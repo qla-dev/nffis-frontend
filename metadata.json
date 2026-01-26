@@ -1,0 +1,7 @@
+{
+  "name": "NFSSI - National Forest Safety & Surveillance Initiative",
+  "description": "A GIS-powered early fire and flood alert system for Bosnia and Herzegovina. Features real-time layering, advanced filtering, and community-driven incident reporting.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
