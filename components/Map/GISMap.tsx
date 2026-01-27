@@ -85,13 +85,14 @@ const HeatmapLayer = ({ active }: { active: boolean }) => {
 
     // Config options for heatmap.js
     const cfg = {
-      "radius": 40,
-      "maxOpacity": 0.5,
-      "scaleRadius": false,
+      "radius": 20, // Reduced radius for finer blobs in point cloud
+      "maxOpacity": 0.55,
+      "scaleRadius": false, // False: radius is in pixels. True: radius is in degrees (very tricky to get right with leaflet-heatmap)
       "useLocalExtrema": true,
       latField: 'lat',
       lngField: 'lng',
       valueField: 'val',
+      blur: 0.75,
       gradient: {
         0.1: '#1a53ff',  // Blue
         0.3: '#00cc66',  // Green
@@ -103,10 +104,51 @@ const HeatmapLayer = ({ active }: { active: boolean }) => {
     // Create layer
     const layer = new HeatmapOverlay(cfg);
 
+    // Generate Point Cloud based on Area
+    // This creates an "organic" blob by scattering points around the center based on area size
+    const generatedPoints: Array<{lat: number, lng: number, val: number}> = [];
+
+    PROTECTED_AREAS_DATA.forEach(area => {
+      // Scale: 100 points per 100km^2 roughly, min 25 points
+      const pointCount = Math.max(30, Math.ceil(area.areaSqKm / 1.5));
+      
+      // Radius approximation: sqrt(Area/PI) gives radius in KM.
+      // 1 degree lat ~ 111km.
+      const radiusKm = Math.sqrt(area.areaSqKm / Math.PI);
+      const radiusDeg = radiusKm / 111;
+
+      // Add strong center
+      generatedPoints.push({ lat: area.lat, lng: area.lng, val: area.intensity });
+
+      for (let i = 0; i < pointCount; i++) {
+        // Random polar coordinates
+        const theta = Math.random() * 2 * Math.PI;
+        
+        // Use square root of random to spread points evenly in the circle area
+        // Multiply by gaussian-like random to concentrate slightly more in center but allow edges
+        const r = radiusDeg * Math.sqrt(Math.random());
+        
+        // Introduce irregularity (stretch one axis randomly)
+        // Use a deterministic pseudo-random stretching based on index to keep shape consistent-ish or just random
+        const stretchLat = 1.0; 
+        const stretchLng = 0.8 + Math.random() * 0.4; // 0.8 to 1.2 stretch on longitude
+
+        const dLat = r * Math.cos(theta) * stretchLat;
+        const dLng = r * Math.sin(theta) * stretchLng;
+
+        generatedPoints.push({
+          lat: area.lat + dLat,
+          lng: area.lng + dLng,
+          // Fade intensity slightly towards edges for smoother look
+          val: area.intensity * (0.6 + Math.random() * 0.4)
+        });
+      }
+    });
+
     // Transform structured data to heatmap format
     const heatmapData = {
       max: 1.0,
-      data: PROTECTED_AREAS_DATA.map(d => ({lat: d.lat, lng: d.lng, val: d.intensity}))
+      data: generatedPoints
     };
     
     layer.setData(heatmapData);
@@ -317,9 +359,15 @@ export const GISMap: React.FC<GISMapProps> = ({
                           <div className={`h-full transition-all duration-1000 ${area.intensity > 0.8 ? 'bg-red-500' : 'bg-yellow-500'}`} style={{ width: `${area.intensity * 100}%` }} />
                         </div>
                       </div>
-                      <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
                           <div className="text-[9px] font-bold text-slate-500 uppercase">{t.popup.dataSync}</div>
                           <div className="text-xs font-black text-emerald-500 flex items-center gap-1">GOV.BA REGISTRY <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /></div>
+                        </div>
+                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                          <div className="text-[9px] font-bold text-slate-500 uppercase">{t.popup.surfaceArea}</div>
+                          <div className="text-xs font-black text-white">{area.areaSqKm} km²</div>
+                        </div>
                       </div>
                     </div>
                   </div>
