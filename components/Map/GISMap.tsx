@@ -214,43 +214,64 @@ export const GISMap: React.FC<GISMapProps> = ({
         {userPos && <Marker position={userPos} icon={UserIcon} />}
 
         <LayerGroup>
-          {MOCK_FORESTS.map(forest => (
-            <Marker key={forest.id} position={forest.coordinates} icon={getRegionIcon(forest.type)}>
-              <Popup className="google-style-popup">
-                <div className="p-4 w-72 bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700">
-                  <header className="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
-                    <div>
-                      <h3 className="font-bold text-sm text-blue-400 leading-tight">{t.forests[forest.name as keyof typeof t.forests] || forest.name}</h3>
-                      <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">{t.regionTypes[forest.type] || forest.type} {t.popup.unit}</span>
-                    </div>
-                  </header>
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
-                        <span>{t.popup.threatIndex}</span>
-                        <span className={forest.riskScore > 0.6 ? 'text-red-500' : 'text-blue-500'}>
-                          {(forest.riskScore * 100).toFixed(0)}%
-                        </span>
+          {MOCK_FORESTS.map(forest => {
+            const style = REGION_STYLES[forest.type];
+            const iconPath = ICON_PATHS[style.iconType] || ICON_PATHS.tree;
+
+            return (
+              <Marker key={forest.id} position={forest.coordinates} icon={getRegionIcon(forest.type)}>
+                <Popup className="google-style-popup">
+                  <div className="p-4 w-72 bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700">
+                    <header className="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
+                      <div>
+                        <h3 className="font-bold text-sm text-blue-400 leading-tight">{t.forests[forest.name as keyof typeof t.forests] || forest.name}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <svg 
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14" 
+                            height="14" 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            stroke={style.color} 
+                            strokeWidth="2.5" 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round"
+                            dangerouslySetInnerHTML={{ __html: iconPath }}
+                          />
+                          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: style.color }}>
+                            {t.regionTypes[forest.type] || forest.type}
+                          </span>
+                        </div>
                       </div>
-                      <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-                        <div className={`h-full transition-all duration-1000 ${forest.riskScore > 0.6 ? 'bg-red-600' : 'bg-blue-600'}`} style={{ width: `${forest.riskScore * 100}%` }} />
+                    </header>
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
+                          <span>{t.popup.threatIndex}</span>
+                          <span className={forest.riskScore > 0.6 ? 'text-red-500' : 'text-blue-500'}>
+                            {(forest.riskScore * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                          <div className={`h-full transition-all duration-1000 ${forest.riskScore > 0.6 ? 'bg-red-600' : 'bg-blue-600'}`} style={{ width: `${forest.riskScore * 100}%` }} />
+                        </div>
                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                        <div className="text-[9px] font-bold text-slate-500 uppercase">{t.popup.surfaceArea}</div>
-                        <div className="text-xs font-black text-white">{forest.area.toLocaleString()} ha</div>
-                      </div>
-                      <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                        <div className="text-[9px] font-bold text-slate-500 uppercase">{t.popup.dataSync}</div>
-                        <div className="text-xs font-black text-emerald-500 flex items-center gap-1">{t.popup.live} <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /></div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                          <div className="text-[9px] font-bold text-slate-500 uppercase">{t.popup.surfaceArea}</div>
+                          <div className="text-xs font-black text-white">{forest.area.toLocaleString()} ha</div>
+                        </div>
+                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                          <div className="text-[9px] font-bold text-slate-500 uppercase">{t.popup.dataSync}</div>
+                          <div className="text-xs font-black text-emerald-500 flex items-center gap-1">{t.popup.live} <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /></div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+                </Popup>
+              </Marker>
+            );
+          })}
         </LayerGroup>
 
         <LayerGroup>
