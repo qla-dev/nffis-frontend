@@ -28,6 +28,15 @@ export enum IncidentType {
   FLOOD = 'FLOOD'
 }
 
+export enum RegionType {
+  DECIDUOUS = 'Deciduous Forests',
+  CONIFEROUS = 'Coniferous Forests',
+  MIXED = 'Mixed Forests',
+  MAQUIS = 'Maquis',
+  LOW_VEGETATION = 'Low Vegetation',
+  LANDFILL = 'Anthropogenic Landfill'
+}
+
 export interface IncidentReport {
   id: string;
   type: IncidentType;
@@ -43,9 +52,9 @@ export interface IncidentReport {
 export interface ForestRegion {
   id: string;
   name: string;
-  type: string;
-  area: number;
-  riskScore: number;
+  type: RegionType;
+  area: number; // in hectares
+  riskScore: number; // 0-1
   coordinates: [number, number];
 }
 

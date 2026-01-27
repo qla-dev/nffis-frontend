@@ -1,7 +1,7 @@
 
-import { ForestRegion, IncidentType, Language, IncidentReport } from './types';
+import { ForestRegion, IncidentType, Language, IncidentReport, RegionType } from './types';
 
-export const BIH_CENTER: [number, number] = [44.3333, 17.8333];
+export const BIH_CENTER: [number, number] = [44.1, 17.9];
 
 export const BIH_GEOJSON: any = {
   type: "Feature",
@@ -74,14 +74,10 @@ export const TRANSLATIONS = {
     temperature: "Temperature",
     riverLevel: "River Level",
     floodAlarm: "Flood Alarm",
+    classLegend: "Classification",
     forests: {
       "Sutjeska National Park": "Sutjeska National Park",
       "Bjelašnica Range": "Bjelašnica Range",
-      "Coniferous": "Coniferous",
-      "Deciduous": "Deciduous",
-      "Mixed": "Mixed",
-      "Old-growth": "Old-growth",
-      "Rocky Forest": "Rocky Forest"
     }
   },
   [Language.BS]: {
@@ -134,14 +130,10 @@ export const TRANSLATIONS = {
     temperature: "Temperatura",
     riverLevel: "Vodostaj",
     floodAlarm: "Alarm poplave",
+    classLegend: "Klasifikacija",
     forests: {
       "Sutjeska National Park": "NP Sutjeska",
       "Bjelašnica Range": "Masiv Bjelašnica",
-      "Coniferous": "Četinari",
-      "Deciduous": "Listopadna",
-      "Mixed": "Mješovita",
-      "Old-growth": "Prašuma",
-      "Rocky Forest": "Krševita šuma"
     }
   },
   [Language.JA]: {
@@ -194,45 +186,59 @@ export const TRANSLATIONS = {
     temperature: "気温",
     riverLevel: "水位",
     floodAlarm: "洪水警報",
+    classLegend: "分類",
     forests: {
       "Sutjeska National Park": "ストイェスカ国立公園",
       "Bjelašnica Range": "ビイェラシュニツァ山脈",
-      "Coniferous": "針葉樹林",
-      "Deciduous": "広葉樹林",
-      "Mixed": "混合林",
-      "Old-growth": "原生林",
-      "Rocky Forest": "岩石森林"
     }
   }
 };
 
+export const REGION_STYLES = {
+  [RegionType.DECIDUOUS]: { color: '#4ade80', iconType: 'tree', label: 'Deciduous' }, // bright green
+  [RegionType.CONIFEROUS]: { color: '#14532d', iconType: 'pine', label: 'Coniferous' }, // dark green
+  [RegionType.MIXED]: { color: '#84cc16', iconType: 'tree-pine', label: 'Mixed Forest' }, // lime
+  [RegionType.MAQUIS]: { color: '#eab308', iconType: 'shrub', label: 'Maquis' }, // yellow
+  [RegionType.LOW_VEGETATION]: { color: '#bef264', iconType: 'sprout', label: 'Low Veg' }, // light lime
+  [RegionType.LANDFILL]: { color: '#ef4444', iconType: 'trash', label: 'Landfill' }, // red/gray
+};
+
 export const MOCK_FORESTS: ForestRegion[] = [
-  { id: '1', name: 'Sutjeska National Park', type: 'Old-growth', area: 17500, riskScore: 0.2, coordinates: [43.3444, 18.6833] },
-  { id: '2', name: 'Kozara National Park', type: 'Deciduous', area: 3375, riskScore: 0.45, coordinates: [45.0083, 16.8914] },
-  { id: '3', name: 'Mount Igman', type: 'Coniferous', area: 5400, riskScore: 0.8, coordinates: [43.75, 18.25] },
-  { id: '4', name: 'Una National Park', type: 'Mixed', area: 19800, riskScore: 0.1, coordinates: [44.66, 16.14] },
-  { id: '5', name: 'Prenj Mountain', type: 'Rocky Forest', area: 12000, riskScore: 0.6, coordinates: [43.53, 17.91] },
-  { id: '6', name: 'Bjelašnica Range', type: 'Coniferous', area: 9500, riskScore: 0.75, coordinates: [43.70, 18.25] },
-  { id: '7', name: 'Jahorina Forest', type: 'Mixed', area: 8200, riskScore: 0.65, coordinates: [43.73, 18.56] },
-  { id: '8', name: 'Vlašić Plateau', type: 'Deciduous', area: 11000, riskScore: 0.5, coordinates: [44.29, 17.65] },
-  { id: '9', name: 'Trebević Park', type: 'Mixed', area: 2100, riskScore: 0.9, coordinates: [43.82, 18.45] },
-  { id: '10', name: 'Maglić Massif', type: 'Old-growth', area: 6000, riskScore: 0.3, coordinates: [43.28, 18.73] },
-  { id: '11', name: 'Čvrsnica Reserve', type: 'Rocky Forest', area: 14500, riskScore: 0.7, coordinates: [43.60, 17.61] },
-  { id: '12', name: 'Vranica Central', type: 'Mixed', area: 7800, riskScore: 0.4, coordinates: [43.96, 17.71] },
-  { id: '13', name: 'Zelengora Slopes', type: 'Coniferous', area: 13200, riskScore: 0.25, coordinates: [43.36, 18.57] },
-  { id: '14', name: 'Majevica Hills', type: 'Deciduous', area: 9000, riskScore: 0.55, coordinates: [44.53, 18.82] },
-  { id: '15', name: 'Ozren Mountain', type: 'Mixed', area: 5500, riskScore: 0.6, coordinates: [44.59, 18.31] },
-  { id: '16', name: 'Grmeč Forest', type: 'Coniferous', area: 15000, riskScore: 0.35, coordinates: [44.66, 16.42] },
-  { id: '17', name: 'Klekovača Reserve', type: 'Old-growth', area: 8800, riskScore: 0.2, coordinates: [44.43, 16.51] },
-  { id: '18', name: 'Manjača Highlands', type: 'Deciduous', area: 4200, riskScore: 0.45, coordinates: [44.60, 17.05] },
-  { id: '19', name: 'Motajica Forest', type: 'Mixed', area: 3100, riskScore: 0.5, coordinates: [45.05, 17.66] },
-  { id: '20', name: 'Romanija Plateau', type: 'Coniferous', area: 10500, riskScore: 0.85, coordinates: [43.88, 18.66] },
-  { id: '21', name: 'Velež Range', type: 'Rocky Forest', area: 6700, riskScore: 0.78, coordinates: [43.31, 17.91] },
-  { id: '22', name: 'Šator Mountain', type: 'Mixed', area: 5900, riskScore: 0.4, coordinates: [44.16, 16.60] },
-  { id: '23', name: 'Dinara Border', type: 'Coniferous', area: 12800, riskScore: 0.62, coordinates: [44.05, 16.43] }
+  // Major Landfills (Deponije)
+  { id: 'dep-1', name: 'Deponija Uborak (Mostar)', type: RegionType.LANDFILL, area: 150, riskScore: 0.95, coordinates: [43.4132, 17.8887] },
+  { id: 'dep-2', name: 'Deponija Smiljevići (Sarajevo)', type: RegionType.LANDFILL, area: 210, riskScore: 0.88, coordinates: [43.8864, 18.3600] },
+  { id: 'dep-3', name: 'Deponija Ramići (Banja Luka)', type: RegionType.LANDFILL, area: 180, riskScore: 0.82, coordinates: [44.8572, 17.1565] },
+  { id: 'dep-4', name: 'Deponija Desetine (Tuzla)', type: RegionType.LANDFILL, area: 120, riskScore: 0.91, coordinates: [44.5375, 18.6258] },
+  { id: 'dep-5', name: 'Deponija Mošćanica (Zenica)', type: RegionType.LANDFILL, area: 140, riskScore: 0.75, coordinates: [44.1755, 17.9610] },
+  { id: 'dep-6', name: 'Deponija Eko-Dep (Bijeljina)', type: RegionType.LANDFILL, area: 130, riskScore: 0.70, coordinates: [44.7877, 19.1837] },
+
+  // Forests re-categorized
+  { id: '1', name: 'Sutjeska National Park', type: RegionType.MIXED, area: 17500, riskScore: 0.2, coordinates: [43.3444, 18.6833] },
+  { id: '2', name: 'Kozara National Park', type: RegionType.DECIDUOUS, area: 3375, riskScore: 0.45, coordinates: [45.0083, 16.8914] },
+  { id: '3', name: 'Mount Igman', type: RegionType.CONIFEROUS, area: 5400, riskScore: 0.8, coordinates: [43.75, 18.25] },
+  { id: '4', name: 'Una National Park', type: RegionType.MIXED, area: 19800, riskScore: 0.1, coordinates: [44.66, 16.14] },
+  { id: '5', name: 'Prenj Mountain', type: RegionType.LOW_VEGETATION, area: 12000, riskScore: 0.6, coordinates: [43.53, 17.91] },
+  { id: '6', name: 'Bjelašnica Range', type: RegionType.CONIFEROUS, area: 9500, riskScore: 0.75, coordinates: [43.70, 18.25] },
+  { id: '7', name: 'Jahorina Forest', type: RegionType.CONIFEROUS, area: 8200, riskScore: 0.65, coordinates: [43.73, 18.56] },
+  { id: '8', name: 'Vlašić Plateau', type: RegionType.MIXED, area: 11000, riskScore: 0.5, coordinates: [44.29, 17.65] },
+  { id: '9', name: 'Trebević Park', type: RegionType.CONIFEROUS, area: 2100, riskScore: 0.9, coordinates: [43.82, 18.45] },
+  { id: '10', name: 'Maglić Massif', type: RegionType.MIXED, area: 6000, riskScore: 0.3, coordinates: [43.28, 18.73] },
+  { id: '11', name: 'Čvrsnica Reserve', type: RegionType.MAQUIS, area: 14500, riskScore: 0.7, coordinates: [43.60, 17.61] },
+  { id: '12', name: 'Vranica Central', type: RegionType.LOW_VEGETATION, area: 7800, riskScore: 0.4, coordinates: [43.96, 17.71] },
+  { id: '13', name: 'Zelengora Slopes', type: RegionType.CONIFEROUS, area: 13200, riskScore: 0.25, coordinates: [43.36, 18.57] },
+  { id: '14', name: 'Majevica Hills', type: RegionType.DECIDUOUS, area: 9000, riskScore: 0.55, coordinates: [44.53, 18.82] },
+  { id: '15', name: 'Ozren Mountain', type: RegionType.MIXED, area: 5500, riskScore: 0.6, coordinates: [44.59, 18.31] },
+  { id: '16', name: 'Grmeč Forest', type: RegionType.CONIFEROUS, area: 15000, riskScore: 0.35, coordinates: [44.66, 16.42] },
+  { id: '17', name: 'Klekovača Reserve', type: RegionType.CONIFEROUS, area: 8800, riskScore: 0.2, coordinates: [44.43, 16.51] },
+  { id: '18', name: 'Manjača Highlands', type: RegionType.LOW_VEGETATION, area: 4200, riskScore: 0.45, coordinates: [44.60, 17.05] },
+  { id: '19', name: 'Motajica Forest', type: RegionType.DECIDUOUS, area: 3100, riskScore: 0.5, coordinates: [45.05, 17.66] },
+  { id: '20', name: 'Romanija Plateau', type: RegionType.CONIFEROUS, area: 10500, riskScore: 0.85, coordinates: [43.88, 18.66] },
+  { id: '21', name: 'Velež Range', type: RegionType.MAQUIS, area: 6700, riskScore: 0.78, coordinates: [43.31, 17.91] },
+  { id: '22', name: 'Šator Mountain', type: RegionType.MIXED, area: 5900, riskScore: 0.4, coordinates: [44.16, 16.60] },
+  { id: '23', name: 'Dinara Border', type: RegionType.LOW_VEGETATION, area: 12800, riskScore: 0.62, coordinates: [44.05, 16.43] },
+  { id: '24', name: 'Hutovo Blato', type: RegionType.MAQUIS, area: 7411, riskScore: 0.8, coordinates: [43.05, 17.78] }
 ];
 
-// Fix: Import IncidentReport from types.ts to fix the 'Cannot find name' error.
 export const INITIAL_INCIDENTS: IncidentReport[] = [
   { id: 'i1', type: IncidentType.FIRE, lat: 43.8, lng: 18.3, description: 'Small brush fire near residential area', timestamp: Date.now() - 3600000, urgency: 'high', windDirection: 220, windSpeed: 15 },
   { id: 'i2', type: IncidentType.FLOOD, lat: 44.8, lng: 17.2, description: 'River bank overflow detected', timestamp: Date.now() - 7200000, urgency: 'medium' }

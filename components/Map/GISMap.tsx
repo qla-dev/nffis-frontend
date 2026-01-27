@@ -1,23 +1,48 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, LayerGroup, GeoJSON, WMSTileLayer } from 'react-leaflet';
 import L from 'leaflet';
-import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Languages, Settings, Map as MapIcon, Image as ImageIcon, Satellite, Mountain, Leaf, X } from 'lucide-react';
-import { BIH_CENTER, MOCK_FORESTS, BIH_GEOJSON, TRANSLATIONS } from '../../constants';
-import { IncidentReport, IncidentType, MapLayer, Language } from '../../types';
+import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Languages, Settings, Map as MapIcon, Image as ImageIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, TreePine, Sprout, Tent } from 'lucide-react';
+import { BIH_CENTER, MOCK_FORESTS, BIH_GEOJSON, TRANSLATIONS, REGION_STYLES } from '../../constants';
+import { IncidentReport, IncidentType, MapLayer, Language, RegionType } from '../../types';
 
-const ForestIcon = L.divIcon({
-  html: `
-    <div class="flex items-center justify-center w-7 h-7 bg-slate-950 rounded-full border-2 border-blue-600 shadow-2xl text-blue-500 hover:scale-110 transition-transform">
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 2v5"/><path d="M12 19v3"/><path d="M12 7l-4 4h8l-4-4Z" fill="currentColor"/>
-      </svg>
-    </div>
-  `,
-  className: '',
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-  popupAnchor: [0, -14]
-});
+// Helper to generate dynamic icons
+const getRegionIcon = (type: RegionType) => {
+  const style = REGION_STYLES[type];
+  const color = style.color;
+  
+  let iconSvg = '';
+  
+  // Custom SVG strings for Leaflet divIcon
+  switch(style.iconType) {
+    case 'trash':
+      iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`;
+      break;
+    case 'pine':
+      iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m8 14 4-9 4 9"/><path d="m10 14-3 9"/><path d="m14 14 3 9"/></svg>`;
+      break;
+    case 'shrub':
+      iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-9"/><path d="M6.06 14a4 4 0 0 1 7.15-2.73"/><path d="M12.8 11.27a4 4 0 0 1 5.14 8.73"/><path d="M18.66 16.32a4 4 0 0 1-1.37 5.68"/><path d="M4.69 13.9a4 4 0 0 0-.25 7.84"/></svg>`;
+      break;
+    case 'sprout':
+      iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .5-3.5 1.3-3.5 1.3s-.9-2.4 0-4.6c.9-2.1 2.2-2 2.2-2"/></svg>`;
+      break;
+    case 'tree':
+    default:
+      iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19v3"/><path d="M12 19h-3a9 9 0 0 1 0-18h6a9 9 0 0 1 0 18h-3"/></svg>`;
+  }
+
+  return L.divIcon({
+    html: `
+      <div class="flex items-center justify-center w-8 h-8 bg-slate-950 rounded-full border-2 border-[${color}] shadow-2xl hover:scale-110 transition-transform" style="border-color: ${color}">
+        ${iconSvg}
+      </div>
+    `,
+    className: '',
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -16]
+  });
+};
 
 const UserIcon = L.divIcon({
   html: `
@@ -198,13 +223,13 @@ export const GISMap: React.FC<GISMapProps> = ({
 
         <LayerGroup>
           {MOCK_FORESTS.map(forest => (
-            <Marker key={forest.id} position={forest.coordinates} icon={ForestIcon}>
+            <Marker key={forest.id} position={forest.coordinates} icon={getRegionIcon(forest.type)}>
               <Popup className="google-style-popup">
                 <div className="p-4 w-72 bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700">
                   <header className="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
                     <div>
                       <h3 className="font-bold text-sm text-blue-400 leading-tight">{t.forests[forest.name as keyof typeof t.forests] || forest.name}</h3>
-                      <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">{forest.type} UNIT</span>
+                      <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">{forest.type}</span>
                     </div>
                   </header>
                   <div className="space-y-4">
@@ -427,9 +452,39 @@ export const GISMap: React.FC<GISMapProps> = ({
         </div>
       </div>
 
-      {/* Floating Legend (Left) */}
+      {/* Stacked Legends Container (Left) */}
       {showLegend && (
-        <div className="absolute bottom-24 left-4 md:bottom-8 md:left-[4.5rem] z-[2000] animate-in slide-in-from-left-2 duration-300">
+        <div className="absolute bottom-24 left-4 md:bottom-8 md:left-[4.5rem] z-[2000] flex flex-col gap-2 animate-in slide-in-from-left-2 duration-300">
+          
+          {/* New Classification Legend */}
+          <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 p-3 rounded-xl shadow-2xl min-w-[160px]">
+            <div className="flex items-center gap-2 mb-3">
+              <Trees size={14} className="text-emerald-500" />
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.classLegend}</span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                <div className="w-2 h-2 rounded-full border border-[#4ade80]" /> Deciduous Forests
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                <div className="w-2 h-2 rounded-full border border-[#14532d]" /> Coniferous Forests
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                <div className="w-2 h-2 rounded-full border border-[#84cc16]" /> Mixed Forests
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                <div className="w-2 h-2 rounded-full border border-[#eab308]" /> Maquis
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                <div className="w-2 h-2 rounded-full border border-[#bef264]" /> Low Vegetation
+              </div>
+               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                <div className="w-2 h-2 rounded-full bg-[#ef4444]" /> Landfills (Deponije)
+              </div>
+            </div>
+          </div>
+
+          {/* Existing GIS Legend */}
           <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 p-3 rounded-xl shadow-2xl min-w-[160px]">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
