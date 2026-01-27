@@ -23,6 +23,27 @@ export const BIH_GEOJSON: any = {
   }
 };
 
+// [Latitude, Longitude, Intensity(0-1)]
+// Data representing: National Parks, Nature Parks, Protected Landscapes, Ramsar Sites, and Nature Monuments
+export const PROTECTED_AREAS_HEATMAP_DATA: [number, number, number][] = [
+  [43.3333, 18.6833, 1.0], // NP Sutjeska (High Importance)
+  [44.4939, 16.1214, 0.95], // NP Una
+  [45.0114, 16.9039, 0.9], // NP Kozara
+  [43.9536, 19.2944, 0.9], // NP Drina
+  [43.6108, 17.5133, 0.85], // PP Blidinje
+  [43.0542, 17.7847, 0.85], // PP Hutovo Blato
+  [43.8188, 18.2694, 0.8], // SP Vrelo Bosne
+  [43.9458, 18.4489, 0.75], // SP Skakavac
+  [44.3031, 18.1822, 0.75], // SP Tajan
+  [44.0875, 18.5122, 0.75], // ZP Bijambare
+  [43.8372, 18.4486, 0.8], // ZP Trebević
+  [44.3161, 18.6092, 0.7], // ZP Konjuh
+  [43.8611, 18.4431, 0.65], // ZP Bentbaša
+  [43.9575, 17.7533, 0.7], // PM Prokoško Jezero
+  [43.8347, 16.8336, 0.8], // Ramsar Livanjsko Polje
+  [45.1014, 17.4431, 0.8], // Ramsar Bardača
+];
+
 export const TRANSLATIONS = {
   [Language.EN]: {
     appName: "NFSSI",

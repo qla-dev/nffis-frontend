@@ -22,7 +22,10 @@ export enum MapLayer {
   FIRE_RISK = 'Fire Risk',
   FLOOD_RISK = 'Flood Risk',
   VEGETATION = 'Vegetation',
-  COUNTRY_BORDERS = 'Country Borders'
+  COUNTRY_BORDERS = 'Country Borders',
+  FORESTS = 'Forest Inventory',
+  LANDFILLS = 'Active Landfills',
+  PROTECTED_AREAS = 'Protected Areas (Heatmap)'
 }
 
 export enum IncidentType {

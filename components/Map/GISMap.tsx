@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, LayerGroup, GeoJSON, WMSTileLayer } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, LayerGroup, GeoJSON, WMSTileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Languages, Settings, Map as MapIcon, Image as ImageIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, TreePine, Sprout, Tent } from 'lucide-react';
-import { BIH_CENTER, MOCK_FORESTS, BIH_GEOJSON, TRANSLATIONS, REGION_STYLES } from '../../constants';
+import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Languages, Settings, Map as MapIcon, Image as ImageIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, TreePine, Sprout, Tent, ShieldCheck, Factory } from 'lucide-react';
+import { BIH_CENTER, MOCK_FORESTS, BIH_GEOJSON, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_HEATMAP_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType } from '../../types';
 
 // Shared SVG paths for Map Markers and Legend
@@ -47,6 +47,65 @@ const UserIcon = L.divIcon({
   iconSize: [32, 32],
   iconAnchor: [16, 16]
 });
+
+// Component to handle the heatmap using HeatmapOverlay from leaflet-heatmap.js
+const HeatmapLayer = ({ active }: { active: boolean }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!active) return;
+    
+    // Check if the HeatmapOverlay (from leaflet-heatmap.js) is available on window
+    const HeatmapOverlay = (window as any).HeatmapOverlay;
+
+    if (!HeatmapOverlay) {
+      console.warn('HeatmapOverlay not loaded. Check script tags in index.html.');
+      return;
+    }
+
+    // Config options for heatmap.js
+    const cfg = {
+      // radius should be small ONLY if scaleRadius is true (or small radius is intended)
+      // if scaleRadius is false it will be the constant radius used in pixels
+      "radius": 40,
+      "maxOpacity": 0.65,
+      // scales the radius based on map zoom
+      "scaleRadius": false,
+      // if set to false the heatmap uses the global maximum for colorization
+      // if activated: uses the data maximum within the current map boundaries
+      "useLocalExtrema": true,
+      // field names
+      latField: 'lat',
+      lngField: 'lng',
+      valueField: 'val',
+      // aesthetic configuration
+      gradient: {
+        0.1: '#1a53ff',  // Blue
+        0.3: '#00cc66',  // Green
+        0.6: '#e6e600',  // Yellow
+        0.9: '#ff0000'   // Red
+      }
+    };
+    
+    // Create layer
+    const layer = new HeatmapOverlay(cfg);
+
+    // Transform data from [lat, lng, intensity] to {lat, lng, val}
+    const heatmapData = {
+      max: 1.0,
+      data: PROTECTED_AREAS_HEATMAP_DATA.map(d => ({lat: d[0], lng: d[1], val: d[2]}))
+    };
+    
+    layer.setData(heatmapData);
+    map.addLayer(layer);
+
+    return () => {
+      map.removeLayer(layer);
+    };
+  }, [active, map]);
+
+  return null;
+};
 
 interface GISMapProps {
   incidents: IncidentReport[];
@@ -212,10 +271,19 @@ export const GISMap: React.FC<GISMapProps> = ({
         {activeLayers.has(MapLayer.WIND_SPEED) && <WMSTileLayer url="https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=d22f66d48348243ed47c132845c48b2a" opacity={0.4} />}
         {activeLayers.has(MapLayer.COUNTRY_BORDERS) && <GeoJSON data={BIH_GEOJSON} style={{ color: '#1a73e8', weight: 1.5, fillOpacity: 0.05 }} />}
         
+        {/* Protected Areas Heatmap (Using heatmap.js) */}
+        <HeatmapLayer active={activeLayers.has(MapLayer.PROTECTED_AREAS)} />
+
         {userPos && <Marker position={userPos} icon={UserIcon} />}
 
         <LayerGroup>
           {MOCK_FORESTS.map(forest => {
+            const isLandfill = forest.type === RegionType.LANDFILL;
+            
+            // Filtering Logic
+            if (isLandfill && !activeLayers.has(MapLayer.LANDFILLS)) return null;
+            if (!isLandfill && !activeLayers.has(MapLayer.FORESTS)) return null;
+
             const style = REGION_STYLES[forest.type];
             const iconPath = ICON_PATHS[style.iconType] || ICON_PATHS.tree;
 
@@ -439,6 +507,9 @@ export const GISMap: React.FC<GISMapProps> = ({
               </h4>
               <div className="space-y-2">
                 {[
+                  { id: MapLayer.FORESTS, label: 'Forest Inventory', icon: Trees, color: 'text-emerald-500' },
+                  { id: MapLayer.LANDFILLS, label: 'Active Landfills', icon: Trash2, color: 'text-red-500' },
+                  { id: MapLayer.PROTECTED_AREAS, label: 'Protected Areas', icon: ShieldCheck, color: 'text-yellow-400' },
                   { id: MapLayer.FIRE_RISK, label: 'Fire Threats', icon: Flame, color: 'text-red-500' },
                   { id: MapLayer.FLOOD_RISK, label: 'Hydrological', icon: Waves, color: 'text-blue-500' },
                   { id: MapLayer.WEATHER_TEMP, label: 'Heat Index', icon: Thermometer, color: 'text-orange-500' },

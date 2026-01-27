@@ -23,7 +23,7 @@ const BASE_LAYER_IDS = [
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     language: Language.EN,
-    activeLayers: new Set([MapLayer.FIRE_RISK, MapLayer.COUNTRY_BORDERS]),
+    activeLayers: new Set([MapLayer.FIRE_RISK, MapLayer.COUNTRY_BORDERS, MapLayer.FORESTS, MapLayer.LANDFILLS]),
     incidents: INITIAL_INCIDENTS as any,
     view: 'map',
     isReporting: false,
