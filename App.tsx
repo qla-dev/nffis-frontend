@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Navigation } from './components/Navigation';
 import { GISMap } from './components/Map/GISMap';
@@ -15,7 +16,8 @@ const BASE_LAYER_IDS = [
   MapLayer.METEOBLUE,
   MapLayer.NASA_FIRMS,
   MapLayer.THERMAL,
-  MapLayer.TERRAIN
+  MapLayer.TERRAIN,
+  MapLayer.WINDY
 ];
 
 const App: React.FC = () => {

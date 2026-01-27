@@ -133,6 +133,7 @@ export const GISMap: React.FC<GISMapProps> = ({
     { id: MapLayer.SATELLITE, label: 'ArcGIS Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Satellite },
     { id: MapLayer.SATELLITE_CLARITY, label: 'Esri Clarity', url: 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Satellite },
     { id: MapLayer.SATELLITE_GOOGLE, label: 'Google Hybrid', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', icon: Globe2 },
+    { id: MapLayer.WINDY, label: 'Windy.com (Dark GIS)', url: 'https://tiles.windy.com/tiles/v1.0.0/darkmap/{z}/{x}/{y}.png', icon: Wind },
     { id: MapLayer.SENTINEL, label: 'Sentinel-2', url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2019_3857/default/g/{z}/{y}/{x}.jpg', icon: Layers },
     { id: MapLayer.INFRARED, label: 'Infrared (Veg)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Leaf },
     { id: MapLayer.METEOBLUE, label: 'Meteoblue Temp', url: meteoblueUrl, icon: Thermometer },

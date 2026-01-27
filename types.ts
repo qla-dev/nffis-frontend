@@ -1,4 +1,5 @@
 
+
 export enum Language {
   EN = 'en',
   BS = 'bs',
@@ -14,6 +15,7 @@ export enum MapLayer {
   METEOBLUE = 'Meteoblue Temperature',
   NASA_FIRMS = 'NASA FIRMS (Hotspots)',
   THERMAL = 'Thermal Infrared (LST)',
+  WINDY = 'Windy.com (Dark GIS)',
   WEATHER_TEMP = 'Temperature Map',
   WIND_SPEED = 'Wind Dynamics',
   TERRAIN = 'Terrain',
