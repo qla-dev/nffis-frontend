@@ -242,9 +242,9 @@ export const TRANSLATIONS = {
 export const REGION_STYLES = {
   [RegionType.DECIDUOUS]: { color: '#4ade80', iconType: 'tree', label: 'Deciduous' }, // bright green
   [RegionType.CONIFEROUS]: { color: '#14532d', iconType: 'pine', label: 'Coniferous' }, // dark green
-  [RegionType.MIXED]: { color: '#84cc16', iconType: 'tree-pine', label: 'Mixed Forest' }, // lime
+  [RegionType.MIXED]: { color: '#a855f7', iconType: 'mixed', label: 'Mixed Forest' }, // Purple
   [RegionType.MAQUIS]: { color: '#eab308', iconType: 'shrub', label: 'Maquis' }, // yellow
-  [RegionType.LOW_VEGETATION]: { color: '#bef264', iconType: 'sprout', label: 'Low Veg' }, // light lime
+  [RegionType.LOW_VEGETATION]: { color: '#ec4899', iconType: 'sprout', label: 'Low Veg' }, // Pink
   [RegionType.LANDFILL]: { color: '#ef4444', iconType: 'trash', label: 'Landfill' }, // red/gray
 };
 

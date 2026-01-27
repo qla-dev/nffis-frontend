@@ -5,31 +5,23 @@ import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Na
 import { BIH_CENTER, MOCK_FORESTS, BIH_GEOJSON, TRANSLATIONS, REGION_STYLES } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType } from '../../types';
 
+// Shared SVG paths for Map Markers and Legend
+const ICON_PATHS: Record<string, string> = {
+  tree: `<path d="M12 19v3"/><path d="M12 19h-3a9 9 0 0 1 0-18h6a9 9 0 0 1 0 18h-3"/>`,
+  pine: `<path d="m8 14 4-9 4 9"/><path d="m10 14-3 9"/><path d="m14 14 3 9"/>`,
+  mixed: `<path d="M10 10v.2A3 3 0 0 1 8.9 16v0H5v0h0a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z"/><path d="M7 16v6"/><path d="M13 19v3"/><path d="M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .9-1.7l-2.6-5a1 1 0 0 0-1.8 0l-2.6 5a1 1 0 0 0 .9 1.7h.2l-1.4 2.5"/>`,
+  shrub: `<path d="M12 22v-9"/><path d="M6.06 14a4 4 0 0 1 7.15-2.73"/><path d="M12.8 11.27a4 4 0 0 1 5.14 8.73"/><path d="M18.66 16.32a4 4 0 0 1-1.37 5.68"/><path d="M4.69 13.9a4 4 0 0 0-.25 7.84"/>`,
+  sprout: `<path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .5-3.5 1.3-3.5 1.3s-.9-2.4 0-4.6c.9-2.1 2.2-2 2.2-2"/>`,
+  trash: `<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>`
+};
+
 // Helper to generate dynamic icons
 const getRegionIcon = (type: RegionType) => {
   const style = REGION_STYLES[type];
   const color = style.color;
+  const path = ICON_PATHS[style.iconType] || ICON_PATHS.tree;
   
-  let iconSvg = '';
-  
-  // Custom SVG strings for Leaflet divIcon
-  switch(style.iconType) {
-    case 'trash':
-      iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>`;
-      break;
-    case 'pine':
-      iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m8 14 4-9 4 9"/><path d="m10 14-3 9"/><path d="m14 14 3 9"/></svg>`;
-      break;
-    case 'shrub':
-      iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-9"/><path d="M6.06 14a4 4 0 0 1 7.15-2.73"/><path d="M12.8 11.27a4 4 0 0 1 5.14 8.73"/><path d="M18.66 16.32a4 4 0 0 1-1.37 5.68"/><path d="M4.69 13.9a4 4 0 0 0-.25 7.84"/></svg>`;
-      break;
-    case 'sprout':
-      iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .5-3.5 1.3-3.5 1.3s-.9-2.4 0-4.6c.9-2.1 2.2-2 2.2-2"/></svg>`;
-      break;
-    case 'tree':
-    default:
-      iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19v3"/><path d="M12 19h-3a9 9 0 0 1 0-18h6a9 9 0 0 1 0 18h-3"/></svg>`;
-  }
+  const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 
   return L.divIcon({
     html: `
@@ -463,24 +455,16 @@ export const GISMap: React.FC<GISMapProps> = ({
               <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.classLegend}</span>
             </div>
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full border border-[#4ade80]" /> {t.regionTypes[RegionType.DECIDUOUS]}
-              </div>
-              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full border border-[#14532d]" /> {t.regionTypes[RegionType.CONIFEROUS]}
-              </div>
-              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full border border-[#84cc16]" /> {t.regionTypes[RegionType.MIXED]}
-              </div>
-              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full border border-[#eab308]" /> {t.regionTypes[RegionType.MAQUIS]}
-              </div>
-              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full border border-[#bef264]" /> {t.regionTypes[RegionType.LOW_VEGETATION]}
-              </div>
-               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full bg-[#ef4444]" /> {t.regionTypes[RegionType.LANDFILL]}
-              </div>
+              {Object.values(RegionType).map((type) => {
+                 const style = REGION_STYLES[type];
+                 const path = ICON_PATHS[style.iconType] || ICON_PATHS.tree;
+                 return (
+                   <div key={type} className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={style.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: path }} />
+                     {t.regionTypes[type]}
+                   </div>
+                 )
+              })}
             </div>
           </div>
 
