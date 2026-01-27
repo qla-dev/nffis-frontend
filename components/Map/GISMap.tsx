@@ -229,13 +229,13 @@ export const GISMap: React.FC<GISMapProps> = ({
                   <header className="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
                     <div>
                       <h3 className="font-bold text-sm text-blue-400 leading-tight">{t.forests[forest.name as keyof typeof t.forests] || forest.name}</h3>
-                      <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">{forest.type}</span>
+                      <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">{t.regionTypes[forest.type] || forest.type} {t.popup.unit}</span>
                     </div>
                   </header>
                   <div className="space-y-4">
                     <div className="space-y-1">
                       <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
-                        <span>Threat Index</span>
+                        <span>{t.popup.threatIndex}</span>
                         <span className={forest.riskScore > 0.6 ? 'text-red-500' : 'text-blue-500'}>
                           {(forest.riskScore * 100).toFixed(0)}%
                         </span>
@@ -246,12 +246,12 @@ export const GISMap: React.FC<GISMapProps> = ({
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                        <div className="text-[9px] font-bold text-slate-500 uppercase">Surface Area</div>
+                        <div className="text-[9px] font-bold text-slate-500 uppercase">{t.popup.surfaceArea}</div>
                         <div className="text-xs font-black text-white">{forest.area.toLocaleString()} ha</div>
                       </div>
                       <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                        <div className="text-[9px] font-bold text-slate-500 uppercase">Data Sync</div>
-                        <div className="text-xs font-black text-emerald-500 flex items-center gap-1">LIVE <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /></div>
+                        <div className="text-[9px] font-bold text-slate-500 uppercase">{t.popup.dataSync}</div>
+                        <div className="text-xs font-black text-emerald-500 flex items-center gap-1">{t.popup.live} <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /></div>
                       </div>
                     </div>
                   </div>
@@ -464,22 +464,22 @@ export const GISMap: React.FC<GISMapProps> = ({
             </div>
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full border border-[#4ade80]" /> Deciduous Forests
+                <div className="w-2 h-2 rounded-full border border-[#4ade80]" /> {t.regionTypes[RegionType.DECIDUOUS]}
               </div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full border border-[#14532d]" /> Coniferous Forests
+                <div className="w-2 h-2 rounded-full border border-[#14532d]" /> {t.regionTypes[RegionType.CONIFEROUS]}
               </div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full border border-[#84cc16]" /> Mixed Forests
+                <div className="w-2 h-2 rounded-full border border-[#84cc16]" /> {t.regionTypes[RegionType.MIXED]}
               </div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full border border-[#eab308]" /> Maquis
+                <div className="w-2 h-2 rounded-full border border-[#eab308]" /> {t.regionTypes[RegionType.MAQUIS]}
               </div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full border border-[#bef264]" /> Low Vegetation
+                <div className="w-2 h-2 rounded-full border border-[#bef264]" /> {t.regionTypes[RegionType.LOW_VEGETATION]}
               </div>
                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full bg-[#ef4444]" /> Landfills (Deponije)
+                <div className="w-2 h-2 rounded-full bg-[#ef4444]" /> {t.regionTypes[RegionType.LANDFILL]}
               </div>
             </div>
           </div>

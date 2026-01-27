@@ -78,6 +78,21 @@ export const TRANSLATIONS = {
     forests: {
       "Sutjeska National Park": "Sutjeska National Park",
       "Bjelašnica Range": "Bjelašnica Range",
+    },
+    regionTypes: {
+      [RegionType.DECIDUOUS]: "Deciduous Forests",
+      [RegionType.CONIFEROUS]: "Coniferous Forests",
+      [RegionType.MIXED]: "Mixed Forests",
+      [RegionType.MAQUIS]: "Maquis",
+      [RegionType.LOW_VEGETATION]: "Low Vegetation",
+      [RegionType.LANDFILL]: "Anthropogenic Landfill",
+    },
+    popup: {
+      threatIndex: "Threat Index",
+      surfaceArea: "Surface Area",
+      dataSync: "Data Sync",
+      live: "LIVE",
+      unit: "UNIT"
     }
   },
   [Language.BS]: {
@@ -134,6 +149,21 @@ export const TRANSLATIONS = {
     forests: {
       "Sutjeska National Park": "NP Sutjeska",
       "Bjelašnica Range": "Masiv Bjelašnica",
+    },
+    regionTypes: {
+      [RegionType.DECIDUOUS]: "Listopadne šume",
+      [RegionType.CONIFEROUS]: "Crnogorične šume",
+      [RegionType.MIXED]: "Mješovite šume",
+      [RegionType.MAQUIS]: "Makija",
+      [RegionType.LOW_VEGETATION]: "Nisko rastinje",
+      [RegionType.LANDFILL]: "Antropogena odlagališta (Deponije)",
+    },
+    popup: {
+      threatIndex: "Indeks opasnosti",
+      surfaceArea: "Površina",
+      dataSync: "Sinhronizacija",
+      live: "UŽIVO",
+      unit: "JEDINICA"
     }
   },
   [Language.JA]: {
@@ -190,6 +220,21 @@ export const TRANSLATIONS = {
     forests: {
       "Sutjeska National Park": "ストイェスカ国立公園",
       "Bjelašnica Range": "ビイェラシュニツァ山脈",
+    },
+    regionTypes: {
+      [RegionType.DECIDUOUS]: "落葉樹林",
+      [RegionType.CONIFEROUS]: "針葉樹林",
+      [RegionType.MIXED]: "混合林",
+      [RegionType.MAQUIS]: "マキ (低木林)",
+      [RegionType.LOW_VEGETATION]: "低植生",
+      [RegionType.LANDFILL]: "埋立地 (ゴミ捨て場)",
+    },
+    popup: {
+      threatIndex: "脅威指数",
+      surfaceArea: "面積",
+      dataSync: "データ同期",
+      live: "ライブ",
+      unit: "ユニット"
     }
   }
 };
