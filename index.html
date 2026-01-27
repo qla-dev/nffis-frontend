@@ -1,46 +1,90 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NFSSI - BiH Forest Safety</title>
+    <title>NFSSI - National Surveillance Core</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Plus Jakarta Sans', sans-serif;
             margin: 0;
             padding: 0;
             overflow: hidden;
             background-color: #020617;
+            -webkit-font-smoothing: antialiased;
         }
+
         #root {
             height: 100vh;
             width: 100vw;
         }
+
+        /* Modern Scrollbar */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #020617;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3b82f6;
+        }
+
+        /* Leaflet Overrides */
         .leaflet-container {
             width: 100%;
             height: 100%;
-            background-color: #0f172a;
+            background-color: #020617 !important;
         }
-        .grayscale-tile {
-            filter: grayscale(1) invert(1) contrast(1.2) brightness(0.8);
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background: #0f172a !important;
+            color: white !important;
+            border: 1px solid #334155;
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5);
+            border-radius: 12px !important;
         }
-        /* Custom GIS Scrollbar */
-        ::-webkit-scrollbar {
-            width: 6px;
+        .leaflet-popup-content {
+            margin: 0 !important;
         }
-        ::-webkit-scrollbar-track {
-            background: #1e293b;
+        .leaflet-bar {
+            border: none !important;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3) !important;
         }
-        ::-webkit-scrollbar-thumb {
-            background: #475569;
-            border-radius: 3px;
+        .leaflet-bar a {
+            background-color: #0f172a !important;
+            color: #94a3b8 !important;
+            border-bottom: 1px solid #1e293b !important;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
+        .leaflet-bar a:hover {
+            background-color: #1e293b !important;
+            color: white !important;
+        }
+
+        /* Custom UI Classes */
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace !important;
+        }
+
+        .animate-scan {
+            animation: scan 4s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+
+        .google-style-popup .leaflet-popup-content-wrapper {
+          padding: 0 !important;
         }
     </style>
 <script type="importmap">

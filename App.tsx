@@ -1,16 +1,27 @@
-
 import React, { useState, useCallback } from 'react';
 import { Navigation } from './components/Navigation';
 import { GISMap } from './components/Map/GISMap';
 import { ReportModal } from './components/Report/ReportModal';
 import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './types';
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
-import { Activity, Shield, Waves, Flame, Search } from 'lucide-react';
+import { Activity, Shield, Waves, Flame, Search, Layers, Database, ChevronRight } from 'lucide-react';
+
+const BASE_LAYER_IDS = [
+  MapLayer.SATELLITE,
+  MapLayer.SATELLITE_CLARITY,
+  MapLayer.SATELLITE_GOOGLE,
+  MapLayer.SENTINEL,
+  MapLayer.INFRARED,
+  MapLayer.METEOBLUE,
+  MapLayer.NASA_FIRMS,
+  MapLayer.THERMAL,
+  MapLayer.TERRAIN
+];
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     language: Language.EN,
-    activeLayers: new Set([MapLayer.FIRE_RISK, MapLayer.VEGETATION, MapLayer.COUNTRY_BORDERS]),
+    activeLayers: new Set([MapLayer.FIRE_RISK, MapLayer.COUNTRY_BORDERS]),
     incidents: INITIAL_INCIDENTS as any,
     view: 'map',
     isReporting: false,
@@ -37,6 +48,20 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const setBaseLayer = useCallback((layer: MapLayer | null) => {
+    setState(prev => {
+      const newLayers = new Set(prev.activeLayers);
+      // Remove all known base layers to ensure exclusivity
+      BASE_LAYER_IDS.forEach(id => newLayers.delete(id));
+      
+      // If a layer is provided (not null/vector), add it
+      if (layer) {
+        newLayers.add(layer);
+      }
+      return { ...prev, activeLayers: newLayers };
+    });
+  }, []);
+
   const handleMapClick = useCallback((lat: number, lng: number) => {
     setReportLocation({ lat, lng });
     setShowModal(true);
@@ -49,87 +74,178 @@ const App: React.FC = () => {
       timestamp: Date.now(),
       ...data
     };
-    setState(prev => ({
-      ...prev,
-      incidents: [newIncident, ...prev.incidents]
-    }));
+    setState(prev => ({ ...prev, incidents: [newIncident, ...prev.incidents] }));
     setShowModal(false);
   };
 
+  // Filter out base layers for the main "Layers" list view
+  const overlayLayers = Object.values(MapLayer).filter(layer => !BASE_LAYER_IDS.includes(layer));
+
   return (
-    <div className={`flex h-screen w-full overflow-hidden transition-colors ${state.isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+    <div className={`flex h-screen w-full overflow-hidden ${state.isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       <Navigation state={state} onSetView={handleSetView} onSetLang={handleSetLang} onOpenReport={toggleReporting} />
-      <main className="flex-1 relative md:ml-64 pb-[60px] md:pb-0 h-full">
-        {state.view === 'map' && <GISMap incidents={state.incidents} activeLayers={state.activeLayers} onReportClick={handleMapClick} isReporting={state.isReporting} onToggleLayer={toggleLayer} isDarkMode={state.isDarkMode} onToggleTheme={handleToggleTheme} language={state.language} />}
-        {state.view === 'reports' && (
-          <div className="p-6 overflow-y-auto h-full">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-3"><Activity className="text-emerald-500" />{t.recentReports}</h2>
-            <div className="grid gap-4">
-              {state.incidents.map(inc => (
-                <div key={inc.id} className={`p-4 rounded-2xl border flex gap-4 ${state.isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-                  <div className={`p-3 rounded-xl ${inc.type === IncidentType.FIRE ? 'bg-red-900/20 text-red-500' : 'bg-blue-900/20 text-blue-500'}`}>
-                    {inc.type === IncidentType.FIRE ? <Flame size={24} /> : <Waves size={24} />}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-lg">{inc.type === IncidentType.FIRE ? t.fireAlert : t.floodAlert}</h3>
-                    <p className="text-sm opacity-70">{inc.description}</p>
-                    <div className="mt-3 flex gap-4 text-xs opacity-50"><span className="flex items-center gap-1"><Shield size={12} />{t.verifiedData}</span></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+      
+      <main className="flex-1 relative md:ml-auto h-full overflow-hidden transition-all duration-300">
+        {state.view === 'map' && (
+          <GISMap 
+            incidents={state.incidents} 
+            activeLayers={state.activeLayers} 
+            onReportClick={handleMapClick} 
+            isReporting={state.isReporting} 
+            onToggleLayer={toggleLayer}
+            onSetBaseLayer={setBaseLayer}
+            isDarkMode={state.isDarkMode} 
+            onToggleTheme={handleToggleTheme} 
+            language={state.language} 
+            onSetLanguage={handleSetLang}
+          />
         )}
-        {state.view === 'layers' && (
-          <div className="p-6 h-full overflow-y-auto">
-            <h2 className="text-2xl font-bold mb-6">{t.filters} & {t.layers}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className={`p-6 rounded-2xl border ${state.isDarkMode ? 'bg-slate-900' : 'bg-white'}`}>
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Search size={20} className="text-emerald-500" />GIS Layers</h3>
-                <div className="space-y-2">
-                  {Object.values(MapLayer).map(layer => (
-                    <label key={layer} className="flex items-center justify-between p-3 rounded-xl bg-slate-800/20 cursor-pointer">
-                      <span>{layer === MapLayer.NASA_FIRMS ? t.nasaFirms : layer}</span>
-                      <input type="checkbox" checked={state.activeLayers.has(layer)} onChange={() => toggleLayer(layer)} className="w-5 h-5 accent-emerald-500" />
-                    </label>
+
+        {state.view !== 'map' && (
+          <div className="h-full w-full overflow-y-auto bg-slate-950 p-8">
+            <div className="max-w-6xl mx-auto">
+              <header className="mb-10 flex items-center justify-between border-b border-slate-800 pb-6">
+                <div>
+                  <div className="flex items-center gap-2 text-blue-500 text-xs font-bold tracking-[0.2em] uppercase mb-2">
+                    <Database size={14} /> System Core Data
+                  </div>
+                  <h1 className="text-3xl font-bold text-white tracking-tight">
+                    {state.view === 'reports' ? t.recentReports : state.view === 'layers' ? t.layers : t.stats}
+                  </h1>
+                </div>
+                <div className="flex items-center gap-2">
+                   <div className="flex -space-x-2">
+                      {[1,2,3].map(i => <div key={i} className="w-8 h-8 rounded-full border-2 border-slate-950 bg-slate-800" />)}
+                   </div>
+                   <span className="text-[10px] text-slate-500 ml-2 font-mono uppercase tracking-widest">3 Active Operators</span>
+                </div>
+              </header>
+
+              {state.view === 'reports' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {state.incidents.map(inc => (
+                    <div key={inc.id} className="group bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-blue-500/50 transition-all duration-300 shadow-xl">
+                      <div className={`h-1.5 w-full ${inc.type === IncidentType.FIRE ? 'bg-red-600' : 'bg-blue-600'}`} />
+                      <div className="p-5">
+                        <div className="flex justify-between items-start mb-4">
+                           <div className={`p-2 rounded-lg ${inc.type === IncidentType.FIRE ? 'bg-red-600/10 text-red-500' : 'bg-blue-600/10 text-blue-500'}`}>
+                             {inc.type === IncidentType.FIRE ? <Flame size={20} /> : <Waves size={20} />}
+                           </div>
+                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${inc.urgency === 'high' ? 'border-red-500/50 text-red-500 bg-red-500/5' : 'border-slate-700 text-slate-400'}`}>
+                             {inc.urgency.toUpperCase()}
+                           </span>
+                        </div>
+                        <h3 className="font-bold text-lg text-white mb-2">{inc.type === IncidentType.FIRE ? t.fireAlert : t.floodAlert}</h3>
+                        <p className="text-sm text-slate-400 leading-relaxed mb-6 line-clamp-3">"{inc.description}"</p>
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+                          <span className="text-[10px] text-slate-500 uppercase tracking-widest font-mono">VERIFIED DATA</span>
+                          <button className="text-blue-500 hover:text-blue-400 text-xs font-bold flex items-center gap-1 group">
+                            VIEW ON MAP <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
-              </div>
-              <div className={`p-6 rounded-2xl border ${state.isDarkMode ? 'bg-slate-900' : 'bg-white'}`}>
-                <h3 className="text-lg font-bold mb-4">{t.regFilters}</h3>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-xs font-bold opacity-50 uppercase mb-2">{t.forestType}</p>
-                    <select className="w-full bg-slate-800 border-slate-700 p-3 rounded-xl"><option>{t.allTypes}</option></select>
+              )}
+
+              {state.view === 'layers' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                      <Layers size={16} className="text-blue-500" /> Active GIS Layers
+                    </h3>
+                    <div className="space-y-1">
+                      {overlayLayers.map(layer => (
+                        <label key={layer} className={`flex items-center justify-between p-4 rounded-lg cursor-pointer transition-colors ${state.activeLayers.has(layer) ? 'bg-blue-600/5 border border-blue-500/20' : 'hover:bg-slate-800/50 border border-transparent'}`}>
+                          <div className="flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full ${state.activeLayers.has(layer) ? 'bg-blue-500 animate-pulse' : 'bg-slate-700'}`} />
+                            <span className={`text-sm ${state.activeLayers.has(layer) ? 'text-white font-medium' : 'text-slate-400'}`}>
+                              {layer}
+                            </span>
+                          </div>
+                          {/* Google Style Switch */}
+                          <div 
+                            onClick={(e) => { e.preventDefault(); toggleLayer(layer); }}
+                            className={`w-9 h-5 rounded-full relative transition-colors duration-200 ${state.activeLayers.has(layer) ? 'bg-blue-600' : 'bg-slate-700'}`}
+                          >
+                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-200 ${state.activeLayers.has(layer) ? 'left-5' : 'left-1'}`} />
+                          </div>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs font-bold opacity-50 uppercase mb-2">{t.riskThreshold}</p>
-                    <input type="range" className="w-full accent-emerald-500" />
-                    <div className="flex justify-between text-[10px] opacity-50 mt-1"><span>{t.low.toUpperCase()}</span><span>{t.critical}</span></div>
+                  
+                  <div className="space-y-8">
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6">Risk Threshold Filter</h3>
+                      <div className="px-2">
+                        <input type="range" className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+                        <div className="flex justify-between mt-4">
+                          <span className="text-[10px] font-bold text-slate-600 uppercase">Low Risk</span>
+                          <span className="text-[10px] font-bold text-red-500 uppercase">Critical Only</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-blue-600 rounded-xl p-8 relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-700" />
+                      <h3 className="text-2xl font-black text-white mb-2">Automated Analysis</h3>
+                      <p className="text-blue-100 text-sm mb-6">Our system uses machine learning to correlate NASA hotspots with community reports in real-time.</p>
+                      <button className="bg-white text-blue-600 px-6 py-2 rounded-lg font-bold text-sm shadow-xl hover:bg-slate-50 transition-colors">
+                        GENERATE REPORT
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {state.view === 'stats' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {[
+                      { label: 'Protected Area', val: '45.2k ha', icon: Shield, color: 'text-blue-500' },
+                      { label: 'Active Alerts', val: state.incidents.length, icon: Flame, color: 'text-red-500' },
+                      { label: 'Reliability', val: '99.8%', icon: Activity, color: 'text-emerald-500' }
+                    ].map(stat => (
+                      <div key={stat.label} className="bg-slate-900 border border-slate-800 p-6 rounded-xl relative overflow-hidden">
+                        <stat.icon className={`absolute -right-4 -bottom-4 w-24 h-24 opacity-5 ${stat.color}`} />
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">{stat.label}</p>
+                        <p className="text-4xl font-black text-white mt-4">{stat.val}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 p-8 rounded-xl">
+                    <div className="flex items-center justify-between mb-8">
+                      <h3 className="font-bold text-white uppercase tracking-widest text-sm">Threat Index History</h3>
+                      <select className="bg-slate-800 border-none text-[10px] rounded px-3 py-1 font-bold text-slate-400">
+                        <option>LAST 7 DAYS</option>
+                        <option>LAST 30 DAYS</option>
+                      </select>
+                    </div>
+                    <div className="h-48 flex items-end gap-3">
+                      {[30, 45, 25, 80, 65, 40, 55, 30, 45, 90, 70, 50, 35, 60].map((h, i) => (
+                        <div key={i} className="group relative flex-1 h-full flex flex-col justify-end">
+                          <div className="bg-blue-600/20 group-hover:bg-blue-600/40 transition-colors rounded-t w-full" style={{ height: `${h}%` }}>
+                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">Val: {h}%</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
-        {state.view === 'stats' && (
-          <div className="p-6 h-full">
-            <h2 className="text-2xl font-bold mb-6">{t.stats}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              {[ { label: t.totalProtected, val: '45,230 Ha' }, { label: t.activeHotspots, val: state.incidents.length }, { label: t.avgRiskIndex, val: '0.34' } ].map(stat => (
-                <div key={stat.label} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-                  <p className="text-xs font-bold opacity-50 uppercase tracking-widest">{stat.label}</p>
-                  <p className="text-3xl font-black mt-2">{stat.val}</p>
-                </div>
-              ))}
-            </div>
-            <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-              <h3 className="font-bold mb-4">{t.histComparison}</h3>
-              <div className="h-40 flex items-end gap-2 px-4">{[40, 60, 45, 90, 75, 55, 30].map((h, i) => (<div key={i} className="flex-1 bg-emerald-600/20 rounded-t-lg" style={{ height: `${h}%` }} />))}</div>
-            </div>
-          </div>
+
+        {showModal && (
+          <ReportModal 
+            language={state.language} 
+            location={reportLocation} 
+            onClose={() => setShowModal(false)} 
+            onSubmit={handleReportSubmit} 
+          />
         )}
-        {showModal && <ReportModal language={state.language} location={reportLocation} onClose={() => setShowModal(false)} onSubmit={handleReportSubmit} />}
       </main>
     </div>
   );

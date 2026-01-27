@@ -10,8 +10,10 @@ export enum MapLayer {
   SATELLITE_CLARITY = 'High Clarity (Esri)',
   SATELLITE_GOOGLE = 'Google High-Res',
   SENTINEL = 'Sentinel-2 Cloudless',
-  SENTINEL_INFRARED = 'Forest Health (Infrared)',
+  INFRARED = 'Infrared (Vegetation)',
+  METEOBLUE = 'Meteoblue Temperature',
   NASA_FIRMS = 'NASA FIRMS (Hotspots)',
+  THERMAL = 'Thermal Infrared (LST)',
   WEATHER_TEMP = 'Temperature Map',
   WIND_SPEED = 'Wind Dynamics',
   TERRAIN = 'Terrain',
@@ -51,7 +53,7 @@ export interface AppState {
   language: Language;
   activeLayers: Set<MapLayer>;
   incidents: IncidentReport[];
-  view: 'map' | 'reports' | 'stats' | 'info';
+  view: 'map' | 'reports' | 'stats' | 'info' | 'layers';
   isReporting: boolean;
   isDarkMode: boolean;
 }

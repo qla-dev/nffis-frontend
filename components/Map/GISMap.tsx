@@ -1,32 +1,29 @@
-
-import React, { useEffect, useState, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, LayerGroup, GeoJSON, WMSTileLayer, Polyline } from 'react-leaflet';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Circle, LayerGroup, GeoJSON, WMSTileLayer } from 'react-leaflet';
 import L from 'leaflet';
-import { AlertTriangle, Layers, Waves, Flame, ChevronDown, ChevronUp, Eye, Navigation as NavIcon, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Check } from 'lucide-react';
+import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Languages, Settings, Map as MapIcon, Image as ImageIcon, Satellite, Mountain, Leaf, X } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, BIH_GEOJSON, TRANSLATIONS } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language } from '../../types';
 
 const ForestIcon = L.divIcon({
   html: `
-    <div class="flex items-center justify-center w-9 h-9 bg-emerald-600 rounded-full border-2 border-white shadow-2xl text-white transform hover:scale-110 transition-transform cursor-pointer">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <div class="flex items-center justify-center w-7 h-7 bg-slate-950 rounded-full border-2 border-blue-600 shadow-2xl text-blue-500 hover:scale-110 transition-transform">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 2v5"/><path d="M12 19v3"/><path d="M12 7l-4 4h8l-4-4Z" fill="currentColor"/>
-        <path d="m12 7-6 6h12l-6-6Z" fill="currentColor" fill-opacity="0.6"/>
       </svg>
     </div>
   `,
   className: '',
-  iconSize: [36, 36],
-  iconAnchor: [18, 18],
-  popupAnchor: [0, -18]
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+  popupAnchor: [0, -14]
 });
 
 const UserIcon = L.divIcon({
   html: `
     <div class="relative flex items-center justify-center">
-      <div class="absolute w-8 h-8 bg-blue-500 rounded-full animate-ping opacity-40"></div>
-      <div class="absolute w-6 h-6 bg-blue-400 rounded-full animate-pulse opacity-60"></div>
-      <div class="relative w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>
+      <div class="absolute w-8 h-8 bg-blue-500 rounded-full animate-ping opacity-20"></div>
+      <div class="relative w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-xl"></div>
     </div>
   `,
   className: '',
@@ -40,164 +37,197 @@ interface GISMapProps {
   onReportClick: (lat: number, lng: number) => void;
   isReporting: boolean;
   onToggleLayer: (layer: MapLayer) => void;
+  onSetBaseLayer: (layer: MapLayer | null) => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
   language: Language;
+  onSetLanguage: (lang: Language) => void;
 }
-
-const SAT_LAYERS = [
-  { id: MapLayer.SATELLITE, label: 'Esri World Imagery', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' },
-  { id: MapLayer.SATELLITE_CLARITY, label: 'Esri Clarity', url: 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' },
-  { id: MapLayer.SATELLITE_GOOGLE, label: 'Google Maps Sat', url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}' },
-  { id: MapLayer.SENTINEL, label: 'Sentinel-2 Cloudless', url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg' },
-];
 
 export const GISMap: React.FC<GISMapProps> = ({ 
   incidents, 
   activeLayers, 
   onReportClick, 
   isReporting, 
-  onToggleLayer, 
+  onToggleLayer,
+  onSetBaseLayer,
   isDarkMode, 
   onToggleTheme,
-  language 
+  language,
+  onSetLanguage
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
-  const [isSatMenuOpen, setIsSatMenuOpen] = useState(false);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [showLayerPanel, setShowLayerPanel] = useState(false);
+  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  const [showSatPanel, setShowSatPanel] = useState(false);
+  const [showLegend, setShowLegend] = useState(true);
+  const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
 
   const t = TRANSLATIONS[language];
+
+  // Fetch Meteoblue URL
+  useEffect(() => {
+    const fetchMeteoblue = async () => {
+      try {
+        const apiKey = "be72f76237db";
+        const timeResponse = await fetch(`https://maps-api.meteoblue.com/v1/time/hourly/ICONAUTO?lang=en&apikey=${apiKey}`);
+        const timeInfo = await timeResponse.json();
+        const date = timeInfo.current;
+        
+        const url = `https://maps-api.meteoblue.com/v1/map/raster/ICONAUTO/${date}/` +
+          "11~2%20m%20above%20gnd~hourly~none~contourSteps~" +
+          "-10.0~rgba(52,140,237,1.0)~" +
+          "-8.0~rgba(68,177,246,1.0)~" +
+          "-6.0~rgba(81,203,250,1.0)~" +
+          "-4.0~rgba(128,224,247,1.0)~" +
+          "-2.0~rgba(160,234,247,1.0)~" +
+          "0.0~rgba(0,239,124,1.0)~" +
+          "2.0~rgba(0,228,82,1.0)~" +
+          "4.0~rgba(0,200,72,1.0)~" +
+          "6.0~rgba(16,184,122,1.0)~" +
+          "8.0~rgba(41,123,93,1.0)~" +
+          "10.0~rgba(0,114,41,1.0)~" +
+          "12.0~rgba(60,161,44,1.0)~" +
+          "14.0~rgba(121,208,48,1.0)~" +
+          "16.0~rgba(181,255,51,1.0)~" +
+          "18.0~rgba(216,247,161,1.0)~" +
+          "20.0~rgba(255,246,0,1.0)~" +
+          "22.0~rgba(248,223,11,1.0)~" +
+          "24.0~rgba(253,202,12,1.0)~" +
+          "26.0~rgba(252,172,5,1.0)~" +
+          "28.0~rgba(248,141,0,1.0)~" +
+          "30.0~rgba(255,102,0,1.0)~" +
+          "/{z}/{x}/{y}" +
+          "?temperatureUnit=C" +
+          `&apikey=${apiKey}` +
+          `&lastUpdate=${timeInfo.lastUpdate}`;
+          
+        setMeteoblueUrl(url);
+      } catch (e) {
+        console.error("Failed to fetch meteoblue", e);
+      }
+    };
+    fetchMeteoblue();
+  }, []);
+
+  const imagerySources = useMemo(() => [
+    { id: MapLayer.SATELLITE, label: 'ArcGIS Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Satellite },
+    { id: MapLayer.SATELLITE_CLARITY, label: 'Esri Clarity', url: 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Satellite },
+    { id: MapLayer.SATELLITE_GOOGLE, label: 'Google Hybrid', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', icon: Globe2 },
+    { id: MapLayer.SENTINEL, label: 'Sentinel-2', url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2019_3857/default/g/{z}/{y}/{x}.jpg', icon: Layers },
+    { id: MapLayer.INFRARED, label: 'Infrared (Veg)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Leaf },
+    { id: MapLayer.METEOBLUE, label: 'Meteoblue Temp', url: meteoblueUrl, icon: Thermometer },
+    { id: MapLayer.NASA_FIRMS, label: 'NASA VIIRS', url: 'https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg', icon: Flame },
+    { id: MapLayer.THERMAL, label: 'Thermal LST', url: 'https://map1.vis.earthdata.nasa.gov/wmts-webmerc/MODIS_Terra_Land_Surface_Temp_Day/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png', icon: Thermometer },
+    { id: MapLayer.TERRAIN, label: 'OpenTopoMap', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', icon: Mountain },
+  ], [meteoblueUrl]);
 
   useEffect(() => {
     if (map) {
       const clickHandler = (e: L.LeafletMouseEvent) => {
-        if (isReporting) {
-          onReportClick(e.latlng.lat, e.latlng.lng);
-        }
+        if (isReporting) onReportClick(e.latlng.lat, e.latlng.lng);
       };
       map.on('click', clickHandler);
-      return () => {
-        map.off('click', clickHandler);
-      };
+      return () => map.off('click', clickHandler);
     }
   }, [map, isReporting, onReportClick]);
 
   const handleLocateMe = useCallback(() => {
-    if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
-      return;
-    }
-
+    if (!navigator.geolocation) return;
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
         setUserPos([latitude, longitude]);
-        map?.flyTo([latitude, longitude], 15, { animate: true });
+        map?.flyTo([latitude, longitude], 13);
         setIsLocating(false);
       },
-      (error) => {
-        setIsLocating(false);
-        let msg = "Location error";
-        if (error.code === error.PERMISSION_DENIED) msg = "Please enable location permissions in your browser.";
-        else if (error.code === error.POSITION_UNAVAILABLE) msg = "Location information is unavailable.";
-        alert(msg);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
+      () => setIsLocating(false),
+      { enableHighAccuracy: true }
     );
   }, [map]);
 
-  const calculateSpreadVector = (lat: number, lng: number, angle: number = 0, speed: number = 10) => {
-    const length = (speed / 100) * 0.2; 
-    const rad = (angle - 90) * (Math.PI / 180);
-    return [
-      [lat, lng],
-      [lat + Math.sin(rad) * length, lng + Math.cos(rad) * length]
-    ] as [number, number][];
-  };
+  const activeBaseLayer = imagerySources.find(src => activeLayers.has(src.id)) || null;
 
-  const activeSatLayer = SAT_LAYERS.find(sat => activeLayers.has(sat.id)) || null;
-  const isFloodRiskActive = activeLayers.has(MapLayer.FLOOD_RISK);
-  const isFireRiskActive = activeLayers.has(MapLayer.FIRE_RISK);
-  const isBordersActive = activeLayers.has(MapLayer.COUNTRY_BORDERS);
-
-  const handleSelectSatellite = (id: MapLayer) => {
-    // Turn off all other satellite layers
-    SAT_LAYERS.forEach(sat => {
-      if (sat.id !== id && activeLayers.has(sat.id)) {
-        onToggleLayer(sat.id);
-      }
-    });
-    // Toggle the selected one
-    if (!activeLayers.has(id)) {
-      onToggleLayer(id);
+  // Handle panel exclusivity
+  const togglePanel = (panel: 'layer' | 'settings' | 'sat') => {
+    if (panel === 'layer') {
+      setShowLayerPanel(!showLayerPanel);
+      setShowSettingsPanel(false);
+      setShowSatPanel(false);
+    } else if (panel === 'settings') {
+      setShowSettingsPanel(!showSettingsPanel);
+      setShowLayerPanel(false);
+      setShowSatPanel(false);
+    } else if (panel === 'sat') {
+      setShowSatPanel(!showSatPanel);
+      setShowSettingsPanel(false);
+      setShowLayerPanel(false);
     }
-    setIsSatMenuOpen(false);
   };
 
   return (
     <div className="w-full h-full relative">
       <MapContainer center={BIH_CENTER} zoom={8} className="w-full h-full" ref={setMap} zoomControl={false}>
-        {!activeSatLayer && (
+        {/* Base Layer Logic */}
+        {!activeBaseLayer ? (
           <TileLayer
             key={isDarkMode ? 'dark' : 'light'}
-            url={isDarkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"}
+            url={isDarkMode 
+              ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
+              : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"}
           />
-        )}
-        
-        {activeSatLayer && (
+        ) : (
           <TileLayer 
-            key={activeSatLayer.id}
-            url={activeSatLayer.url} 
-            attribution={activeSatLayer.label}
+            key={activeBaseLayer.id} 
+            url={activeBaseLayer.url} 
+            attribution={activeBaseLayer.label} 
+            className={(activeBaseLayer.id === MapLayer.INFRARED) ? 'hue-rotate-180 invert' : ''} 
+            opacity={activeBaseLayer.id === MapLayer.METEOBLUE ? 0.7 : 1}
           />
         )}
         
-        {activeLayers.has(MapLayer.WEATHER_TEMP) && (
-          <WMSTileLayer
-            url="https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=d22f66d48348243ed47c132845c48b2a"
-            opacity={0.5}
-            attribution="OpenWeather"
-          />
-        )}
+        {/* Standard Overlays */}
+        {activeLayers.has(MapLayer.WEATHER_TEMP) && <WMSTileLayer url="https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=d22f66d48348243ed47c132845c48b2a" opacity={0.4} />}
+        {activeLayers.has(MapLayer.WIND_SPEED) && <WMSTileLayer url="https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=d22f66d48348243ed47c132845c48b2a" opacity={0.4} />}
+        {activeLayers.has(MapLayer.COUNTRY_BORDERS) && <GeoJSON data={BIH_GEOJSON} style={{ color: '#1a73e8', weight: 1.5, fillOpacity: 0.05 }} />}
         
-        {activeLayers.has(MapLayer.WIND_SPEED) && (
-          <WMSTileLayer
-            url="https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=d22f66d48348243ed47c132845c48b2a"
-            opacity={0.5}
-            attribution="OpenWeather"
-          />
-        )}
-
-        {isBordersActive && <GeoJSON data={BIH_GEOJSON} style={{ color: isDarkMode ? '#fbbf24' : '#d97706', weight: 2, fillOpacity: 0.05 }} />}
-        
-        {activeLayers.has(MapLayer.NASA_FIRMS) && (
-          <WMSTileLayer
-            url="https://firms.modaps.eosdis.nasa.gov/mapserver/wms/v2/firedetect/"
-            layers="fires_viirs_24"
-            format="image/png"
-            transparent={true}
-            attribution="NASA FIRMS"
-          />
-        )}
-
         {userPos && <Marker position={userPos} icon={UserIcon} />}
 
         <LayerGroup>
           {MOCK_FORESTS.map(forest => (
             <Marker key={forest.id} position={forest.coordinates} icon={ForestIcon}>
-              <Popup>
-                <div className="p-2 min-w-[150px]">
-                  <h3 className="font-bold text-slate-900">{t.forests[forest.name as keyof typeof t.forests] || forest.name}</h3>
-                  <p className="text-xs text-slate-600">{t.forests[forest.type as keyof typeof t.forests] || forest.type}</p>
-                  <div className="mt-2 flex flex-col gap-1">
-                    <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400">
-                      <span>{t.riskLevel}</span>
-                      <span>{Math.round(forest.riskScore * 100)}%</span>
+              <Popup className="google-style-popup">
+                <div className="p-4 w-72 bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700">
+                  <header className="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
+                    <div>
+                      <h3 className="font-bold text-sm text-blue-400 leading-tight">{t.forests[forest.name as keyof typeof t.forests] || forest.name}</h3>
+                      <span className="text-[9px] text-slate-500 font-mono tracking-widest uppercase">{forest.type} UNIT</span>
                     </div>
-                    <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                      <div className={`h-full ${forest.riskScore > 0.6 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${forest.riskScore * 100}%` }} />
+                  </header>
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
+                        <span>Threat Index</span>
+                        <span className={forest.riskScore > 0.6 ? 'text-red-500' : 'text-blue-500'}>
+                          {(forest.riskScore * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div className={`h-full transition-all duration-1000 ${forest.riskScore > 0.6 ? 'bg-red-600' : 'bg-blue-600'}`} style={{ width: `${forest.riskScore * 100}%` }} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                        <div className="text-[9px] font-bold text-slate-500 uppercase">Surface Area</div>
+                        <div className="text-xs font-black text-white">{forest.area.toLocaleString()} ha</div>
+                      </div>
+                      <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                        <div className="text-[9px] font-bold text-slate-500 uppercase">Data Sync</div>
+                        <div className="text-xs font-black text-emerald-500 flex items-center gap-1">LIVE <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /></div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -206,123 +236,250 @@ export const GISMap: React.FC<GISMapProps> = ({
           ))}
         </LayerGroup>
 
-        {(isFireRiskActive || isFloodRiskActive) && (
-          <LayerGroup>
-            {incidents.filter(inc => (inc.type === IncidentType.FIRE && isFireRiskActive) || (inc.type === IncidentType.FLOOD && isFloodRiskActive)).map(incident => (
-              <React.Fragment key={incident.id}>
-                {incident.type === IncidentType.FIRE && incident.windDirection && (
-                  <Polyline 
-                    positions={calculateSpreadVector(incident.lat, incident.lng, incident.windDirection, incident.windSpeed)} 
-                    pathOptions={{ color: '#ef4444', weight: 4, dashArray: '8, 8', opacity: 0.6 }}
-                  />
-                )}
-                <Circle center={[incident.lat, incident.lng]} radius={1000} pathOptions={{ color: incident.urgency === 'high' ? '#ef4444' : '#f59e0b', fillOpacity: 0.6 }}>
-                  <Popup>
-                    <div className="p-1">
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${incident.type === IncidentType.FIRE ? 'bg-red-600' : 'bg-blue-600'}`}>
-                        {incident.type === IncidentType.FIRE ? t.fireAlert : t.floodAlert}
-                      </span>
-                      <p className="mt-2 text-sm font-medium">{incident.description}</p>
-                      {incident.windSpeed && (
-                        <div className="mt-2 pt-2 border-t flex items-center gap-2 text-xs text-slate-500">
-                          <Wind size={14} /> {t.windSpeed}: {incident.windSpeed} km/h
-                        </div>
-                      )}
-                    </div>
-                  </Popup>
-                </Circle>
-              </React.Fragment>
-            ))}
-          </LayerGroup>
-        )}
+        <LayerGroup>
+          {incidents.filter(inc => (inc.type === IncidentType.FIRE && activeLayers.has(MapLayer.FIRE_RISK)) || (inc.type === IncidentType.FLOOD && activeLayers.has(MapLayer.FLOOD_RISK))).map(incident => (
+            <Circle key={incident.id} center={[incident.lat, incident.lng]} radius={2000} pathOptions={{ 
+              color: incident.type === IncidentType.FIRE ? '#ea4335' : '#1a73e8', 
+              fillColor: incident.type === IncidentType.FIRE ? '#ea4335' : '#1a73e8',
+              fillOpacity: 0.35,
+              weight: 2
+            }}>
+              <Popup>
+                <div className="p-2">
+                  <div className={`text-[10px] font-black px-2 py-1 rounded mb-2 inline-flex items-center gap-1 ${incident.type === IncidentType.FIRE ? 'bg-red-600' : 'bg-blue-600'} text-white`}>
+                    {incident.type === IncidentType.FIRE ? <Flame size={12} /> : <Waves size={12} />}
+                    {incident.type === IncidentType.FIRE ? 'FIRE EMERGENCY' : 'FLOOD EMERGENCY'}
+                  </div>
+                  <p className="text-xs font-medium text-slate-200 mb-2 leading-relaxed">"{incident.description}"</p>
+                  <div className="flex items-center justify-between text-[9px] text-slate-500 font-bold uppercase border-t border-slate-800 pt-2">
+                    <span>Priority: {incident.urgency}</span>
+                    <span>WIND: {incident.windSpeed} km/h</span>
+                  </div>
+                </div>
+              </Popup>
+            </Circle>
+          ))}
+        </LayerGroup>
       </MapContainer>
 
-      {/* Locate Me Button */}
-      <button 
-        onClick={handleLocateMe} 
-        disabled={isLocating}
-        className="absolute bottom-32 right-6 z-[1000] bg-slate-900/90 text-white p-4 rounded-full shadow-2xl border border-slate-700 hover:bg-slate-800 transition-colors disabled:opacity-50"
-      >
-        {isLocating ? <Loader2 size={24} className="animate-spin" /> : <NavIcon size={24} />}
-      </button>
-
-      {/* Top Right Controls */}
-      <div className="absolute top-6 right-6 z-[1000] flex flex-col gap-3 max-w-[200px] w-full items-end">
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700 p-1 rounded-2xl flex items-center shadow-2xl w-full">
-          <button onClick={() => onToggleLayer(MapLayer.FIRE_RISK)} className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs uppercase ${isFireRiskActive ? 'bg-red-600/20 text-red-500' : 'text-slate-400'}`}>
-            <Flame size={16} />{t.fireAlert.split(' ')[0]}
-          </button>
-          <button onClick={() => onToggleLayer(MapLayer.FLOOD_RISK)} className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-xs uppercase ${isFloodRiskActive ? 'bg-blue-600/20 text-blue-500' : 'text-slate-400'}`}>
-            <Waves size={16} />{t.floodAlert.split(' ')[0]}
-          </button>
+      {/* Floating Operations Header (Aesthetic) */}
+      <div className="absolute top-4 left-4 md:left-20 z-[2000] pointer-events-none">
+        <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 px-4 py-2 rounded-lg shadow-2xl flex items-center gap-4">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Surveillance Network</span>
+            <span className="text-xs font-bold text-white leading-none">Status: Nominal / Tracking {incidents.length} Alerts</span>
+          </div>
         </div>
+      </div>
 
-        <button onClick={onToggleTheme} className={`w-full p-3 rounded-xl border font-bold text-xs uppercase flex items-center gap-2 ${isDarkMode ? 'bg-slate-800 text-amber-400 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-          {isDarkMode ? <Moon size={18} /> : <Sun size={18} />}{isDarkMode ? t.dark : t.light}
-        </button>
+      {/* HORIZONTAL Control Cluster (Right Side) */}
+      <div className="absolute top-4 right-4 z-[2000] flex flex-col items-end gap-2">
+        <div className="bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-xl shadow-2xl p-1 flex items-center gap-1">
+          {/* Theme */}
+          <button onClick={onToggleTheme} className={`p-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-amber-400 bg-amber-400/5 hover:bg-amber-400/10' : 'text-slate-400 hover:bg-slate-800'}`} title="Toggle Theme">
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+          
+          <div className="w-px h-6 bg-slate-800 mx-1" />
 
-        <div className="bg-slate-900/90 border border-slate-700 rounded-xl p-1 flex gap-1 shadow-2xl w-full">
-           <button onClick={() => onToggleLayer(MapLayer.WEATHER_TEMP)} className={`flex-1 p-2 rounded-lg flex items-center justify-center ${activeLayers.has(MapLayer.WEATHER_TEMP) ? 'bg-orange-600 text-white' : 'text-slate-400'}`}>
-             <Thermometer size={18} />
-           </button>
-           <button onClick={() => onToggleLayer(MapLayer.WIND_SPEED)} className={`flex-1 p-2 rounded-lg flex items-center justify-center ${activeLayers.has(MapLayer.WIND_SPEED) ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}>
-             <Wind size={18} />
-           </button>
-        </div>
-
-        <button onClick={() => onToggleLayer(MapLayer.COUNTRY_BORDERS)} className={`w-full p-3 rounded-xl border font-bold text-xs uppercase flex items-center gap-2 ${isBordersActive ? 'bg-amber-600/20 text-amber-200 border-amber-500' : 'bg-slate-900/90 text-slate-400 border-slate-700'}`}>
-          <Globe2 size={18} />{t.borders} {isBordersActive ? t.on : t.off}
-        </button>
-
-        {/* Satellite Dropdown Menu */}
-        <div className="relative w-full">
+          {/* Settings / Language Toggle */}
           <button 
-            onClick={() => setIsSatMenuOpen(!isSatMenuOpen)} 
-            className="w-full p-3 bg-slate-900/90 border border-slate-700 rounded-xl flex items-center justify-between text-xs font-bold uppercase text-slate-400 hover:text-white transition-colors"
+            onClick={() => togglePanel('settings')} 
+            className={`p-2.5 rounded-lg transition-colors ${showSettingsPanel ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+            title="Global Settings"
           >
-            <span className="flex items-center gap-2">
-              <Layers size={18} />
-              {activeSatLayer ? activeSatLayer.label.split(' ')[0] : t.satellite}
-            </span>
-            {isSatMenuOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            <Settings size={18} />
           </button>
 
-          {isSatMenuOpen && (
-            <div className="absolute top-full mt-2 left-0 right-0 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 z-[1001]">
-              <button 
-                onClick={() => {
-                  SAT_LAYERS.forEach(sat => activeLayers.has(sat.id) && onToggleLayer(sat.id));
-                  setIsSatMenuOpen(false);
-                }}
-                className={`w-full px-4 py-3 text-left text-xs font-bold uppercase flex items-center justify-between transition-colors ${!activeSatLayer ? 'bg-emerald-600/10 text-emerald-500' : 'text-slate-400 hover:bg-slate-800'}`}
-              >
-                Vector Map {!activeSatLayer && <Check size={14} />}
-              </button>
-              {SAT_LAYERS.map(sat => (
-                <button
-                  key={sat.id}
-                  onClick={() => handleSelectSatellite(sat.id)}
-                  className={`w-full px-4 py-3 text-left text-xs font-bold uppercase flex items-center justify-between transition-colors ${activeLayers.has(sat.id) ? 'bg-emerald-600/10 text-emerald-500' : 'text-slate-400 hover:bg-slate-800'}`}
+          {/* Layer Panel Toggle */}
+          <button 
+            onClick={() => togglePanel('layer')} 
+            className={`p-2.5 rounded-lg transition-colors ${showLayerPanel ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+            title="Layer Settings"
+          >
+            <Settings2 size={18} />
+          </button>
+          
+          {/* Legend Toggle */}
+          <button 
+            onClick={() => setShowLegend(!showLegend)} 
+            className={`p-2.5 rounded-lg transition-colors ${showLegend ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+            title="Toggle Legend"
+          >
+            <Info size={18} />
+          </button>
+
+          <div className="w-px h-6 bg-slate-800 mx-1" />
+
+          {/* Satellite Chooser */}
+          <button 
+            onClick={() => togglePanel('sat')} 
+            className={`p-2.5 rounded-lg transition-colors ${showSatPanel || activeBaseLayer ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+            title="Imagery Source"
+          >
+            <Globe2 size={18} />
+          </button>
+        </div>
+
+        {/* Dropdown Panels Container */}
+        <div className="relative w-64">
+          
+          {/* Floating Satellite Panel */}
+          {showSatPanel && (
+            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-full animate-in slide-in-from-top-2 duration-200">
+              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+                Imagery Source
+                <button onClick={() => setShowSatPanel(false)} className="hover:text-white"><X size={14} /></button>
+              </h4>
+              <div className="grid grid-cols-2 gap-2">
+                <button 
+                  onClick={() => { onSetBaseLayer(null); setShowSatPanel(false); }}
+                  className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    !activeBaseLayer ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  }`}
                 >
-                  {sat.label}
-                  {activeLayers.has(sat.id) && <Check size={14} />}
+                  <MapIcon size={20} className={!activeBaseLayer ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[10px] font-bold text-white uppercase">Vector</span>
                 </button>
-              ))}
+                {imagerySources.map(layer => (
+                  <button 
+                    key={layer.id}
+                    onClick={() => { onSetBaseLayer(layer.id); setShowSatPanel(false); }}
+                    className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                      activeLayers.has(layer.id) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                    }`}
+                  >
+                    <layer.icon size={20} className={activeLayers.has(layer.id) ? 'text-blue-500' : 'text-slate-500'} />
+                    <span className="text-[10px] font-bold text-white uppercase text-center leading-tight">{layer.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Floating Settings Panel */}
+          {showSettingsPanel && (
+            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-full animate-in slide-in-from-top-2 duration-200">
+              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+                System Configuration
+                <button onClick={() => setShowSettingsPanel(false)} className="hover:text-white"><X size={14} /></button>
+              </h4>
+              
+              <div className="space-y-4">
+                <section>
+                  <div className="text-[9px] font-bold text-slate-600 uppercase mb-2 tracking-tighter">Active Language</div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {Object.values(Language).map((lang) => (
+                      <button 
+                        key={lang}
+                        onClick={() => onSetLanguage(lang)}
+                        className={`py-1.5 rounded-md text-[10px] font-black transition-all border ${
+                          language === lang 
+                            ? 'bg-blue-600 border-blue-500 text-white' 
+                            : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        {lang.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </div>
+          )}
+
+          {/* Layer Quick Panel */}
+          {showLayerPanel && (
+            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-full animate-in slide-in-from-top-2 duration-200">
+              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+                Data Overlays
+                <button onClick={() => setShowLayerPanel(false)} className="hover:text-white transition-colors">
+                  <X size={14} />
+                </button>
+              </h4>
+              <div className="space-y-2">
+                {[
+                  { id: MapLayer.FIRE_RISK, label: 'Fire Threats', icon: Flame, color: 'text-red-500' },
+                  { id: MapLayer.FLOOD_RISK, label: 'Hydrological', icon: Waves, color: 'text-blue-500' },
+                  { id: MapLayer.WEATHER_TEMP, label: 'Heat Index', icon: Thermometer, color: 'text-orange-500' },
+                  { id: MapLayer.WIND_SPEED, label: 'Wind Patterns', icon: Wind, color: 'text-cyan-500' },
+                ].map(layer => (
+                  <button 
+                    key={layer.id}
+                    onClick={() => onToggleLayer(layer.id)}
+                    className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
+                      activeLayers.has(layer.id) 
+                        ? 'bg-blue-600/10 border-blue-600/50' 
+                        : 'bg-slate-900/50 border-transparent hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <layer.icon size={16} className={activeLayers.has(layer.id) ? layer.color : 'text-slate-600'} />
+                      <span className={`text-[11px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>{layer.label}</span>
+                    </div>
+                    {activeLayers.has(layer.id) && <Check size={12} className="text-blue-500" />}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Legend */}
-      <div className={`absolute bottom-6 right-6 z-[1000] p-4 rounded-2xl text-xs hidden md:block shadow-2xl border ${isDarkMode ? 'bg-slate-950/90 text-slate-300 border-slate-800' : 'bg-white/90 text-slate-700 border-slate-200'}`}>
-        <h4 className="font-bold mb-3 uppercase tracking-wider text-[10px] opacity-50">{t.gisLegend}</h4>
-        <div className="space-y-3">
-          <div className="flex items-center gap-3"><span className="w-3 h-3 rounded-full bg-red-600" /><span>{t.fireAlert}</span></div>
-          <div className="flex items-center gap-3"><span className="w-3 h-3 rounded-full bg-blue-600" /><span>{t.floodAlert}</span></div>
-          <div className="flex items-center gap-3"><span className="w-4 h-0.5 border-t-2 border-dashed border-red-500" /><span>{t.windSpeed} Forecast</span></div>
-          <div className="flex items-center gap-3"><span className="w-3 h-3 rounded-full bg-orange-600" /><span>{t.nasaFirms}</span></div>
+      {/* Floating Legend (Left) */}
+      {showLegend && (
+        <div className="absolute bottom-24 left-4 md:bottom-8 md:left-[4.5rem] z-[2000] animate-in slide-in-from-left-2 duration-300">
+          <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 p-3 rounded-xl shadow-2xl min-w-[160px]">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <Info size={14} className="text-blue-500" />
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.gisLegend}</span>
+              </div>
+              <button onClick={() => setShowLegend(false)} className="text-slate-600 hover:text-slate-400 md:hidden">
+                <ChevronRight size={12} className="rotate-90" />
+              </button>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                <div className="w-2 h-2 rounded-full bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.5)]" /> Active Fire
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                <div className="w-2 h-2 rounded-full bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.5)]" /> Active Flood
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                <div className="w-2 h-2 rounded-full border border-blue-500" /> Sensor Station
+              </div>
+              <div className="pt-1 mt-1 border-t border-slate-800/50">
+                 <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" /> Live Data Stream
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* GPS FAB */}
+      <div className="absolute bottom-6 right-6 z-[2000]">
+        <button 
+          onClick={handleLocateMe}
+          title="My Location"
+          className="w-12 h-12 bg-white text-slate-950 rounded-full shadow-2xl flex items-center justify-center hover:bg-blue-50 active:scale-95 transition-all"
+        >
+          {isLocating ? <Loader2 size={20} className="animate-spin" /> : <NavIcon size={20} className="fill-current" />}
+        </button>
       </div>
+
+      {/* Incident Reporting Banner */}
+      {isReporting && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[3000] bg-blue-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <NavIcon size={16} className="animate-pulse" />
+          <span className="text-xs font-black uppercase tracking-widest">TAP MAP TO SELECT INCIDENT COORDINATES</span>
+          <div className="h-4 w-px bg-white/20 mx-2" />
+          <button onClick={() => onReportClick(0,0)} className="text-[10px] font-black hover:text-white/80">CANCEL</button>
+        </div>
+      )}
     </div>
   );
 };
