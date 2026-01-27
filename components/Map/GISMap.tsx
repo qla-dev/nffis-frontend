@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, LayerGroup, GeoJSON, WMSTileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Languages, Settings, Map as MapIcon, Image as ImageIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, TreePine, Sprout, Tent, ShieldCheck, Factory } from 'lucide-react';
-import { BIH_CENTER, MOCK_FORESTS, BIH_GEOJSON, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_HEATMAP_DATA } from '../../constants';
+import { BIH_CENTER, MOCK_FORESTS, BIH_GEOJSON, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType } from '../../types';
 
 // Shared SVG paths for Map Markers and Legend
@@ -12,7 +12,8 @@ const ICON_PATHS: Record<string, string> = {
   mixed: `<path d="M10 10v.2A3 3 0 0 1 8.9 16v0H5v0h0a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z"/><path d="M7 16v6"/><path d="M13 19v3"/><path d="M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .9-1.7l-2.6-5a1 1 0 0 0-1.8 0l-2.6 5a1 1 0 0 0 .9 1.7h.2l-1.4 2.5"/>`,
   shrub: `<path d="M12 22v-9"/><path d="M6.06 14a4 4 0 0 1 7.15-2.73"/><path d="M12.8 11.27a4 4 0 0 1 5.14 8.73"/><path d="M18.66 16.32a4 4 0 0 1-1.37 5.68"/><path d="M4.69 13.9a4 4 0 0 0-.25 7.84"/>`,
   sprout: `<path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .5-3.5 1.3-3.5 1.3s-.9-2.4 0-4.6c.9-2.1 2.2-2 2.2-2"/>`,
-  trash: `<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>`
+  trash: `<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>`,
+  shield: `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/>`
 };
 
 // Helper to generate dynamic icons
@@ -33,6 +34,25 @@ const getRegionIcon = (type: RegionType) => {
     iconSize: [32, 32],
     iconAnchor: [16, 16],
     popupAnchor: [0, -16]
+  });
+};
+
+const getProtectedAreaIcon = (intensity: number) => {
+  const color = intensity > 0.8 ? '#ef4444' : '#eab308'; // Red for high, Yellow for medium
+  const path = ICON_PATHS.shield;
+  
+  const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+
+  return L.divIcon({
+    html: `
+      <div class="flex items-center justify-center w-9 h-9 bg-slate-900/90 rounded-full border-2 border-[${color}] shadow-[0_0_15px_${color}40] hover:scale-110 transition-transform backdrop-blur-sm" style="border-color: ${color}">
+        ${iconSvg}
+      </div>
+    `,
+    className: '',
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    popupAnchor: [0, -18]
   });
 };
 
@@ -65,20 +85,13 @@ const HeatmapLayer = ({ active }: { active: boolean }) => {
 
     // Config options for heatmap.js
     const cfg = {
-      // radius should be small ONLY if scaleRadius is true (or small radius is intended)
-      // if scaleRadius is false it will be the constant radius used in pixels
       "radius": 40,
-      "maxOpacity": 0.65,
-      // scales the radius based on map zoom
+      "maxOpacity": 0.5,
       "scaleRadius": false,
-      // if set to false the heatmap uses the global maximum for colorization
-      // if activated: uses the data maximum within the current map boundaries
       "useLocalExtrema": true,
-      // field names
       latField: 'lat',
       lngField: 'lng',
       valueField: 'val',
-      // aesthetic configuration
       gradient: {
         0.1: '#1a53ff',  // Blue
         0.3: '#00cc66',  // Green
@@ -90,10 +103,10 @@ const HeatmapLayer = ({ active }: { active: boolean }) => {
     // Create layer
     const layer = new HeatmapOverlay(cfg);
 
-    // Transform data from [lat, lng, intensity] to {lat, lng, val}
+    // Transform structured data to heatmap format
     const heatmapData = {
       max: 1.0,
-      data: PROTECTED_AREAS_HEATMAP_DATA.map(d => ({lat: d[0], lng: d[1], val: d[2]}))
+      data: PROTECTED_AREAS_DATA.map(d => ({lat: d.lat, lng: d.lng, val: d.intensity}))
     };
     
     layer.setData(heatmapData);
@@ -273,6 +286,48 @@ export const GISMap: React.FC<GISMapProps> = ({
         
         {/* Protected Areas Heatmap (Using heatmap.js) */}
         <HeatmapLayer active={activeLayers.has(MapLayer.PROTECTED_AREAS)} />
+
+        {/* Protected Areas Markers & Popups */}
+        {activeLayers.has(MapLayer.PROTECTED_AREAS) && (
+          <LayerGroup>
+            {PROTECTED_AREAS_DATA.map((area, idx) => (
+              <Marker key={`protected-${idx}`} position={[area.lat, area.lng]} icon={getProtectedAreaIcon(area.intensity)}>
+                <Popup className="google-style-popup">
+                  <div className="p-4 w-72 bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700">
+                    <header className="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
+                      <div>
+                        <h3 className="font-bold text-sm text-yellow-400 leading-tight">{area.name}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <ShieldCheck size={12} className="text-yellow-500" />
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                            {area.type}
+                          </span>
+                        </div>
+                      </div>
+                    </header>
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
+                          <span>Protection Level</span>
+                          <span className={area.intensity > 0.8 ? 'text-red-500' : 'text-yellow-500'}>
+                            {area.intensity > 0.9 ? 'STRICT NATURE RESERVE' : 'MANAGED RESOURCE'}
+                          </span>
+                        </div>
+                        <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                          <div className={`h-full transition-all duration-1000 ${area.intensity > 0.8 ? 'bg-red-500' : 'bg-yellow-500'}`} style={{ width: `${area.intensity * 100}%` }} />
+                        </div>
+                      </div>
+                      <div className="bg-slate-950 p-2 rounded border border-slate-800">
+                          <div className="text-[9px] font-bold text-slate-500 uppercase">{t.popup.dataSync}</div>
+                          <div className="text-xs font-black text-emerald-500 flex items-center gap-1">GOV.BA REGISTRY <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /></div>
+                      </div>
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+          </LayerGroup>
+        )}
 
         {userPos && <Marker position={userPos} icon={UserIcon} />}
 

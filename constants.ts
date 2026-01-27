@@ -23,25 +23,32 @@ export const BIH_GEOJSON: any = {
   }
 };
 
-// [Latitude, Longitude, Intensity(0-1)]
+export interface ProtectedArea {
+  name: string;
+  lat: number;
+  lng: number;
+  intensity: number; // 0-1
+  type: string;
+}
+
 // Data representing: National Parks, Nature Parks, Protected Landscapes, Ramsar Sites, and Nature Monuments
-export const PROTECTED_AREAS_HEATMAP_DATA: [number, number, number][] = [
-  [43.3333, 18.6833, 1.0], // NP Sutjeska (High Importance)
-  [44.4939, 16.1214, 0.95], // NP Una
-  [45.0114, 16.9039, 0.9], // NP Kozara
-  [43.9536, 19.2944, 0.9], // NP Drina
-  [43.6108, 17.5133, 0.85], // PP Blidinje
-  [43.0542, 17.7847, 0.85], // PP Hutovo Blato
-  [43.8188, 18.2694, 0.8], // SP Vrelo Bosne
-  [43.9458, 18.4489, 0.75], // SP Skakavac
-  [44.3031, 18.1822, 0.75], // SP Tajan
-  [44.0875, 18.5122, 0.75], // ZP Bijambare
-  [43.8372, 18.4486, 0.8], // ZP Trebević
-  [44.3161, 18.6092, 0.7], // ZP Konjuh
-  [43.8611, 18.4431, 0.65], // ZP Bentbaša
-  [43.9575, 17.7533, 0.7], // PM Prokoško Jezero
-  [43.8347, 16.8336, 0.8], // Ramsar Livanjsko Polje
-  [45.1014, 17.4431, 0.8], // Ramsar Bardača
+export const PROTECTED_AREAS_DATA: ProtectedArea[] = [
+  { name: "NP Sutjeska", lat: 43.3333, lng: 18.6833, intensity: 1.0, type: "National Park" },
+  { name: "NP Una", lat: 44.4939, lng: 16.1214, intensity: 0.95, type: "National Park" },
+  { name: "NP Kozara", lat: 45.0114, lng: 16.9039, intensity: 0.9, type: "National Park" },
+  { name: "NP Drina", lat: 43.9536, lng: 19.2944, intensity: 0.9, type: "National Park" },
+  { name: "PP Blidinje", lat: 43.6108, lng: 17.5133, intensity: 0.85, type: "Nature Park" },
+  { name: "PP Hutovo Blato", lat: 43.0542, lng: 17.7847, intensity: 0.85, type: "Nature Park" },
+  { name: "SP Vrelo Bosne", lat: 43.8188, lng: 18.2694, intensity: 0.8, type: "Nature Monument" },
+  { name: "SP Skakavac", lat: 43.9458, lng: 18.4489, intensity: 0.75, type: "Nature Monument" },
+  { name: "SP Tajan", lat: 44.3031, lng: 18.1822, intensity: 0.75, type: "Nature Monument" },
+  { name: "ZP Bijambare", lat: 44.0875, lng: 18.5122, intensity: 0.75, type: "Protected Landscape" },
+  { name: "ZP Trebević", lat: 43.8372, lng: 18.4486, intensity: 0.8, type: "Protected Landscape" },
+  { name: "ZP Konjuh", lat: 44.3161, lng: 18.6092, intensity: 0.7, type: "Protected Landscape" },
+  { name: "ZP Bentbaša", lat: 43.8611, lng: 18.4431, intensity: 0.65, type: "Protected Landscape" },
+  { name: "PM Prokoško Jezero", lat: 43.9575, lng: 17.7533, intensity: 0.7, type: "Nature Monument" },
+  { name: "Ramsar Livanjsko Polje", lat: 43.8347, lng: 16.8336, intensity: 0.8, type: "Ramsar Site" },
+  { name: "Ramsar Bardača", lat: 45.1014, lng: 17.4431, intensity: 0.8, type: "Ramsar Site" },
 ];
 
 export const TRANSLATIONS = {
