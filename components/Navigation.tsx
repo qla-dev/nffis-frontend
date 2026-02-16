@@ -19,7 +19,6 @@ export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, on
     return (
       <button
         onClick={() => onClick ? onClick() : onSetView(id)}
-        onMouseEnter={() => !isExpanded && setIsExpanded(false)}
         className={`group relative flex items-center w-full h-10 transition-all duration-150 ${
           isActive 
             ? 'bg-blue-600/10 text-blue-400' 
@@ -87,8 +86,8 @@ export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, on
         {/* Bottom Actions */}
         <div className="border-t border-slate-800/50 bg-slate-900/50">
            <div className="py-2">
-             <NavItem icon={Settings} label="System" onClick={() => {}} />
-             <NavItem icon={HelpCircle} label="Support" onClick={() => {}} />
+             <NavItem icon={Settings} label={t.system} onClick={() => {}} />
+             <NavItem icon={HelpCircle} label={t.support} onClick={() => {}} />
            </div>
            <div className={`flex flex-col gap-1 p-2 bg-slate-950/50 transition-all duration-300 ${isExpanded ? 'opacity-100' : 'opacity-0 h-0 pointer-events-none'}`}>
               <div className="flex gap-1">

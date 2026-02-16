@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Navigation } from './components/Navigation';
 import { GISMap } from './components/Map/GISMap';
@@ -23,11 +22,12 @@ const BASE_LAYER_IDS = [
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     language: Language.EN,
-    activeLayers: new Set([MapLayer.FIRE_RISK, MapLayer.COUNTRY_BORDERS, MapLayer.FORESTS, MapLayer.LANDFILLS]),
+    // Added MapLayer.WINDY to activeLayers by default
+    activeLayers: new Set([MapLayer.FIRE_RISK, MapLayer.COUNTRY_BORDERS, MapLayer.FORESTS, MapLayer.LANDFILLS, MapLayer.WINDY]),
     incidents: INITIAL_INCIDENTS as any,
     view: 'map',
     isReporting: false,
-    isDarkMode: true,
+    isDarkMode: false,
   });
 
   const [reportLocation, setReportLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -43,9 +43,11 @@ const App: React.FC = () => {
   const toggleLayer = useCallback((layer: MapLayer) => {
     setState(prev => {
       const newLayers = new Set(prev.activeLayers);
-      if (layer === MapLayer.FIRE_RISK) { newLayers.add(MapLayer.FIRE_RISK); newLayers.delete(MapLayer.FLOOD_RISK); }
-      else if (layer === MapLayer.FLOOD_RISK) { newLayers.add(MapLayer.FLOOD_RISK); newLayers.delete(MapLayer.FIRE_RISK); }
-      else { newLayers.has(layer) ? newLayers.delete(layer) : newLayers.add(layer); }
+      if (newLayers.has(layer)) {
+        newLayers.delete(layer);
+      } else {
+        newLayers.add(layer);
+      }
       return { ...prev, activeLayers: newLayers };
     });
   }, []);
@@ -109,7 +111,7 @@ const App: React.FC = () => {
               <header className="mb-10 flex items-center justify-between border-b border-slate-800 pb-6">
                 <div>
                   <div className="flex items-center gap-2 text-blue-500 text-xs font-bold tracking-[0.2em] uppercase mb-2">
-                    <Database size={14} /> System Core Data
+                    <Database size={14} /> {t.systemCoreData}
                   </div>
                   <h1 className="text-3xl font-bold text-white tracking-tight">
                     {state.view === 'reports' ? t.recentReports : state.view === 'layers' ? t.layers : t.stats}
@@ -119,7 +121,7 @@ const App: React.FC = () => {
                    <div className="flex -space-x-2">
                       {[1,2,3].map(i => <div key={i} className="w-8 h-8 rounded-full border-2 border-slate-950 bg-slate-800" />)}
                    </div>
-                   <span className="text-[10px] text-slate-500 ml-2 font-mono uppercase tracking-widest">3 Active Operators</span>
+                   <span className="text-[10px] text-slate-500 ml-2 font-mono uppercase tracking-widest">3 {t.activeOperators}</span>
                 </div>
               </header>
 

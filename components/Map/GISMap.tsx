@@ -1,9 +1,13 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, LayerGroup, GeoJSON, WMSTileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Languages, Settings, Map as MapIcon, Image as ImageIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, TreePine, Sprout, Tent, ShieldCheck, Factory } from 'lucide-react';
+import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Languages, Settings, Map as MapIcon, Image as ImageIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, TreePine, Sprout, Tent, ShieldCheck, Factory, LandPlot } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, BIH_GEOJSON, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType } from '../../types';
+import { bihBorderData } from '../../bihData';
+
+// Fix for ESM import of Leaflet - ensuring plugins attach to the correct instance
+const GlobalLeaflet = (L as any).default || L;
 
 // Shared SVG paths for Map Markers and Legend
 const ICON_PATHS: Record<string, string> = {
@@ -24,7 +28,7 @@ const getRegionIcon = (type: RegionType) => {
   
   const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 
-  return L.divIcon({
+  return GlobalLeaflet.divIcon({
     html: `
       <div class="flex items-center justify-center w-8 h-8 bg-slate-950 rounded-full border-2 border-[${color}] shadow-2xl hover:scale-110 transition-transform" style="border-color: ${color}">
         ${iconSvg}
@@ -43,7 +47,7 @@ const getProtectedAreaIcon = (intensity: number) => {
   
   const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 
-  return L.divIcon({
+  return GlobalLeaflet.divIcon({
     html: `
       <div class="flex items-center justify-center w-9 h-9 bg-slate-900/90 rounded-full border-2 border-[${color}] shadow-[0_0_15px_${color}40] hover:scale-110 transition-transform backdrop-blur-sm" style="border-color: ${color}">
         ${iconSvg}
@@ -56,7 +60,7 @@ const getProtectedAreaIcon = (intensity: number) => {
   });
 };
 
-const UserIcon = L.divIcon({
+const UserIcon = GlobalLeaflet.divIcon({
   html: `
     <div class="relative flex items-center justify-center">
       <div class="absolute w-8 h-8 bg-blue-500 rounded-full animate-ping opacity-20"></div>
@@ -68,84 +72,207 @@ const UserIcon = L.divIcon({
   iconAnchor: [16, 16]
 });
 
-// Component to handle the heatmap using HeatmapOverlay from leaflet-heatmap.js
-const HeatmapLayer = ({ active }: { active: boolean }) => {
+// --- HELPER: Synthetic Wind Data Generator (GRIB-JSON format for leaflet-velocity) ---
+const generateWindData = () => {
+  // Region: Bosnia and surrounds
+  // Ensure we cover well beyond the viewport
+  const lo1 = 14.0; // West
+  const la1 = 47.0; // North
+  const dx = 0.05;  // 0.05 deg ~ 5km
+  const dy = 0.05; 
+  const nx = 140;   
+  const ny = 120;   
+  
+  const uData = [];
+  const vData = [];
+
+  for (let y = 0; y < ny; y++) {
+    const lat = la1 - y * dy;
+    for (let x = 0; x < nx; x++) {
+      const lng = lo1 + x * dx;
+      
+      // Procedural Wind Pattern Generation
+      let u = 4.0;
+      let v = 0.5 * Math.sin(lng * 0.5);
+
+      // Topographic interference
+      const distToCenter = Math.sqrt(Math.pow(lat - 44.0, 2) + Math.pow(lng - 17.8, 2));
+      
+      // Cyclonic system
+      const vortexLat = 43.8;
+      const vortexLng = 17.5;
+      const dY = lat - vortexLat;
+      const dX = lng - vortexLng;
+      const distVortex = Math.sqrt(dX*dX + dY*dY);
+      
+      const vortexStrength = 5.0 / (distVortex + 0.5);
+      u += -dY * vortexStrength;
+      v += dX * vortexStrength;
+
+      // Noise
+      u += (Math.random() - 0.5) * 1.5;
+      v += (Math.random() - 0.5) * 1.5;
+
+      uData.push(u);
+      vData.push(v);
+    }
+  }
+
+  return [
+    {
+      header: {
+        parameterCategory: 2,
+        parameterNumber: 2,
+        lo1, la1, dx, dy, nx, ny,
+        refTime: new Date().toISOString()
+      },
+      data: uData
+    },
+    {
+      header: {
+        parameterCategory: 2,
+        parameterNumber: 3,
+        lo1, la1, dx, dy, nx, ny,
+        refTime: new Date().toISOString()
+      },
+      data: vData
+    }
+  ];
+};
+
+// --- COMPONENT: Wind Animation Layer ---
+const WindAnimationLayer = ({ active, isLoaded }: { active: boolean, isLoaded: boolean }) => {
   const map = useMap();
 
   useEffect(() => {
     if (!active) return;
+    if (!isLoaded) {
+        console.log('[WindLayer] Waiting for plugins to load...');
+        return;
+    }
     
-    // Check if the HeatmapOverlay (from leaflet-heatmap.js) is available on window
+    // Explicitly use window.L which now has the plugins attached
+    const GlobalL = (window as any).L;
+
+    if (GlobalL && GlobalL.velocityLayer) {
+      console.log('[WindLayer] Initializing velocity layer');
+      
+      // Check if layer already exists to prevent duplication
+      if ((window as any)._windLayerInstance) {
+          map.removeLayer((window as any)._windLayerInstance);
+      }
+
+      const windData = generateWindData();
+      
+      const layer = GlobalL.velocityLayer({
+        displayValues: true,
+        displayOptions: {
+          velocityType: "Global Wind",
+          position: "bottomleft",
+          emptyString: "No wind data",
+          angleConvention: "bearingCW",
+          displayPosition: "bottomleft",
+          displayEmptyString: "No wind data",
+          speedUnit: "km/h"
+        },
+        data: windData,
+        maxVelocity: 12,
+        velocityScale: 0.005, // Adjusted scale
+        particleMultiplier: 1/800, // Slightly fewer particles for performance
+        lineWidth: 2,
+        frameRate: 15,
+        colorScale: [
+          "rgb(36,104, 180)", "rgb(60,157, 194)", "rgb(128,205,193)",
+          "rgb(151,218,168)", "rgb(198,231,181)", "rgb(238,247,217)",
+          "rgb(255,238,159)", "rgb(252,217,125)", "rgb(255,182,100)",
+          "rgb(252,150,75)", "rgb(250,112,52)", "rgb(245,64,32)",
+          "rgb(237,45,28)", "rgb(220,24,32)", "rgb(180,0,35)"
+        ]
+      });
+
+      console.log('[WindLayer] Adding layer to map', layer);
+      layer.addTo(map);
+      (window as any)._windLayerInstance = layer;
+
+      return () => {
+        console.log('[WindLayer] Removing layer');
+        layer.remove();
+        (window as any)._windLayerInstance = null;
+      };
+    } else {
+        console.error('[WindLayer] GlobalL or L.velocityLayer missing', { GlobalL });
+    }
+  }, [active, isLoaded, map]);
+
+  return null;
+};
+
+
+// Component to handle the heatmap using HeatmapOverlay
+const HeatmapLayer = ({ active, isLoaded }: { active: boolean, isLoaded: boolean }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!active) return;
+    if (!isLoaded) {
+        console.log('[HeatmapLayer] Waiting for plugins...');
+        return;
+    }
+    
+    const GlobalL = (window as any).L;
     const HeatmapOverlay = (window as any).HeatmapOverlay;
 
     if (!HeatmapOverlay) {
-      console.warn('HeatmapOverlay not loaded. Check script tags in index.html.');
-      return;
+        console.error('[HeatmapLayer] HeatmapOverlay plugin missing');
+        return;
     }
 
-    // Config options for heatmap.js
+    console.log('[HeatmapLayer] Initializing heatmap');
+
     const cfg = {
-      "radius": 20, // Reduced radius for finer blobs in point cloud
+      "radius": 20,
       "maxOpacity": 0.55,
-      "scaleRadius": false, // False: radius is in pixels. True: radius is in degrees (very tricky to get right with leaflet-heatmap)
+      "scaleRadius": false,
       "useLocalExtrema": true,
       latField: 'lat',
       lngField: 'lng',
       valueField: 'val',
       blur: 0.75,
       gradient: {
-        0.1: '#1a53ff',  // Blue
-        0.3: '#00cc66',  // Green
-        0.6: '#e6e600',  // Yellow
-        0.9: '#ff0000'   // Red
+        0.1: '#1a53ff',
+        0.3: '#00cc66',
+        0.6: '#e6e600',
+        0.9: '#ff0000'
       }
     };
     
-    // Create layer
     const layer = new HeatmapOverlay(cfg);
 
-    // Generate Point Cloud based on Area
-    // This creates an "organic" blob by scattering points around the center based on area size
     const generatedPoints: Array<{lat: number, lng: number, val: number}> = [];
 
     PROTECTED_AREAS_DATA.forEach(area => {
-      // Scale: 100 points per 100km^2 roughly, min 25 points
       const pointCount = Math.max(30, Math.ceil(area.areaSqKm / 1.5));
-      
-      // Radius approximation: sqrt(Area/PI) gives radius in KM.
-      // 1 degree lat ~ 111km.
       const radiusKm = Math.sqrt(area.areaSqKm / Math.PI);
       const radiusDeg = radiusKm / 111;
 
-      // Add strong center
       generatedPoints.push({ lat: area.lat, lng: area.lng, val: area.intensity });
 
       for (let i = 0; i < pointCount; i++) {
-        // Random polar coordinates
         const theta = Math.random() * 2 * Math.PI;
-        
-        // Use square root of random to spread points evenly in the circle area
-        // Multiply by gaussian-like random to concentrate slightly more in center but allow edges
         const r = radiusDeg * Math.sqrt(Math.random());
-        
-        // Introduce irregularity (stretch one axis randomly)
-        // Use a deterministic pseudo-random stretching based on index to keep shape consistent-ish or just random
         const stretchLat = 1.0; 
-        const stretchLng = 0.8 + Math.random() * 0.4; // 0.8 to 1.2 stretch on longitude
-
+        const stretchLng = 0.8 + Math.random() * 0.4;
         const dLat = r * Math.cos(theta) * stretchLat;
         const dLng = r * Math.sin(theta) * stretchLng;
 
         generatedPoints.push({
           lat: area.lat + dLat,
           lng: area.lng + dLng,
-          // Fade intensity slightly towards edges for smoother look
           val: area.intensity * (0.6 + Math.random() * 0.4)
         });
       }
     });
 
-    // Transform structured data to heatmap format
     const heatmapData = {
       max: 1.0,
       data: generatedPoints
@@ -157,7 +284,7 @@ const HeatmapLayer = ({ active }: { active: boolean }) => {
     return () => {
       map.removeLayer(layer);
     };
-  }, [active, map]);
+  }, [active, isLoaded, map]);
 
   return null;
 };
@@ -175,15 +302,39 @@ interface GISMapProps {
   onSetLanguage: (lang: Language) => void;
 }
 
+// Function to load script
+const loadScript = (src: string) => {
+  return new Promise<void>((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) {
+      console.log(`[ScriptLoader] Already loaded: ${src}`);
+      resolve();
+      return;
+    }
+    console.log(`[ScriptLoader] Loading: ${src}`);
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.onload = () => {
+        console.log(`[ScriptLoader] Loaded: ${src}`);
+        resolve();
+    };
+    script.onerror = (e) => {
+        console.error(`[ScriptLoader] Error loading: ${src}`, e);
+        reject(e);
+    };
+    document.body.appendChild(script);
+  });
+};
+
 export const GISMap: React.FC<GISMapProps> = ({ 
   incidents, 
   activeLayers, 
   onReportClick, 
   isReporting, 
-  onToggleLayer,
+  onToggleLayer, 
   onSetBaseLayer,
   isDarkMode, 
-  onToggleTheme,
+  onToggleTheme, 
   language,
   onSetLanguage
 }) => {
@@ -191,12 +342,67 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [showLayerPanel, setShowLayerPanel] = useState(false);
+  const [showAssetsPanel, setShowAssetsPanel] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [showSatPanel, setShowSatPanel] = useState(false);
   const [showLegend, setShowLegend] = useState(true);
   const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
+  
+  // State to track if external plugins are loaded
+  const [pluginsLoaded, setPluginsLoaded] = useState(false);
 
   const t = TRANSLATIONS[language];
+
+  // Dynamic Plugin Loading Strategy
+  useEffect(() => {
+    // 1. Expose the ESM Leaflet to window so legacy plugins can attach to it
+    // CRITICAL: Ensure we are attaching the correct object.
+    // If 'import L' returns a Module, we need L.default.
+    console.log('[Init] Setting up global Leaflet...');
+    if (!(window as any).L) {
+        (window as any).L = GlobalLeaflet;
+        console.log('[Init] Assigned GlobalLeaflet to window.L', GlobalLeaflet);
+    } else {
+        console.log('[Init] window.L already exists', (window as any).L);
+        // Double check it's not an empty object if something else claimed it
+        if (!(window as any).L.version) {
+             console.warn('[Init] window.L exists but has no version, overwriting with GlobalLeaflet');
+             (window as any).L = GlobalLeaflet;
+        }
+    }
+
+    const loadPlugins = async () => {
+      try {
+        // 2. Load Heatmap Core
+        await loadScript('https://cdn.jsdelivr.net/npm/heatmap.js@2.0.5/build/heatmap.min.js');
+        // 3. Load Leaflet Heatmap (depends on heatmap.js and window.L)
+        await loadScript('https://cdn.jsdelivr.net/npm/leaflet-heatmap@1.0.0/leaflet-heatmap.js');
+        // 4. Load Leaflet Velocity (depends on window.L)
+        await loadScript('https://unpkg.com/leaflet-velocity@1.10.1/dist/leaflet-velocity.js');
+        
+        // Wait a small tick to ensure scripts are evaluated
+        setTimeout(() => {
+             const WinL = (window as any).L;
+             // Verify L.velocityLayer exists
+            if (WinL && WinL.velocityLayer) {
+                console.log("[Init] L.velocityLayer verified.");
+                setPluginsLoaded(true);
+            } else {
+                console.error("[Init] Scripts loaded but L.velocityLayer undefined.", { 
+                    hasL: !!WinL,
+                    hasVelocity: !!(WinL && WinL.velocityLayer),
+                    L_keys: WinL ? Object.keys(WinL).filter(k => k.includes('velocity')) : []
+                });
+            }
+        }, 500); // Increased timeout to 500ms to be safe
+        
+      } catch (err) {
+        console.error("Failed to load GIS plugins", err);
+      }
+    };
+
+    loadPlugins();
+  }, []);
 
   // Fetch Meteoblue URL
   useEffect(() => {
@@ -247,7 +453,7 @@ export const GISMap: React.FC<GISMapProps> = ({
     { id: MapLayer.SATELLITE, label: 'ArcGIS Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Satellite },
     { id: MapLayer.SATELLITE_CLARITY, label: 'Esri Clarity', url: 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Satellite },
     { id: MapLayer.SATELLITE_GOOGLE, label: 'Google Hybrid', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', icon: Globe2 },
-    { id: MapLayer.WINDY, label: 'Windy.com (Dark GIS)', url: 'https://tiles.windy.com/tiles/v1.0.0/darkmap/{z}/{x}/{y}.png', icon: Wind },
+    // Removed old Windy tile layer. Wind is now an overlay layer (MapLayer.WINDY).
     { id: MapLayer.SENTINEL, label: 'Sentinel-2', url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2019_3857/default/g/{z}/{y}/{x}.jpg', icon: Layers },
     { id: MapLayer.INFRARED, label: 'Infrared (Veg)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Leaf },
     { id: MapLayer.METEOBLUE, label: 'Meteoblue Temp', url: meteoblueUrl, icon: Thermometer },
@@ -258,11 +464,14 @@ export const GISMap: React.FC<GISMapProps> = ({
 
   useEffect(() => {
     if (map) {
+      console.log("[Map] Map instance ready");
       const clickHandler = (e: L.LeafletMouseEvent) => {
         if (isReporting) onReportClick(e.latlng.lat, e.latlng.lng);
       };
       map.on('click', clickHandler);
-      return () => map.off('click', clickHandler);
+      return () => {
+        map.off('click', clickHandler);
+      };
     }
   }, [map, isReporting, onReportClick]);
 
@@ -284,20 +493,11 @@ export const GISMap: React.FC<GISMapProps> = ({
   const activeBaseLayer = imagerySources.find(src => activeLayers.has(src.id)) || null;
 
   // Handle panel exclusivity
-  const togglePanel = (panel: 'layer' | 'settings' | 'sat') => {
-    if (panel === 'layer') {
-      setShowLayerPanel(!showLayerPanel);
-      setShowSettingsPanel(false);
-      setShowSatPanel(false);
-    } else if (panel === 'settings') {
-      setShowSettingsPanel(!showSettingsPanel);
-      setShowLayerPanel(false);
-      setShowSatPanel(false);
-    } else if (panel === 'sat') {
-      setShowSatPanel(!showSatPanel);
-      setShowSettingsPanel(false);
-      setShowLayerPanel(false);
-    }
+  const togglePanel = (panel: 'layer' | 'settings' | 'sat' | 'assets') => {
+    setShowLayerPanel(panel === 'layer' ? !showLayerPanel : false);
+    setShowSettingsPanel(panel === 'settings' ? !showSettingsPanel : false);
+    setShowSatPanel(panel === 'sat' ? !showSatPanel : false);
+    setShowAssetsPanel(panel === 'assets' ? !showAssetsPanel : false);
   };
 
   return (
@@ -326,8 +526,19 @@ export const GISMap: React.FC<GISMapProps> = ({
         {activeLayers.has(MapLayer.WIND_SPEED) && <WMSTileLayer url="https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=d22f66d48348243ed47c132845c48b2a" opacity={0.4} />}
         {activeLayers.has(MapLayer.COUNTRY_BORDERS) && <GeoJSON data={BIH_GEOJSON} style={{ color: '#1a73e8', weight: 1.5, fillOpacity: 0.05 }} />}
         
+        {/* New Detailed State Borders Layer */}
+        {activeLayers.has(MapLayer.BIH_BORDERS) && (
+          <GeoJSON 
+            data={bihBorderData as any} 
+            style={{ color: '#ec4899', weight: 3, fill: false, opacity: 0.8 }} 
+          />
+        )}
+        
         {/* Protected Areas Heatmap (Using heatmap.js) */}
-        <HeatmapLayer active={activeLayers.has(MapLayer.PROTECTED_AREAS)} />
+        <HeatmapLayer active={activeLayers.has(MapLayer.PROTECTED_AREAS)} isLoaded={pluginsLoaded} />
+        
+        {/* Wind Vector Animation (Using wind-js-leaflet) - Triggered by MapLayer.WINDY which we now treat as an overlay or special mode */}
+        <WindAnimationLayer active={activeLayers.has(MapLayer.WINDY)} isLoaded={pluginsLoaded} />
 
         {/* Protected Areas Markers & Popups */}
         {activeLayers.has(MapLayer.PROTECTED_AREAS) && (
@@ -477,8 +688,8 @@ export const GISMap: React.FC<GISMapProps> = ({
         <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 px-4 py-2 rounded-lg shadow-2xl flex items-center gap-4">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <div className="flex flex-col">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Surveillance Network</span>
-            <span className="text-xs font-bold text-white leading-none">Status: Nominal / Tracking {incidents.length} Alerts</span>
+            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">{t.surveillanceNetwork}</span>
+            <span className="text-xs font-bold text-white leading-none">{t.status}: {t.nominal} / {t.tracking} {incidents.length} {t.alerts}</span>
           </div>
         </div>
       </div>
@@ -487,35 +698,75 @@ export const GISMap: React.FC<GISMapProps> = ({
       <div className="absolute top-4 right-4 z-[2000] flex flex-col items-end gap-2">
         <div className="bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-xl shadow-2xl p-1 flex items-center gap-1">
           {/* Theme */}
-          <button onClick={onToggleTheme} className={`p-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-amber-400 bg-amber-400/5 hover:bg-amber-400/10' : 'text-slate-400 hover:bg-slate-800'}`} title="Toggle Theme">
+          <button onClick={onToggleTheme} className={`p-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-amber-400 bg-amber-400/5 hover:bg-amber-400/10' : 'text-slate-400 hover:bg-slate-800'}`} title={t.theme}>
             {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
           
+          <div className="w-px h-6 bg-slate-800 mx-1" />
+
+          {/* Wind Toggle */}
+          <button 
+            onClick={() => onToggleLayer(MapLayer.WINDY)} 
+            className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.WINDY) ? 'text-cyan-400 bg-cyan-950/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
+            title={t.liveWindVector}
+          >
+            <Wind size={18} className={activeLayers.has(MapLayer.WINDY) ? 'animate-pulse' : ''} />
+          </button>
+
+          {/* Heat Index Toggle */}
+          <button 
+            onClick={() => onToggleLayer(MapLayer.WEATHER_TEMP)} 
+            className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.WEATHER_TEMP) ? 'text-orange-500 bg-orange-950/30 shadow-[0_0_10px_rgba(249,115,22,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
+            title={t.heatIndex}
+          >
+            <Thermometer size={18} className={activeLayers.has(MapLayer.WEATHER_TEMP) ? 'animate-pulse' : ''} />
+          </button>
+
+          {/* New State Borders Toggle */}
+          <button 
+            onClick={() => onToggleLayer(MapLayer.BIH_BORDERS)} 
+            className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.BIH_BORDERS) ? 'text-pink-500 bg-pink-950/30 shadow-[0_0_10px_rgba(236,72,153,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
+            title="Toggle State Borders"
+          >
+            <LandPlot size={18} />
+          </button>
+
+          <div className="w-px h-6 bg-slate-800 mx-1" />
+
+          {/* Assets & Regions Toggle */}
+          <button 
+            onClick={() => togglePanel('assets')} 
+            className={`p-2.5 rounded-lg transition-colors ${showAssetsPanel ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+            title={t.assetsRegions}
+          >
+            <Trees size={18} />
+          </button>
+
+          {/* Layer Panel Toggle (Data Overlays) */}
+          <button 
+            onClick={() => togglePanel('layer')} 
+            className={`p-2.5 rounded-lg transition-colors ${showLayerPanel ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+            title={t.dataOverlays}
+          >
+            <Settings2 size={18} />
+          </button>
+
           <div className="w-px h-6 bg-slate-800 mx-1" />
 
           {/* Settings / Language Toggle */}
           <button 
             onClick={() => togglePanel('settings')} 
             className={`p-2.5 rounded-lg transition-colors ${showSettingsPanel ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-            title="Global Settings"
+            title={t.systemConfig}
           >
             <Settings size={18} />
-          </button>
-
-          {/* Layer Panel Toggle */}
-          <button 
-            onClick={() => togglePanel('layer')} 
-            className={`p-2.5 rounded-lg transition-colors ${showLayerPanel ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-            title="Layer Settings"
-          >
-            <Settings2 size={18} />
           </button>
           
           {/* Legend Toggle */}
           <button 
             onClick={() => setShowLegend(!showLegend)} 
             className={`p-2.5 rounded-lg transition-colors ${showLegend ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-            title="Toggle Legend"
+            title={t.gisLegend}
           >
             <Info size={18} />
           </button>
@@ -526,7 +777,7 @@ export const GISMap: React.FC<GISMapProps> = ({
           <button 
             onClick={() => togglePanel('sat')} 
             className={`p-2.5 rounded-lg transition-colors ${showSatPanel || activeBaseLayer ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-            title="Imagery Source"
+            title={t.imagerySource}
           >
             <Globe2 size={18} />
           </button>
@@ -539,7 +790,7 @@ export const GISMap: React.FC<GISMapProps> = ({
           {showSatPanel && (
             <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-full animate-in slide-in-from-top-2 duration-200">
               <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
-                Imagery Source
+                {t.imagerySource}
                 <button onClick={() => setShowSatPanel(false)} className="hover:text-white"><X size={14} /></button>
               </h4>
               <div className="grid grid-cols-2 gap-2">
@@ -550,7 +801,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                   }`}
                 >
                   <MapIcon size={20} className={!activeBaseLayer ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[10px] font-bold text-white uppercase">Vector</span>
+                  <span className="text-[10px] font-bold text-white uppercase">{t.vector}</span>
                 </button>
                 {imagerySources.map(layer => (
                   <button 
@@ -572,13 +823,13 @@ export const GISMap: React.FC<GISMapProps> = ({
           {showSettingsPanel && (
             <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-full animate-in slide-in-from-top-2 duration-200">
               <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
-                System Configuration
+                {t.systemConfig}
                 <button onClick={() => setShowSettingsPanel(false)} className="hover:text-white"><X size={14} /></button>
               </h4>
               
               <div className="space-y-4">
                 <section>
-                  <div className="text-[9px] font-bold text-slate-600 uppercase mb-2 tracking-tighter">Active Language</div>
+                  <div className="text-[9px] font-bold text-slate-600 uppercase mb-2 tracking-tighter">{t.activeLanguage}</div>
                   <div className="grid grid-cols-3 gap-1">
                     {Object.values(Language).map((lang) => (
                       <button 
@@ -599,24 +850,20 @@ export const GISMap: React.FC<GISMapProps> = ({
             </div>
           )}
 
-          {/* Layer Quick Panel */}
-          {showLayerPanel && (
-            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-full animate-in slide-in-from-top-2 duration-200">
-              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
-                Data Overlays
-                <button onClick={() => setShowLayerPanel(false)} className="hover:text-white transition-colors">
+          {/* Floating Assets & Regions Panel */}
+          {showAssetsPanel && (
+            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
+              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">
+                {t.assetsRegions}
+                <button onClick={() => setShowAssetsPanel(false)} className="hover:text-white transition-colors">
                   <X size={14} />
                 </button>
               </h4>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {[
-                  { id: MapLayer.FORESTS, label: 'Forest Inventory', icon: Trees, color: 'text-emerald-500' },
-                  { id: MapLayer.LANDFILLS, label: 'Active Landfills', icon: Trash2, color: 'text-red-500' },
-                  { id: MapLayer.PROTECTED_AREAS, label: 'Protected Areas', icon: ShieldCheck, color: 'text-yellow-400' },
-                  { id: MapLayer.FIRE_RISK, label: 'Fire Threats', icon: Flame, color: 'text-red-500' },
-                  { id: MapLayer.FLOOD_RISK, label: 'Hydrological', icon: Waves, color: 'text-blue-500' },
-                  { id: MapLayer.WEATHER_TEMP, label: 'Heat Index', icon: Thermometer, color: 'text-orange-500' },
-                  { id: MapLayer.WIND_SPEED, label: 'Wind Patterns', icon: Wind, color: 'text-cyan-500' },
+                  { id: MapLayer.FORESTS, label: t.forestInventory, icon: Trees, color: 'text-emerald-500' },
+                  { id: MapLayer.LANDFILLS, label: t.activeLandfills, icon: Trash2, color: 'text-red-500' },
+                  { id: MapLayer.PROTECTED_AREAS, label: t.protectedAreas, icon: ShieldCheck, color: 'text-yellow-400' },
                 ].map(layer => (
                   <button 
                     key={layer.id}
@@ -634,6 +881,46 @@ export const GISMap: React.FC<GISMapProps> = ({
                     {activeLayers.has(layer.id) && <Check size={12} className="text-blue-500" />}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Layer Quick Panel (Data Overlays - Hazards Only) */}
+          {showLayerPanel && (
+            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
+              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">
+                {t.dataOverlays}
+                <button onClick={() => setShowLayerPanel(false)} className="hover:text-white transition-colors">
+                  <X size={14} />
+                </button>
+              </h4>
+              
+              <div className="space-y-4">
+                {/* Hazards Section */}
+                <div>
+                  <div className="space-y-1">
+                    {[
+                       { id: MapLayer.FIRE_RISK, label: t.fireThreats, icon: Flame, color: 'text-red-500' },
+                       { id: MapLayer.FLOOD_RISK, label: t.hydrological, icon: Waves, color: 'text-blue-500' },
+                    ].map(layer => (
+                      <button 
+                        key={layer.id}
+                        onClick={() => onToggleLayer(layer.id)}
+                        className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
+                          activeLayers.has(layer.id) 
+                            ? 'bg-blue-600/10 border-blue-600/50' 
+                            : 'bg-slate-900/50 border-transparent hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <layer.icon size={16} className={activeLayers.has(layer.id) ? layer.color : 'text-slate-600'} />
+                          <span className={`text-[11px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>{layer.label}</span>
+                        </div>
+                        {activeLayers.has(layer.id) && <Check size={12} className="text-blue-500" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -677,17 +964,17 @@ export const GISMap: React.FC<GISMapProps> = ({
             </div>
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.5)]" /> Active Fire
+                <div className="w-2 h-2 rounded-full bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.5)]" /> {t.legend.activeFire}
               </div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.5)]" /> Active Flood
+                <div className="w-2 h-2 rounded-full bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.5)]" /> {t.legend.activeFlood}
               </div>
               <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                <div className="w-2 h-2 rounded-full border border-blue-500" /> Sensor Station
+                <div className="w-2 h-2 rounded-full border border-blue-500" /> {t.legend.sensorStation}
               </div>
               <div className="pt-1 mt-1 border-t border-slate-800/50">
                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500" /> Live Data Stream
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" /> {t.legend.liveData}
                 </div>
               </div>
             </div>

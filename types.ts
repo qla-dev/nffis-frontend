@@ -25,7 +25,8 @@ export enum MapLayer {
   COUNTRY_BORDERS = 'Country Borders',
   FORESTS = 'Forest Inventory',
   LANDFILLS = 'Active Landfills',
-  PROTECTED_AREAS = 'Protected Areas (Heatmap)'
+  PROTECTED_AREAS = 'Protected Areas (Heatmap)',
+  BIH_BORDERS = 'BiH State Borders'
 }
 
 export enum IncidentType {

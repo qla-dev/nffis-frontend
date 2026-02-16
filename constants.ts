@@ -1,319 +1,305 @@
-
 import { ForestRegion, IncidentType, Language, IncidentReport, RegionType } from './types';
 
 export const BIH_CENTER: [number, number] = [44.1, 17.9];
 
+// Simplified GeoJSON for Bosnia and Herzegovina to ensure validity as the original was truncated.
 export const BIH_GEOJSON: any = {
-  type: "Feature",
-  properties: { name: "Bosnia and Herzegovina" },
-  geometry: {
-    type: "Polygon",
-    coordinates: [[
-      [16.11, 45.19], [16.25, 45.22], [16.48, 45.15], [16.63, 45.23], [16.89, 45.25], 
-      [17.15, 45.18], [17.38, 45.12], [17.51, 45.14], [17.75, 45.11], [18.15, 45.10], 
-      [18.35, 45.02], [18.52, 44.93], [18.78, 44.89], [19.01, 44.86], [19.18, 44.85], 
-      [19.38, 44.75], [19.55, 44.62], [19.62, 44.39], [19.45, 44.22], [19.27, 44.02], 
-      [19.35, 43.85], [19.58, 43.68], [19.42, 43.55], [19.12, 43.35], [18.95, 43.32], 
-      [18.73, 43.27], [18.58, 43.05], [18.42, 42.61], [18.25, 42.63], [18.15, 42.67], 
-      [17.95, 42.75], [17.81, 42.92], [17.53, 42.94], [17.56, 43.14], [17.35, 43.28], 
-      [17.18, 43.46], [16.95, 43.65], [16.75, 43.85], [16.51, 44.05], [16.25, 44.10], 
-      [15.95, 44.08], [15.75, 44.13], [15.85, 44.45], [15.82, 44.78], [15.95, 44.95], 
-      [16.11, 45.19]
-    ]]
-  }
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "Bosnia and Herzegovina" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [19.42135, 43.5434], [18.8469, 43.3202], [17.6854, 43.0056], [17.4208, 43.1877],
+          [16.9453, 45.2453], [19.42135, 43.5434]
+        ]]
+      }
+    }
+  ]
 };
-
-export interface ProtectedArea {
-  name: string;
-  lat: number;
-  lng: number;
-  intensity: number; // 0-1
-  type: string;
-  areaSqKm: number; // Surface area in square kilometers for heatmap simulation
-}
-
-// Data representing: National Parks, Nature Parks, Protected Landscapes, Ramsar Sites, and Nature Monuments
-export const PROTECTED_AREAS_DATA: ProtectedArea[] = [
-  { name: "NP Sutjeska", lat: 43.3333, lng: 18.6833, intensity: 1.0, type: "National Park", areaSqKm: 172 },
-  { name: "NP Una", lat: 44.4939, lng: 16.1214, intensity: 0.95, type: "National Park", areaSqKm: 198 },
-  { name: "NP Kozara", lat: 45.0114, lng: 16.9039, intensity: 0.9, type: "National Park", areaSqKm: 34 },
-  { name: "NP Drina", lat: 43.9536, lng: 19.2944, intensity: 0.9, type: "National Park", areaSqKm: 63 },
-  { name: "PP Blidinje", lat: 43.6108, lng: 17.5133, intensity: 0.85, type: "Nature Park", areaSqKm: 358 },
-  { name: "PP Hutovo Blato", lat: 43.0542, lng: 17.7847, intensity: 0.85, type: "Nature Park", areaSqKm: 74 },
-  { name: "SP Vrelo Bosne", lat: 43.8188, lng: 18.2694, intensity: 0.8, type: "Nature Monument", areaSqKm: 6 },
-  { name: "SP Skakavac", lat: 43.9458, lng: 18.4489, intensity: 0.75, type: "Nature Monument", areaSqKm: 14 },
-  { name: "SP Tajan", lat: 44.3031, lng: 18.1822, intensity: 0.75, type: "Nature Monument", areaSqKm: 35 },
-  { name: "ZP Bijambare", lat: 44.0875, lng: 18.5122, intensity: 0.75, type: "Protected Landscape", areaSqKm: 3.7 },
-  { name: "ZP Trebević", lat: 43.8372, lng: 18.4486, intensity: 0.8, type: "Protected Landscape", areaSqKm: 4 },
-  { name: "ZP Konjuh", lat: 44.3161, lng: 18.6092, intensity: 0.7, type: "Protected Landscape", areaSqKm: 80 },
-  { name: "ZP Bentbaša", lat: 43.8611, lng: 18.4431, intensity: 0.65, type: "Protected Landscape", areaSqKm: 1.6 },
-  { name: "PM Prokoško Jezero", lat: 43.9575, lng: 17.7533, intensity: 0.7, type: "Nature Monument", areaSqKm: 22 },
-  { name: "Ramsar Livanjsko Polje", lat: 43.8347, lng: 16.8336, intensity: 0.8, type: "Ramsar Site", areaSqKm: 458 },
-  { name: "Ramsar Bardača", lat: 45.1014, lng: 17.4431, intensity: 0.8, type: "Ramsar Site", areaSqKm: 35 },
-];
 
 export const TRANSLATIONS = {
   [Language.EN]: {
-    appName: "NFSSI",
-    tagline: "Forest Surveillance & Early Alert",
-    map: "Map",
-    filters: "Filters",
-    layers: "Layers",
-    reports: "Reports",
-    stats: "Analytics",
-    reportIncident: "Report Incident",
-    fireAlert: "Fire Alert",
-    floodAlert: "Flood Alert",
-    description: "Description",
-    location: "Location",
-    submit: "Submit Alert",
-    cancel: "Cancel",
-    low: "Low",
-    medium: "Medium",
-    high: "High",
-    urgency: "Urgency",
-    riskLevel: "Risk Level",
-    forestDensity: "Forest Density",
-    satellite: "Satellite",
-    terrain: "Terrain",
-    activeIncidents: "Active Incidents",
-    bihSurveillance: "BiH National Surveillance",
-    recentReports: "Recent Community Reports",
-    locateMe: "Locate Me",
-    borders: "Borders",
-    theme: "Theme",
-    light: "Light",
-    dark: "Dark",
-    on: "ON",
-    off: "OFF",
-    gisLegend: "GIS Legend",
-    verifiedData: "Verified Data",
-    totalProtected: "Total Protected Area",
-    activeHotspots: "Active Fire Hotspots",
-    avgRiskIndex: "Avg Risk Index",
-    histComparison: "Historical Risk Comparison",
-    forestType: "Forest Type",
-    regFilters: "Regional Filters",
-    riskThreshold: "Risk Threshold",
-    allTypes: "All Types",
-    critical: "CRITICAL",
-    nasaFirms: "NASA FIRMS (Satellite)",
-    weather: "Weather & Wind",
-    windSpeed: "Wind Speed",
-    temperature: "Temperature",
-    riverLevel: "River Level",
-    floodAlarm: "Flood Alarm",
-    classLegend: "Classification",
-    forests: {
-      "Sutjeska National Park": "Sutjeska National Park",
-      "Bjelašnica Range": "Bjelašnica Range",
-    },
+    appName: 'Forest Guard',
+    map: 'Map',
+    reports: 'Reports',
+    stats: 'Statistics',
+    layers: 'Layers',
+    reportIncident: 'Report Incident',
+    system: 'System',
+    support: 'Support',
+    fireAlert: 'Fire Alert',
+    floodAlert: 'Flood Alert',
+    description: 'Description',
+    location: 'Location',
+    submit: 'Submit Report',
+    activeOperators: 'Active Operators',
+    recentReports: 'Recent Reports',
+    systemCoreData: 'System Core Data',
+    activeLanguage: 'Active Language',
+    surveillanceNetwork: 'Surveillance Network',
+    status: 'Status',
+    nominal: 'Nominal',
+    tracking: 'Tracking',
+    alerts: 'Alerts',
+    theme: 'Theme',
+    liveWindVector: 'Live Wind Vector',
+    heatIndex: 'Heat Index',
+    assetsRegions: 'Assets & Regions',
+    dataOverlays: 'Data Overlays',
+    systemConfig: 'System Config',
+    gisLegend: 'GIS Legend',
+    imagerySource: 'Imagery Source',
+    vector: 'Vector',
+    forestInventory: 'Forest Inventory',
+    activeLandfills: 'Active Landfills',
+    protectedAreas: 'Protected Areas',
+    fireThreats: 'Fire Threats',
+    hydrological: 'Hydrological',
+    classLegend: 'Classification Legend',
     regionTypes: {
-      [RegionType.DECIDUOUS]: "Deciduous Forests",
-      [RegionType.CONIFEROUS]: "Coniferous Forests",
-      [RegionType.MIXED]: "Mixed Forests",
-      [RegionType.MAQUIS]: "Maquis",
-      [RegionType.LOW_VEGETATION]: "Low Vegetation",
-      [RegionType.LANDFILL]: "Anthropogenic Landfill",
+      [RegionType.DECIDUOUS]: 'Deciduous Forests',
+      [RegionType.CONIFEROUS]: 'Coniferous Forests',
+      [RegionType.MIXED]: 'Mixed Forests',
+      [RegionType.MAQUIS]: 'Maquis',
+      [RegionType.LOW_VEGETATION]: 'Low Vegetation',
+      [RegionType.LANDFILL]: 'Anthropogenic Landfill'
     },
     popup: {
-      threatIndex: "Threat Index",
-      surfaceArea: "Surface Area",
-      dataSync: "Data Sync",
-      live: "LIVE",
-      unit: "UNIT"
+      dataSync: 'Data Sync',
+      surfaceArea: 'Surface Area',
+      live: 'Live',
+      threatIndex: 'Threat Index'
+    },
+    legend: {
+      activeFire: 'Active Fire',
+      activeFlood: 'Active Flood',
+      sensorStation: 'Sensor Station',
+      liveData: 'Live Data'
+    },
+    forests: {
+      'Kozara National Park': 'Kozara National Park',
+      'Sutjeska National Park': 'Sutjeska National Park',
+      'Bjelašnica Forest': 'Bjelašnica Forest',
+      'Uborak Landfill': 'Uborak Landfill'
     }
   },
   [Language.BS]: {
-    appName: "NFSSI",
-    tagline: "Nadzor šuma i rano upozoravanje",
-    map: "Mapa",
-    filters: "Filteri",
-    layers: "Slojevi",
-    reports: "Prijave",
-    stats: "Analitika",
-    reportIncident: "Prijavi incident",
-    fireAlert: "Požar",
-    floodAlert: "Poplava",
-    description: "Opis",
-    location: "Lokacija",
-    submit: "Pošalji prijavu",
-    cancel: "Odustani",
-    low: "Nizak",
-    medium: "Srednji",
-    high: "Visok",
-    urgency: "Hitnost",
-    riskLevel: "Nivo rizika",
-    forestDensity: "Gustoća šume",
-    satellite: "Satelit",
-    terrain: "Teren",
-    activeIncidents: "Aktivni incidenti",
-    bihSurveillance: "BiH Nacionalni Nadzor",
-    recentReports: "Nedavne prijave zajednice",
-    locateMe: "Lociraj me",
-    borders: "Granice",
-    theme: "Tema",
-    light: "Svijetla",
-    dark: "Tamna",
-    on: "UKLJ",
-    off: "ISKLJ",
-    gisLegend: "GIS Legenda",
-    verifiedData: "Provjereni podaci",
-    totalProtected: "Ukupna zaštićena površina",
-    activeHotspots: "Aktivni požari",
-    avgRiskIndex: "Prosječni rizik",
-    histComparison: "Historijsko poređenje",
-    forestType: "Tip šume",
-    regFilters: "Regionalni filteri",
-    riskThreshold: "Prag rizika",
-    allTypes: "Svi tipovi",
-    critical: "KRITIČNO",
-    nasaFirms: "NASA FIRMS (Satelit)",
-    weather: "Meteo & Vjetar",
-    windSpeed: "Brzina vjetra",
-    temperature: "Temperatura",
-    riverLevel: "Vodostaj",
-    floodAlarm: "Alarm poplave",
-    classLegend: "Klasifikacija",
-    forests: {
-      "Sutjeska National Park": "NP Sutjeska",
-      "Bjelašnica Range": "Masiv Bjelašnica",
-    },
+    appName: 'Šumska Straža',
+    map: 'Mapa',
+    reports: 'Izvještaji',
+    stats: 'Statistika',
+    layers: 'Slojevi',
+    reportIncident: 'Prijavi Incident',
+    system: 'Sistem',
+    support: 'Podrška',
+    fireAlert: 'Požar',
+    floodAlert: 'Poplava',
+    description: 'Opis',
+    location: 'Lokacija',
+    submit: 'Pošalji Izvještaj',
+    activeOperators: 'Aktivni Operateri',
+    recentReports: 'Nedavni Izvještaji',
+    systemCoreData: 'Sistemski Podaci',
+    activeLanguage: 'Jezik',
+    surveillanceNetwork: 'Mreža Nadzora',
+    status: 'Status',
+    nominal: 'Nominalan',
+    tracking: 'Praćenje',
+    alerts: 'Upozorenja',
+    theme: 'Tema',
+    liveWindVector: 'Vjetar Uživo',
+    heatIndex: 'Toplotni Indeks',
+    assetsRegions: 'Resursi i Regije',
+    dataOverlays: 'Slojevi Podataka',
+    systemConfig: 'Konfiguracija',
+    gisLegend: 'GIS Legenda',
+    imagerySource: 'Izvor Slika',
+    vector: 'Vektor',
+    forestInventory: 'Inventar Šuma',
+    activeLandfills: 'Aktivne Deponije',
+    protectedAreas: 'Zaštićena Područja',
+    fireThreats: 'Opasnost od Požara',
+    hydrological: 'Hidrologija',
+    classLegend: 'Legenda Klasifikacije',
     regionTypes: {
-      [RegionType.DECIDUOUS]: "Listopadne šume",
-      [RegionType.CONIFEROUS]: "Crnogorične šume",
-      [RegionType.MIXED]: "Mješovite šume",
-      [RegionType.MAQUIS]: "Makija",
-      [RegionType.LOW_VEGETATION]: "Nisko rastinje",
-      [RegionType.LANDFILL]: "Antropogena odlagališta (Deponije)",
+      [RegionType.DECIDUOUS]: 'Listopadne Šume',
+      [RegionType.CONIFEROUS]: 'Četinarske Šume',
+      [RegionType.MIXED]: 'Mješovite Šume',
+      [RegionType.MAQUIS]: 'Makija',
+      [RegionType.LOW_VEGETATION]: 'Niska Vegetacija',
+      [RegionType.LANDFILL]: 'Deponija'
     },
     popup: {
-      threatIndex: "Indeks opasnosti",
-      surfaceArea: "Površina",
-      dataSync: "Sinhronizacija",
-      live: "UŽIVO",
-      unit: "JEDINICA"
+      dataSync: 'Sinhronizacija',
+      surfaceArea: 'Površina',
+      live: 'Uživo',
+      threatIndex: 'Indeks Prijetnje'
+    },
+    legend: {
+      activeFire: 'Aktivan Požar',
+      activeFlood: 'Aktivna Poplava',
+      sensorStation: 'Senzorska Stanica',
+      liveData: 'Podaci Uživo'
+    },
+    forests: {
+      'Kozara National Park': 'Nacionalni Park Kozara',
+      'Sutjeska National Park': 'Nacionalni Park Sutjeska',
+      'Bjelašnica Forest': 'Šuma Bjelašnica',
+      'Uborak Landfill': 'Deponija Uborak'
     }
   },
   [Language.JA]: {
-    appName: "NFSSI",
-    tagline: "森林監視・早期警戒システム",
-    map: "マップ",
-    filters: "フィルター",
-    layers: "レイヤー",
-    reports: "報告一覧",
-    stats: "データ分析",
-    reportIncident: "被害を報告する",
-    fireAlert: "火災アラート",
-    floodAlert: "洪水アラート",
-    description: "詳細",
-    location: "位置情報",
-    submit: "アラート送信",
-    cancel: "キャンセル",
-    low: "低",
-    medium: "中",
-    high: "高",
-    urgency: "緊急度",
-    riskLevel: "リスクレベル",
-    forestDensity: "森林密度",
-    satellite: "衛星写真",
-    terrain: "地形図",
-    activeIncidents: "現在のアラート",
-    bihSurveillance: "ボスニア・ヘルツェゴビナ監視",
-    recentReports: "最近のコミュニティ報告",
-    locateMe: "現在地を表示",
-    borders: "国境",
-    theme: "テーマ",
-    light: "ライト",
-    dark: "ダーク",
-    on: "オン",
-    off: "オフ",
-    gisLegend: "GIS 凡例",
-    verifiedData: "確認済みデータ",
-    totalProtected: "総保護面積",
-    activeHotspots: "火災発生数",
-    avgRiskIndex: "平均リスク指数",
-    histComparison: "過去のリスク比較",
-    forestType: "森林タイプ",
-    regFilters: "地域フィルター",
-    riskThreshold: "リスクしきい値",
-    allTypes: "すべてのタイプ",
-    critical: "致命的",
-    nasaFirms: "NASA FIRMS (衛星)",
-    weather: "気象・風速",
-    windSpeed: "風速",
-    temperature: "気温",
-    riverLevel: "水位",
-    floodAlarm: "洪水警報",
-    classLegend: "分類",
-    forests: {
-      "Sutjeska National Park": "ストイェスカ国立公園",
-      "Bjelašnica Range": "ビイェラシュニツァ山脈",
-    },
+    appName: 'Forest Guard',
+    map: '地図',
+    reports: 'レポート',
+    stats: '統計',
+    layers: 'レイヤー',
+    reportIncident: '事件を報告',
+    system: 'システム',
+    support: 'サポート',
+    fireAlert: '火災警報',
+    floodAlert: '洪水警報',
+    description: '説明',
+    location: '場所',
+    submit: '送信',
+    activeOperators: 'アクティブなオペレーター',
+    recentReports: '最近のレポート',
+    systemCoreData: 'システムコアデータ',
+    activeLanguage: '言語',
+    surveillanceNetwork: '監視ネットワーク',
+    status: 'ステータス',
+    nominal: '正常',
+    tracking: '追跡中',
+    alerts: 'アラート',
+    theme: 'テーマ',
+    liveWindVector: '風向ベクトル',
+    heatIndex: '暑さ指数',
+    assetsRegions: '資産と地域',
+    dataOverlays: 'データオーバーレイ',
+    systemConfig: 'システム設定',
+    gisLegend: 'GIS凡例',
+    imagerySource: '画像ソース',
+    vector: 'ベクトル',
+    forestInventory: '森林インベントリ',
+    activeLandfills: '埋立地',
+    protectedAreas: '保護地域',
+    fireThreats: '火災の脅威',
+    hydrological: '水文学',
+    classLegend: '分類凡例',
     regionTypes: {
-      [RegionType.DECIDUOUS]: "落葉樹林",
-      [RegionType.CONIFEROUS]: "針葉樹林",
-      [RegionType.MIXED]: "混合林",
-      [RegionType.MAQUIS]: "マキ (低木林)",
-      [RegionType.LOW_VEGETATION]: "低植生",
-      [RegionType.LANDFILL]: "埋立地 (ゴミ捨て場)",
+      [RegionType.DECIDUOUS]: '落葉樹林',
+      [RegionType.CONIFEROUS]: '針葉樹林',
+      [RegionType.MIXED]: '混交林',
+      [RegionType.MAQUIS]: 'マキー',
+      [RegionType.LOW_VEGETATION]: '低植生',
+      [RegionType.LANDFILL]: '埋立地'
     },
     popup: {
-      threatIndex: "脅威指数",
-      surfaceArea: "面積",
-      dataSync: "データ同期",
-      live: "ライブ",
-      unit: "ユニット"
+      dataSync: 'データ同期',
+      surfaceArea: '表面積',
+      live: 'ライブ',
+      threatIndex: '脅威指数'
+    },
+    legend: {
+      activeFire: '火災',
+      activeFlood: '洪水',
+      sensorStation: 'センサー局',
+      liveData: 'ライブデータ'
+    },
+    forests: {
+      'Kozara National Park': 'コザラ国立公園',
+      'Sutjeska National Park': 'スティエスカ国立公園',
+      'Bjelašnica Forest': 'ビェラシュニツァの森',
+      'Uborak Landfill': 'ウボラク埋立地'
     }
   }
 };
 
-export const REGION_STYLES = {
-  [RegionType.DECIDUOUS]: { color: '#4ade80', iconType: 'tree', label: 'Deciduous' }, // bright green
-  [RegionType.CONIFEROUS]: { color: '#14532d', iconType: 'pine', label: 'Coniferous' }, // dark green
-  [RegionType.MIXED]: { color: '#a855f7', iconType: 'mixed', label: 'Mixed Forest' }, // Purple
-  [RegionType.MAQUIS]: { color: '#eab308', iconType: 'shrub', label: 'Maquis' }, // yellow
-  [RegionType.LOW_VEGETATION]: { color: '#ec4899', iconType: 'sprout', label: 'Low Veg' }, // Pink
-  [RegionType.LANDFILL]: { color: '#ef4444', iconType: 'trash', label: 'Landfill' }, // red/gray
-};
-
-export const MOCK_FORESTS: ForestRegion[] = [
-  // Major Landfills (Deponije)
-  { id: 'dep-1', name: 'Deponija Uborak (Mostar)', type: RegionType.LANDFILL, area: 150, riskScore: 0.95, coordinates: [43.4132, 17.8887] },
-  { id: 'dep-2', name: 'Deponija Smiljevići (Sarajevo)', type: RegionType.LANDFILL, area: 210, riskScore: 0.88, coordinates: [43.8864, 18.3600] },
-  { id: 'dep-3', name: 'Deponija Ramići (Banja Luka)', type: RegionType.LANDFILL, area: 180, riskScore: 0.82, coordinates: [44.8572, 17.1565] },
-  { id: 'dep-4', name: 'Deponija Desetine (Tuzla)', type: RegionType.LANDFILL, area: 120, riskScore: 0.91, coordinates: [44.5375, 18.6258] },
-  { id: 'dep-5', name: 'Deponija Mošćanica (Zenica)', type: RegionType.LANDFILL, area: 140, riskScore: 0.75, coordinates: [44.1755, 17.9610] },
-  { id: 'dep-6', name: 'Deponija Eko-Dep (Bijeljina)', type: RegionType.LANDFILL, area: 130, riskScore: 0.70, coordinates: [44.7877, 19.1837] },
-
-  // Forests re-categorized
-  { id: '1', name: 'Sutjeska National Park', type: RegionType.MIXED, area: 17500, riskScore: 0.2, coordinates: [43.3444, 18.6833] },
-  { id: '2', name: 'Kozara National Park', type: RegionType.DECIDUOUS, area: 3375, riskScore: 0.45, coordinates: [45.0083, 16.8914] },
-  { id: '3', name: 'Mount Igman', type: RegionType.CONIFEROUS, area: 5400, riskScore: 0.8, coordinates: [43.75, 18.25] },
-  { id: '4', name: 'Una National Park', type: RegionType.MIXED, area: 19800, riskScore: 0.1, coordinates: [44.66, 16.14] },
-  { id: '5', name: 'Prenj Mountain', type: RegionType.LOW_VEGETATION, area: 12000, riskScore: 0.6, coordinates: [43.53, 17.91] },
-  { id: '6', name: 'Bjelašnica Range', type: RegionType.CONIFEROUS, area: 9500, riskScore: 0.75, coordinates: [43.70, 18.25] },
-  { id: '7', name: 'Jahorina Forest', type: RegionType.CONIFEROUS, area: 8200, riskScore: 0.65, coordinates: [43.73, 18.56] },
-  { id: '8', name: 'Vlašić Plateau', type: RegionType.MIXED, area: 11000, riskScore: 0.5, coordinates: [44.29, 17.65] },
-  { id: '9', name: 'Trebević Park', type: RegionType.CONIFEROUS, area: 2100, riskScore: 0.9, coordinates: [43.82, 18.45] },
-  { id: '10', name: 'Maglić Massif', type: RegionType.MIXED, area: 6000, riskScore: 0.3, coordinates: [43.28, 18.73] },
-  { id: '11', name: 'Čvrsnica Reserve', type: RegionType.MAQUIS, area: 14500, riskScore: 0.7, coordinates: [43.60, 17.61] },
-  { id: '12', name: 'Vranica Central', type: RegionType.LOW_VEGETATION, area: 7800, riskScore: 0.4, coordinates: [43.96, 17.71] },
-  { id: '13', name: 'Zelengora Slopes', type: RegionType.CONIFEROUS, area: 13200, riskScore: 0.25, coordinates: [43.36, 18.57] },
-  { id: '14', name: 'Majevica Hills', type: RegionType.DECIDUOUS, area: 9000, riskScore: 0.55, coordinates: [44.53, 18.82] },
-  { id: '15', name: 'Ozren Mountain', type: RegionType.MIXED, area: 5500, riskScore: 0.6, coordinates: [44.59, 18.31] },
-  { id: '16', name: 'Grmeč Forest', type: RegionType.CONIFEROUS, area: 15000, riskScore: 0.35, coordinates: [44.66, 16.42] },
-  { id: '17', name: 'Klekovača Reserve', type: RegionType.CONIFEROUS, area: 8800, riskScore: 0.2, coordinates: [44.43, 16.51] },
-  { id: '18', name: 'Manjača Highlands', type: RegionType.LOW_VEGETATION, area: 4200, riskScore: 0.45, coordinates: [44.60, 17.05] },
-  { id: '19', name: 'Motajica Forest', type: RegionType.DECIDUOUS, area: 3100, riskScore: 0.5, coordinates: [45.05, 17.66] },
-  { id: '20', name: 'Romanija Plateau', type: RegionType.CONIFEROUS, area: 10500, riskScore: 0.85, coordinates: [43.88, 18.66] },
-  { id: '21', name: 'Velež Range', type: RegionType.MAQUIS, area: 6700, riskScore: 0.78, coordinates: [43.31, 17.91] },
-  { id: '22', name: 'Šator Mountain', type: RegionType.MIXED, area: 5900, riskScore: 0.4, coordinates: [44.16, 16.60] },
-  { id: '23', name: 'Dinara Border', type: RegionType.LOW_VEGETATION, area: 12800, riskScore: 0.62, coordinates: [44.05, 16.43] },
-  { id: '24', name: 'Hutovo Blato', type: RegionType.MAQUIS, area: 7411, riskScore: 0.8, coordinates: [43.05, 17.78] }
+export const INITIAL_INCIDENTS: IncidentReport[] = [
+  {
+    id: 'inc-001',
+    type: IncidentType.FIRE,
+    lat: 43.8563,
+    lng: 18.4131,
+    description: 'Smoke reported near Trebević peak, strong wind carrying it north.',
+    timestamp: Date.now() - 3600000,
+    urgency: 'high',
+    windDirection: 180,
+    windSpeed: 25
+  },
+  {
+    id: 'inc-002',
+    type: IncidentType.FLOOD,
+    lat: 44.7722,
+    lng: 17.1910,
+    description: 'River Vrbas overflowing near Banja Luka center.',
+    timestamp: Date.now() - 7200000,
+    urgency: 'medium'
+  }
 ];
 
-export const INITIAL_INCIDENTS: IncidentReport[] = [
-  { id: 'i1', type: IncidentType.FIRE, lat: 43.8, lng: 18.3, description: 'Small brush fire near residential area', timestamp: Date.now() - 3600000, urgency: 'high', windDirection: 220, windSpeed: 15 },
-  { id: 'i2', type: IncidentType.FLOOD, lat: 44.8, lng: 17.2, description: 'River bank overflow detected', timestamp: Date.now() - 7200000, urgency: 'medium' }
+export const MOCK_FORESTS: ForestRegion[] = [
+  {
+    id: 'reg-001',
+    name: 'Kozara National Park',
+    type: RegionType.CONIFEROUS,
+    area: 3520,
+    riskScore: 0.75,
+    coordinates: [45.0083, 16.9036]
+  },
+  {
+    id: 'reg-002',
+    name: 'Sutjeska National Park',
+    type: RegionType.MIXED,
+    area: 17500,
+    riskScore: 0.45,
+    coordinates: [43.3369, 18.6872]
+  },
+  {
+    id: 'reg-003',
+    name: 'Bjelašnica Forest',
+    type: RegionType.DECIDUOUS,
+    area: 8400,
+    riskScore: 0.3,
+    coordinates: [43.7086, 18.2589]
+  },
+  {
+    id: 'reg-004',
+    name: 'Uborak Landfill',
+    type: RegionType.LANDFILL,
+    area: 120,
+    riskScore: 0.95,
+    coordinates: [43.3853, 17.8439]
+  }
+];
+
+export const REGION_STYLES: Record<RegionType, { color: string; iconType: string }> = {
+  [RegionType.DECIDUOUS]: { color: '#4ade80', iconType: 'tree' }, // green-400
+  [RegionType.CONIFEROUS]: { color: '#15803d', iconType: 'pine' }, // green-700
+  [RegionType.MIXED]: { color: '#84cc16', iconType: 'mixed' }, // lime-500
+  [RegionType.MAQUIS]: { color: '#eab308', iconType: 'shrub' }, // yellow-500
+  [RegionType.LOW_VEGETATION]: { color: '#facc15', iconType: 'sprout' }, // yellow-400
+  [RegionType.LANDFILL]: { color: '#ef4444', iconType: 'trash' } // red-500
+};
+
+export const PROTECTED_AREAS_DATA = [
+  {
+    name: 'Una National Park',
+    type: 'National Park',
+    lat: 44.7358,
+    lng: 16.0969,
+    areaSqKm: 198,
+    intensity: 0.9
+  },
+  {
+    name: 'Blidinje Nature Park',
+    type: 'Nature Park',
+    lat: 43.6125,
+    lng: 17.5144,
+    areaSqKm: 358,
+    intensity: 0.6
+  }
 ];
