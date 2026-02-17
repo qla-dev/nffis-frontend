@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -5,6 +6,7 @@ import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Na
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteoResponse, ForestRegion } from '../../types';
 import { bihBorderData } from '../../bihData';
+import { MapControls } from './MapControls';
 
 const GlobalLeaflet = (L as any).default || L;
 
@@ -81,7 +83,7 @@ const BASE_LAYER_CONFIG: Record<string, { url: string; attribution: string }> = 
   [MapLayer.SATELLITE_GOOGLE]: { url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', attribution: 'Google' },
   [MapLayer.TERRAIN]: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: 'OpenTopoMap' },
   [MapLayer.SENTINEL]: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Sentinel2/Scientific/ImageServer/tile/{z}/{y}/{x}', attribution: 'Sentinel' },
-  [MapLayer.INFRARED]: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', attribution: 'NatGeo (Sim)' }, // Fallback for aesthetic
+  [MapLayer.INFRARED]: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', attribution: 'NatGeo (Sim)' },
   [MapLayer.METEOBLUE]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'Meteoblue Base' },
   [MapLayer.NASA_FIRMS]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'NASA FIRMS Base' },
   [MapLayer.THERMAL]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'Thermal Base' },
@@ -109,10 +111,6 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [map, setMap] = useState<L.Map | null>(null);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [isLocating, setIsLocating] = useState(false);
-  const [showLayerPanel, setShowLayerPanel] = useState(false);
-  const [showAssetsPanel, setShowAssetsPanel] = useState(false);
-  const [showSettingsPanel, setShowSettingsPanel] = useState(false);
-  const [showSatPanel, setShowSatPanel] = useState(false);
   const [showLegend, setShowLegend] = useState(true);
 
   // -- NEW DASHBOARD STATE --
@@ -183,13 +181,6 @@ export const GISMap: React.FC<GISMapProps> = ({
       { enableHighAccuracy: true }
     );
   }, [map]);
-
-  const togglePanel = (panel: 'layer' | 'settings' | 'sat' | 'assets') => {
-    setShowLayerPanel(panel === 'layer' ? !showLayerPanel : false);
-    setShowSettingsPanel(panel === 'settings' ? !showSettingsPanel : false);
-    setShowSatPanel(panel === 'sat' ? !showSatPanel : false);
-    setShowAssetsPanel(panel === 'assets' ? !showAssetsPanel : false);
-  };
 
   // Helpers
   const fmtTime = (isoString: string) => new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -313,7 +304,7 @@ export const GISMap: React.FC<GISMapProps> = ({
       {/* --- FULL SCREEN WEATHER DASHBOARD OVERLAY --- */}
       {selectedForest && (
         <div className="fixed inset-0 z-[3000] bg-slate-950/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-300 md:pl-[60px]">
-           
+           {/* ... Dashboard Header & Content ... */}
            {/* Header - Centralized with Sidebar Padding */}
            <div className="flex-none flex items-center justify-center p-6 border-b border-slate-800 bg-slate-900/50 relative min-h-[120px]">
               
@@ -697,308 +688,17 @@ export const GISMap: React.FC<GISMapProps> = ({
         </div>
       </div>
 
-      {/* HORIZONTAL Control Cluster (Right Side) */}
-      <div className="absolute top-4 right-4 z-[2000] flex flex-col items-end gap-2">
-        <div className="bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-xl shadow-2xl p-1 flex items-center gap-1">
-          {/* Theme */}
-          <button onClick={onToggleTheme} className={`p-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-amber-400 bg-amber-400/5 hover:bg-amber-400/10' : 'text-slate-400 hover:bg-slate-800'}`} title={t.theme}>
-            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-          
-          <div className="w-px h-6 bg-slate-800 mx-1" />
-
-          {/* New State Borders Toggle - MOVED HERE */}
-          <button 
-            onClick={() => onToggleLayer(MapLayer.BIH_BORDERS)} 
-            className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.BIH_BORDERS) ? 'text-pink-500 bg-pink-950/30 shadow-[0_0_10px_rgba(236,72,153,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
-            title="Toggle State Borders"
-          >
-            <LandPlot size={18} />
-          </button>
-
-          <div className="w-px h-6 bg-slate-800 mx-1" />
-
-          {/* Wind Toggle */}
-          <button 
-            onClick={() => onToggleLayer(MapLayer.WINDY)} 
-            className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.WINDY) ? 'text-cyan-400 bg-cyan-950/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
-            title={t.liveWindVector}
-          >
-            <Wind size={18} className={activeLayers.has(MapLayer.WINDY) ? 'animate-pulse' : ''} />
-          </button>
-
-          {/* Heat Index Toggle */}
-          <button 
-            onClick={() => onToggleLayer(MapLayer.WEATHER_TEMP)} 
-            className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.WEATHER_TEMP) ? 'text-orange-500 bg-orange-950/30 shadow-[0_0_10px_rgba(249,115,22,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
-            title={t.heatIndex}
-          >
-            <Thermometer size={18} className={activeLayers.has(MapLayer.WEATHER_TEMP) ? 'animate-pulse' : ''} />
-          </button>
-
-          <div className="w-px h-6 bg-slate-800 mx-1" />
-
-          {/* Assets & Regions Toggle */}
-          <button 
-            onClick={() => togglePanel('assets')} 
-            className={`p-2.5 rounded-lg transition-colors ${showAssetsPanel ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-            title={t.assetsRegions}
-          >
-            <Trees size={18} />
-          </button>
-
-          {/* Layer Panel Toggle (Data Overlays) */}
-          <button 
-            onClick={() => togglePanel('layer')} 
-            className={`p-2.5 rounded-lg transition-colors ${showLayerPanel ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-            title={t.dataOverlays}
-          >
-            <Settings2 size={18} />
-          </button>
-
-          <div className="w-px h-6 bg-slate-800 mx-1" />
-
-          {/* Settings / Language Toggle */}
-          <button 
-            onClick={() => togglePanel('settings')} 
-            className={`p-2.5 rounded-lg transition-colors ${showSettingsPanel ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-            title={t.systemConfig}
-          >
-            <Settings size={18} />
-          </button>
-          
-          {/* Legend Toggle */}
-          <button 
-            onClick={() => setShowLegend(!showLegend)} 
-            className={`p-2.5 rounded-lg transition-colors ${showLegend ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-            title={t.gisLegend}
-          >
-            <Info size={18} />
-          </button>
-
-          <div className="w-px h-6 bg-slate-800 mx-1" />
-
-          {/* Satellite Chooser */}
-          <button 
-            onClick={() => togglePanel('sat')} 
-            className={`p-2.5 rounded-lg transition-colors ${showSatPanel || (activeBaseLayerId !== null) ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-            title={t.imagerySource}
-          >
-            <Globe2 size={18} />
-          </button>
-        </div>
-
-        {/* Dropdown Panels Container */}
-        <div className="relative w-64">
-          
-          {/* Floating Satellite Panel - RESTORED FULL LIST */}
-          {showSatPanel && (
-            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200">
-              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
-                {t.imagerySource}
-                <button onClick={() => setShowSatPanel(false)} className="hover:text-white"><X size={14} /></button>
-              </h4>
-              <div className="grid grid-cols-2 gap-2">
-                 {/* Vector (None) */}
-                 <button 
-                  onClick={() => { onSetBaseLayer(null); setShowSatPanel(false); }}
-                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    !activeBaseLayerId ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                  }`}
-                >
-                  <MapIcon size={20} className={!activeBaseLayerId ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Vector</span>
-                </button>
-
-                 {/* Standard Sat */}
-                 <button 
-                  onClick={() => { onSetBaseLayer(MapLayer.SATELLITE); setShowSatPanel(false); }}
-                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    activeBaseLayerId === MapLayer.SATELLITE ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                  }`}
-                >
-                  <Satellite size={20} className={activeBaseLayerId === MapLayer.SATELLITE ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Standard</span>
-                </button>
-
-                {/* Clarity */}
-                <button 
-                  onClick={() => { onSetBaseLayer(MapLayer.SATELLITE_CLARITY); setShowSatPanel(false); }}
-                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    activeBaseLayerId === MapLayer.SATELLITE_CLARITY ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                  }`}
-                >
-                  <Eye size={20} className={activeBaseLayerId === MapLayer.SATELLITE_CLARITY ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Clarity</span>
-                </button>
-
-                {/* Google */}
-                <button 
-                  onClick={() => { onSetBaseLayer(MapLayer.SATELLITE_GOOGLE); setShowSatPanel(false); }}
-                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    activeBaseLayerId === MapLayer.SATELLITE_GOOGLE ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                  }`}
-                >
-                  <Globe2 size={20} className={activeBaseLayerId === MapLayer.SATELLITE_GOOGLE ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Google</span>
-                </button>
-
-                 {/* Sentinel */}
-                 <button 
-                  onClick={() => { onSetBaseLayer(MapLayer.SENTINEL); setShowSatPanel(false); }}
-                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    activeBaseLayerId === MapLayer.SENTINEL ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                  }`}
-                >
-                  <Radar size={20} className={activeBaseLayerId === MapLayer.SENTINEL ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Sentinel</span>
-                </button>
-                
-                 {/* Terrain */}
-                 <button 
-                  onClick={() => { onSetBaseLayer(MapLayer.TERRAIN); setShowSatPanel(false); }}
-                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    activeBaseLayerId === MapLayer.TERRAIN ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                  }`}
-                >
-                  <Mountain size={20} className={activeBaseLayerId === MapLayer.TERRAIN ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Terrain</span>
-                </button>
-
-                 {/* Infrared */}
-                 <button 
-                  onClick={() => { onSetBaseLayer(MapLayer.INFRARED); setShowSatPanel(false); }}
-                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    activeBaseLayerId === MapLayer.INFRARED ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                  }`}
-                >
-                  <Sun size={20} className={activeBaseLayerId === MapLayer.INFRARED ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Infrared</span>
-                </button>
-
-                {/* Meteoblue */}
-                 <button 
-                  onClick={() => { onSetBaseLayer(MapLayer.METEOBLUE); setShowSatPanel(false); }}
-                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    activeBaseLayerId === MapLayer.METEOBLUE ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                  }`}
-                >
-                  <Cloud size={20} className={activeBaseLayerId === MapLayer.METEOBLUE ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Meteoblue</span>
-                </button>
-
-                {/* NASA FIRMS */}
-                 <button 
-                  onClick={() => { onSetBaseLayer(MapLayer.NASA_FIRMS); setShowSatPanel(false); }}
-                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    activeBaseLayerId === MapLayer.NASA_FIRMS ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                  }`}
-                >
-                  <Flame size={20} className={activeBaseLayerId === MapLayer.NASA_FIRMS ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">NASA FIRMS</span>
-                </button>
-
-                 {/* Thermal */}
-                 <button 
-                  onClick={() => { onSetBaseLayer(MapLayer.THERMAL); setShowSatPanel(false); }}
-                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    activeBaseLayerId === MapLayer.THERMAL ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                  }`}
-                >
-                  <Thermometer size={20} className={activeBaseLayerId === MapLayer.THERMAL ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Thermal</span>
-                </button>
-
-                 {/* Windy */}
-                 <button 
-                  onClick={() => { onSetBaseLayer(MapLayer.WINDY); setShowSatPanel(false); }}
-                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    activeBaseLayerId === MapLayer.WINDY ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                  }`}
-                >
-                  <Wind size={20} className={activeBaseLayerId === MapLayer.WINDY ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Windy</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Floating Assets & Regions Panel */}
-          {showAssetsPanel && (
-            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
-              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">
-                {t.assetsRegions}
-                <button onClick={() => setShowAssetsPanel(false)} className="hover:text-white transition-colors">
-                  <X size={14} />
-                </button>
-              </h4>
-              <div className="space-y-1">
-                {[
-                  { id: MapLayer.FORESTS, label: t.forestInventory, icon: Trees, color: 'text-emerald-500' },
-                  { id: MapLayer.LANDFILLS, label: t.activeLandfills, icon: Trash2, color: 'text-red-500' },
-                  { id: MapLayer.PROTECTED_AREAS, label: t.protectedAreas, icon: ShieldCheck, color: 'text-yellow-400' },
-                ].map(layer => (
-                  <button 
-                    key={layer.id}
-                    onClick={() => onToggleLayer(layer.id)}
-                    className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
-                      activeLayers.has(layer.id) 
-                        ? 'bg-blue-600/10 border-blue-600/50' 
-                        : 'bg-slate-900/50 border-transparent hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <layer.icon size={16} className={activeLayers.has(layer.id) ? layer.color : 'text-slate-600'} />
-                      <span className={`text-[11px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>{layer.label}</span>
-                    </div>
-                    {activeLayers.has(layer.id) && <Check size={12} className="text-blue-500" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Layer Quick Panel (Data Overlays - Hazards Only) */}
-          {showLayerPanel && (
-            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
-              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">
-                {t.dataOverlays}
-                <button onClick={() => setShowLayerPanel(false)} className="hover:text-white transition-colors">
-                  <X size={14} />
-                </button>
-              </h4>
-              
-              <div className="space-y-4">
-                {/* Hazards Section */}
-                <div>
-                  <div className="space-y-1">
-                    {[
-                       { id: MapLayer.FIRE_RISK, label: t.fireThreats, icon: Flame, color: 'text-red-500' },
-                       { id: MapLayer.FLOOD_RISK, label: t.hydrological, icon: Waves, color: 'text-blue-500' },
-                    ].map(layer => (
-                      <button 
-                        key={layer.id}
-                        onClick={() => onToggleLayer(layer.id)}
-                        className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
-                          activeLayers.has(layer.id) 
-                            ? 'bg-blue-600/10 border-blue-600/50' 
-                            : 'bg-slate-900/50 border-transparent hover:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <layer.icon size={16} className={activeLayers.has(layer.id) ? layer.color : 'text-slate-600'} />
-                          <span className={`text-[11px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>{layer.label}</span>
-                        </div>
-                        {activeLayers.has(layer.id) && <Check size={12} className="text-blue-500" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Map Controls */}
+      <MapControls 
+        activeLayers={activeLayers} 
+        onToggleLayer={onToggleLayer} 
+        onSetBaseLayer={onSetBaseLayer}
+        isDarkMode={isDarkMode}
+        onToggleTheme={onToggleTheme}
+        showLegend={showLegend}
+        onToggleLegend={() => setShowLegend(!showLegend)}
+        language={language}
+      />
 
       {/* Stacked Legends Container (Left) */}
       {showLegend && (
