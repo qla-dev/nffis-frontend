@@ -1,15 +1,15 @@
+
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Circle, LayerGroup, GeoJSON, WMSTileLayer, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Languages, Settings, Map as MapIcon, Image as ImageIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, TreePine, Sprout, Tent, ShieldCheck, Factory, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, CloudSnow } from 'lucide-react';
+import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
-import { IncidentReport, IncidentType, MapLayer, Language, RegionType } from '../../types';
+import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteoResponse, ForestRegion } from '../../types';
 import { bihBorderData } from '../../bihData';
 
-// Fix for ESM import of Leaflet - ensuring plugins attach to the correct instance
 const GlobalLeaflet = (L as any).default || L;
 
-// Shared SVG paths for Map Markers and Legend
+// --- ICONS & STYLES ---
 const ICON_PATHS: Record<string, string> = {
   tree: `<path d="M12 19v3"/><path d="M12 19h-3a9 9 0 0 1 0-18h6a9 9 0 0 1 0 18h-3"/>`,
   pine: `<path d="m8 14 4-9 4 9"/><path d="m10 14-3 9"/><path d="m14 14 3 9"/>`,
@@ -20,303 +20,62 @@ const ICON_PATHS: Record<string, string> = {
   shield: `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/>`
 };
 
-// Helper to generate dynamic icons
 const getRegionIcon = (type: RegionType) => {
   const style = REGION_STYLES[type];
   const color = style.color;
   const path = ICON_PATHS[style.iconType] || ICON_PATHS.tree;
-  
   const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
-
   return GlobalLeaflet.divIcon({
-    html: `
-      <div class="flex items-center justify-center w-8 h-8 bg-slate-950 rounded-full border-2 border-[${color}] shadow-2xl hover:scale-110 transition-transform" style="border-color: ${color}">
-        ${iconSvg}
-      </div>
-    `,
+    html: `<div class="flex items-center justify-center w-8 h-8 bg-slate-950 rounded-full border-2 border-[${color}] shadow-2xl hover:scale-110 transition-transform" style="border-color: ${color}">${iconSvg}</div>`,
     className: '',
     iconSize: [32, 32],
     iconAnchor: [16, 16],
-    popupAnchor: [0, -16]
-  });
-};
-
-const getProtectedAreaIcon = (intensity: number) => {
-  const color = intensity > 0.8 ? '#ef4444' : '#eab308'; // Red for high, Yellow for medium
-  const path = ICON_PATHS.shield;
-  
-  const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
-
-  return GlobalLeaflet.divIcon({
-    html: `
-      <div class="flex items-center justify-center w-9 h-9 bg-slate-900/90 rounded-full border-2 border-[${color}] shadow-[0_0_15px_${color}40] hover:scale-110 transition-transform backdrop-blur-sm" style="border-color: ${color}">
-        ${iconSvg}
-      </div>
-    `,
-    className: '',
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-    popupAnchor: [0, -18]
-  });
-};
-
-const getTempIcon = (temp: number | undefined) => {
-  const safeTemp = typeof temp === 'number' ? temp : 0;
-  let bgColor = '#3b82f6'; // Blue for cold
-  if (safeTemp > 10) bgColor = '#22c55e'; // Green for mild
-  if (safeTemp > 20) bgColor = '#f97316'; // Orange for warm
-  if (safeTemp > 30) bgColor = '#ef4444'; // Red for hot
-
-  return GlobalLeaflet.divIcon({
-    html: `
-      <div class="flex items-center justify-center px-1.5 py-0.5 rounded-full shadow-lg border border-slate-700 bg-slate-900/90 backdrop-blur-sm transform -translate-y-8">
-         <span class="text-[10px] font-black" style="color: ${bgColor}">${safeTemp.toFixed(1)}°C</span>
-      </div>
-    `,
-    className: '',
-    iconSize: [40, 20],
-    iconAnchor: [20, 0] // Anchor just above the main marker
   });
 };
 
 const UserIcon = GlobalLeaflet.divIcon({
-  html: `
-    <div class="relative flex items-center justify-center">
-      <div class="absolute w-8 h-8 bg-blue-500 rounded-full animate-ping opacity-20"></div>
-      <div class="relative w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-xl"></div>
-    </div>
-  `,
+  html: `<div class="relative flex items-center justify-center"><div class="absolute w-8 h-8 bg-blue-500 rounded-full animate-ping opacity-20"></div><div class="relative w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-xl"></div></div>`,
   className: '',
   iconSize: [32, 32],
   iconAnchor: [16, 16]
 });
 
-// Helper for weather icons
-const getWeatherIcon = (code: number) => {
-  if (code <= 3) return <Sun className="text-yellow-400" size={32} />;
-  if (code <= 8) return <Cloud className="text-slate-400" size={32} />;
-  if (code <= 12) return <CloudRain className="text-blue-400" size={32} />;
-  if (code <= 16) return <Snowflake className="text-white" size={32} />;
-  if (code <= 19) return <CloudLightning className="text-purple-400" size={32} />;
-  return <Cloud className="text-slate-400" size={32} />;
+// --- WMO Weather Codes Helper ---
+const getWeatherInfo = (code: number) => {
+  const codes: Record<number, { label: string; icon: any }> = {
+    0: { label: 'Clear Sky', icon: Sun },
+    1: { label: 'Mainly Clear', icon: Sun },
+    2: { label: 'Partly Cloudy', icon: Cloud },
+    3: { label: 'Overcast', icon: Cloud },
+    45: { label: 'Fog', icon: Cloud },
+    48: { label: 'Depositing Rime Fog', icon: Cloud },
+    51: { label: 'Light Drizzle', icon: CloudRain },
+    53: { label: 'Moderate Drizzle', icon: CloudRain },
+    55: { label: 'Dense Drizzle', icon: CloudRain },
+    56: { label: 'Light Freezing Drizzle', icon: Snowflake },
+    57: { label: 'Dense Freezing Drizzle', icon: Snowflake },
+    61: { label: 'Slight Rain', icon: CloudRain },
+    63: { label: 'Moderate Rain', icon: CloudRain },
+    65: { label: 'Heavy Rain', icon: CloudRain },
+    66: { label: 'Light Freezing Rain', icon: Snowflake },
+    67: { label: 'Heavy Freezing Rain', icon: Snowflake },
+    71: { label: 'Slight Snow', icon: Snowflake },
+    73: { label: 'Moderate Snow', icon: Snowflake },
+    75: { label: 'Heavy Snow', icon: Snowflake },
+    77: { label: 'Snow Grains', icon: Snowflake },
+    80: { label: 'Slight Rain Showers', icon: CloudRain },
+    81: { label: 'Moderate Rain Showers', icon: CloudRain },
+    82: { label: 'Violent Rain Showers', icon: CloudRain },
+    85: { label: 'Slight Snow Showers', icon: Snowflake },
+    86: { label: 'Heavy Snow Showers', icon: Snowflake },
+    95: { label: 'Thunderstorm', icon: CloudLightning },
+    96: { label: 'Thunderstorm with Hail', icon: CloudLightning },
+    99: { label: 'Heavy Thunderstorm with Hail', icon: CloudLightning },
+  };
+  return codes[code] || { label: 'Unknown', icon: Cloud };
 };
 
-// --- HELPER: Synthetic Wind Data Generator (GRIB-JSON format for leaflet-velocity) ---
-const generateWindData = () => {
-  // Region: Bosnia and surrounds
-  // Ensure we cover well beyond the viewport
-  const lo1 = 14.0; // West
-  const la1 = 47.0; // North
-  const dx = 0.05;  // 0.05 deg ~ 5km
-  const dy = 0.05; 
-  const nx = 140;   
-  const ny = 120;   
-  
-  const uData = [];
-  const vData = [];
-
-  for (let y = 0; y < ny; y++) {
-    const lat = la1 - y * dy;
-    for (let x = 0; x < nx; x++) {
-      const lng = lo1 + x * dx;
-      
-      // Procedural Wind Pattern Generation
-      let u = 4.0;
-      let v = 0.5 * Math.sin(lng * 0.5);
-
-      // Topographic interference
-      const distToCenter = Math.sqrt(Math.pow(lat - 44.0, 2) + Math.pow(lng - 17.8, 2));
-      
-      // Cyclonic system
-      const vortexLat = 43.8;
-      const vortexLng = 17.5;
-      const dY = lat - vortexLat;
-      const dX = lng - vortexLng;
-      const distVortex = Math.sqrt(dX*dX + dY*dY);
-      
-      const vortexStrength = 5.0 / (distVortex + 0.5);
-      u += -dY * vortexStrength;
-      v += dX * vortexStrength;
-
-      // Noise
-      u += (Math.random() - 0.5) * 1.5;
-      v += (Math.random() - 0.5) * 1.5;
-
-      uData.push(u);
-      vData.push(v);
-    }
-  }
-
-  return [
-    {
-      header: {
-        parameterCategory: 2,
-        parameterNumber: 2,
-        lo1, la1, dx, dy, nx, ny,
-        refTime: new Date().toISOString()
-      },
-      data: uData
-    },
-    {
-      header: {
-        parameterCategory: 2,
-        parameterNumber: 3,
-        lo1, la1, dx, dy, nx, ny,
-        refTime: new Date().toISOString()
-      },
-      data: vData
-    }
-  ];
-};
-
-// --- COMPONENT: Wind Animation Layer ---
-const WindAnimationLayer = ({ active, isLoaded }: { active: boolean, isLoaded: boolean }) => {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!active) return;
-    if (!isLoaded) {
-        console.log('[WindLayer] Waiting for plugins to load...');
-        return;
-    }
-    
-    // Explicitly use window.L which now has the plugins attached
-    const GlobalL = (window as any).L;
-
-    if (GlobalL && GlobalL.velocityLayer) {
-      console.log('[WindLayer] Initializing velocity layer');
-      
-      // Check if layer already exists to prevent duplication
-      if ((window as any)._windLayerInstance) {
-          map.removeLayer((window as any)._windLayerInstance);
-      }
-
-      const windData = generateWindData();
-      
-      const layer = GlobalL.velocityLayer({
-        displayValues: true,
-        displayOptions: {
-          velocityType: "Global Wind",
-          position: "bottomleft",
-          emptyString: "No wind data",
-          angleConvention: "bearingCW",
-          displayPosition: "bottomleft",
-          displayEmptyString: "No wind data",
-          speedUnit: "km/h"
-        },
-        data: windData,
-        maxVelocity: 12,
-        velocityScale: 0.005, // Adjusted scale
-        particleMultiplier: 1/800, // Slightly fewer particles for performance
-        lineWidth: 2,
-        frameRate: 15,
-        colorScale: [
-          "rgb(36,104, 180)", "rgb(60,157, 194)", "rgb(128,205,193)",
-          "rgb(151,218,168)", "rgb(198,231,181)", "rgb(238,247,217)",
-          "rgb(255,238,159)", "rgb(252,217,125)", "rgb(255,182,100)",
-          "rgb(252,150,75)", "rgb(250,112,52)", "rgb(245,64,32)",
-          "rgb(237,45,28)", "rgb(220,24,32)", "rgb(180,0,35)"
-        ]
-      });
-
-      console.log('[WindLayer] Adding layer to map', layer);
-      layer.addTo(map);
-      (window as any)._windLayerInstance = layer;
-
-      return () => {
-        console.log('[WindLayer] Removing layer');
-        layer.remove();
-        (window as any)._windLayerInstance = null;
-      };
-    } else {
-        console.error('[WindLayer] GlobalL or L.velocityLayer missing', { GlobalL });
-    }
-  }, [active, isLoaded, map]);
-
-  return null;
-};
-
-
-// Component to handle the heatmap using HeatmapOverlay
-const HeatmapLayer = ({ active, isLoaded }: { active: boolean, isLoaded: boolean }) => {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!active) return;
-    if (!isLoaded) {
-        console.log('[HeatmapLayer] Waiting for plugins...');
-        return;
-    }
-    
-    const GlobalL = (window as any).L;
-    const HeatmapOverlay = (window as any).HeatmapOverlay;
-
-    if (!HeatmapOverlay) {
-        console.error('[HeatmapLayer] HeatmapOverlay plugin missing');
-        return;
-    }
-
-    console.log('[HeatmapLayer] Initializing heatmap');
-
-    const cfg = {
-      "radius": 20,
-      "maxOpacity": 0.55,
-      "scaleRadius": false,
-      "useLocalExtrema": true,
-      latField: 'lat',
-      lngField: 'lng',
-      valueField: 'val',
-      blur: 0.75,
-      gradient: {
-        0.1: '#1a53ff',
-        0.3: '#00cc66',
-        0.6: '#e6e600',
-        0.9: '#ff0000'
-      }
-    };
-    
-    const layer = new HeatmapOverlay(cfg);
-
-    const generatedPoints: Array<{lat: number, lng: number, val: number}> = [];
-
-    PROTECTED_AREAS_DATA.forEach(area => {
-      const pointCount = Math.max(30, Math.ceil(area.areaSqKm / 1.5));
-      const radiusKm = Math.sqrt(area.areaSqKm / Math.PI);
-      const radiusDeg = radiusKm / 111;
-
-      generatedPoints.push({ lat: area.lat, lng: area.lng, val: area.intensity });
-
-      for (let i = 0; i < pointCount; i++) {
-        const theta = Math.random() * 2 * Math.PI;
-        const r = radiusDeg * Math.sqrt(Math.random());
-        const stretchLat = 1.0; 
-        const stretchLng = 0.8 + Math.random() * 0.4;
-        const dLat = r * Math.cos(theta) * stretchLat;
-        const dLng = r * Math.sin(theta) * stretchLng;
-
-        generatedPoints.push({
-          lat: area.lat + dLat,
-          lng: area.lng + dLng,
-          val: area.intensity * (0.6 + Math.random() * 0.4)
-        });
-      }
-    });
-
-    const heatmapData = {
-      max: 1.0,
-      data: generatedPoints
-    };
-    
-    layer.setData(heatmapData);
-    map.addLayer(layer);
-
-    return () => {
-      map.removeLayer(layer);
-    };
-  }, [active, isLoaded, map]);
-
-  return null;
-};
+// --- COMPONENTS ---
 
 interface GISMapProps {
   incidents: IncidentReport[];
@@ -331,55 +90,8 @@ interface GISMapProps {
   onSetLanguage: (lang: Language) => void;
 }
 
-// Function to load script
-const loadScript = (src: string) => {
-  return new Promise<void>((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
-      console.log(`[ScriptLoader] Already loaded: ${src}`);
-      resolve();
-      return;
-    }
-    console.log(`[ScriptLoader] Loading: ${src}`);
-    const script = document.createElement('script');
-    script.src = src;
-    script.async = true;
-    script.onload = () => {
-        console.log(`[ScriptLoader] Loaded: ${src}`);
-        resolve();
-    };
-    script.onerror = (e) => {
-        console.error(`[ScriptLoader] Error loading: ${src}`, e);
-        reject(e);
-    };
-    document.body.appendChild(script);
-  });
-};
-
-interface WeatherData {
-  temperature: number;
-  felttemperature: number;
-  windspeed: number;
-  winddirection: number;
-  relativehumidity: number;
-  precipitation_probability: number;
-  precipitation: number;
-  snowfraction: number;
-  convective_precipitation: number;
-  pictocode: number;
-  rainspot?: string;
-}
-
 export const GISMap: React.FC<GISMapProps> = ({ 
-  incidents, 
-  activeLayers, 
-  onReportClick, 
-  isReporting, 
-  onToggleLayer, 
-  onSetBaseLayer,
-  isDarkMode, 
-  onToggleTheme, 
-  language,
-  onSetLanguage
+  incidents, activeLayers, onReportClick, isReporting, onToggleLayer, onSetBaseLayer, isDarkMode, onToggleTheme, language, onSetLanguage
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
@@ -389,173 +101,36 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
   const [showSatPanel, setShowSatPanel] = useState(false);
   const [showLegend, setShowLegend] = useState(true);
-  const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
-  
-  // State to track if external plugins are loaded
-  const [pluginsLoaded, setPluginsLoaded] = useState(false);
-  
-  // State for live forest weather data
-  const [forestWeather, setForestWeather] = useState<Record<string, WeatherData>>({});
+
+  // -- NEW DASHBOARD STATE --
+  const [selectedForest, setSelectedForest] = useState<ForestRegion | null>(null);
+  const [forestWeather, setForestWeather] = useState<OpenMeteoResponse | null>(null);
+  const [loadingWeather, setLoadingWeather] = useState(false);
 
   const t = TRANSLATIONS[language];
 
-  // Dynamic Plugin Loading Strategy
+  // Fetch Weather from Open-Meteo
   useEffect(() => {
-    // 1. Expose the ESM Leaflet to window so legacy plugins can attach to it
-    // CRITICAL: Ensure we are attaching the correct object.
-    // If 'import L' returns a Module, we need L.default.
-    console.log('[Init] Setting up global Leaflet...');
-    if (!(window as any).L) {
-        (window as any).L = GlobalLeaflet;
-        console.log('[Init] Assigned GlobalLeaflet to window.L', GlobalLeaflet);
-    } else {
-        console.log('[Init] window.L already exists', (window as any).L);
-        // Double check it's not an empty object if something else claimed it
-        if (!(window as any).L.version) {
-             console.warn('[Init] window.L exists but has no version, overwriting with GlobalLeaflet');
-             (window as any).L = GlobalLeaflet;
-        }
-    }
-
-    const loadPlugins = async () => {
-      try {
-        // 2. Load Heatmap Core
-        await loadScript('https://cdn.jsdelivr.net/npm/heatmap.js@2.0.5/build/heatmap.min.js');
-        // 3. Load Leaflet Heatmap (depends on heatmap.js and window.L)
-        await loadScript('https://cdn.jsdelivr.net/npm/leaflet-heatmap@1.0.0/leaflet-heatmap.js');
-        // 4. Load Leaflet Velocity (depends on window.L)
-        await loadScript('https://unpkg.com/leaflet-velocity@1.10.1/dist/leaflet-velocity.js');
-        
-        // Wait a small tick to ensure scripts are evaluated
-        setTimeout(() => {
-             const WinL = (window as any).L;
-             // Verify L.velocityLayer exists
-            if (WinL && WinL.velocityLayer) {
-                console.log("[Init] L.velocityLayer verified.");
-                setPluginsLoaded(true);
+    if (selectedForest) {
+      setLoadingWeather(true);
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${selectedForest.coordinates[0]}&longitude=${selectedForest.coordinates[1]}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,pressure_msl,surface_pressure,cloud_cover,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,uv_index_max,precipitation_sum,rain_sum,showers_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&timezone=auto`;
+      
+      fetch(url)
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                 console.error("Open-Meteo API Error", data);
+                 setForestWeather(null);
             } else {
-                console.error("[Init] Scripts loaded but L.velocityLayer undefined.", { 
-                    hasL: !!WinL,
-                    hasVelocity: !!(WinL && WinL.velocityLayer),
-                    L_keys: WinL ? Object.keys(WinL).filter(k => k.includes('velocity')) : []
-                });
+                setForestWeather(data);
             }
-        }, 500); // Increased timeout to 500ms to be safe
-        
-      } catch (err) {
-        console.error("Failed to load GIS plugins", err);
-      }
-    };
-
-    loadPlugins();
-  }, []);
-
-  // Fetch Meteoblue URL
-  useEffect(() => {
-    const fetchMeteoblue = async () => {
-      try {
-        const apiKey = "be72f76237db";
-        const timeResponse = await fetch(`https://maps-api.meteoblue.com/v1/time/hourly/ICONAUTO?lang=en&apikey=${apiKey}`);
-        const timeInfo = await timeResponse.json();
-        const date = timeInfo.current;
-        
-        const url = `https://maps-api.meteoblue.com/v1/map/raster/ICONAUTO/${date}/` +
-          "11~2%20m%20above%20gnd~hourly~none~contourSteps~" +
-          "-10.0~rgba(52,140,237,1.0)~" +
-          "-8.0~rgba(68,177,246,1.0)~" +
-          "-6.0~rgba(81,203,250,1.0)~" +
-          "-4.0~rgba(128,224,247,1.0)~" +
-          "-2.0~rgba(160,234,247,1.0)~" +
-          "0.0~rgba(0,239,124,1.0)~" +
-          "2.0~rgba(0,228,82,1.0)~" +
-          "4.0~rgba(0,200,72,1.0)~" +
-          "6.0~rgba(16,184,122,1.0)~" +
-          "8.0~rgba(41,123,93,1.0)~" +
-          "10.0~rgba(0,114,41,1.0)~" +
-          "12.0~rgba(60,161,44,1.0)~" +
-          "14.0~rgba(121,208,48,1.0)~" +
-          "16.0~rgba(181,255,51,1.0)~" +
-          "18.0~rgba(216,247,161,1.0)~" +
-          "20.0~rgba(255,246,0,1.0)~" +
-          "22.0~rgba(248,223,11,1.0)~" +
-          "24.0~rgba(253,202,12,1.0)~" +
-          "26.0~rgba(252,172,5,1.0)~" +
-          "28.0~rgba(248,141,0,1.0)~" +
-          "30.0~rgba(255,102,0,1.0)~" +
-          "/{z}/{x}/{y}" +
-          "?temperatureUnit=C" +
-          `&apikey=${apiKey}` +
-          `&lastUpdate=${timeInfo.lastUpdate}`;
-          
-        setMeteoblueUrl(url);
-      } catch (e) {
-        console.error("Failed to fetch meteoblue", e);
-      }
-    };
-    fetchMeteoblue();
-  }, []);
-
-  // Fetch Real-time forest weather
-  useEffect(() => {
-    if (activeLayers.has(MapLayer.FOREST_TEMP)) {
-      const fetchWeather = async () => {
-        const weather: Record<string, WeatherData> = {};
-        
-        const promises = MOCK_FORESTS.map(async (forest) => {
-          try {
-             const lat = forest.coordinates[0];
-             const lon = forest.coordinates[1];
-             const apiKey = "zI6inVa18WGJq4f7";
-             const url = `https://my.meteoblue.com/packages/current?apikey=${apiKey}&lat=${lat}&lon=${lon}&format=json`;
-
-             const res = await fetch(url);
-             if (res.ok) {
-                const data = await res.json();
-                if (data.data_current) {
-                    weather[forest.id] = data.data_current;
-                }
-             }
-          } catch (e) {
-             console.warn(`Failed to fetch weather for ${forest.name}`, e);
-          }
-        });
-
-        await Promise.all(promises);
-        setForestWeather(prev => ({...prev, ...weather}));
-      };
-
-      fetchWeather();
-      // Poll every 5 minutes
-      const interval = setInterval(fetchWeather, 300000);
-      return () => clearInterval(interval);
+        })
+        .catch(err => console.error("Weather Fetch Error", err))
+        .finally(() => setLoadingWeather(false));
+    } else {
+        setForestWeather(null);
     }
-  }, [activeLayers]);
-
-  const imagerySources = useMemo(() => [
-    { id: MapLayer.SATELLITE, label: 'ArcGIS Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Satellite },
-    { id: MapLayer.SATELLITE_CLARITY, label: 'Esri Clarity', url: 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Satellite },
-    { id: MapLayer.SATELLITE_GOOGLE, label: 'Google Hybrid', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', icon: Globe2 },
-    // Removed old Windy tile layer. Wind is now an overlay layer (MapLayer.WINDY).
-    { id: MapLayer.SENTINEL, label: 'Sentinel-2', url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2019_3857/default/g/{z}/{y}/{x}.jpg', icon: Layers },
-    { id: MapLayer.INFRARED, label: 'Infrared (Veg)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', icon: Leaf },
-    { id: MapLayer.METEOBLUE, label: 'Meteoblue Temp', url: meteoblueUrl, icon: Thermometer },
-    { id: MapLayer.NASA_FIRMS, label: 'NASA VIIRS', url: 'https://map1.vis.earthdata.nasa.gov/wmts-webmerc/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg', icon: Flame },
-    { id: MapLayer.THERMAL, label: 'Thermal LST', url: 'https://map1.vis.earthdata.nasa.gov/wmts-webmerc/MODIS_Terra_Land_Surface_Temp_Day/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.png', icon: Thermometer },
-    { id: MapLayer.TERRAIN, label: 'OpenTopoMap', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', icon: Mountain },
-  ], [meteoblueUrl]);
-
-  useEffect(() => {
-    if (map) {
-      console.log("[Map] Map instance ready");
-      const clickHandler = (e: L.LeafletMouseEvent) => {
-        if (isReporting) onReportClick(e.latlng.lat, e.latlng.lng);
-      };
-      map.on('click', clickHandler);
-      return () => {
-        map.off('click', clickHandler);
-      };
-    }
-  }, [map, isReporting, onReportClick]);
+  }, [selectedForest]);
 
   const handleLocateMe = useCallback(() => {
     if (!navigator.geolocation) return;
@@ -572,9 +147,6 @@ export const GISMap: React.FC<GISMapProps> = ({
     );
   }, [map]);
 
-  const activeBaseLayer = imagerySources.find(src => activeLayers.has(src.id)) || null;
-
-  // Handle panel exclusivity
   const togglePanel = (panel: 'layer' | 'settings' | 'sat' | 'assets') => {
     setShowLayerPanel(panel === 'layer' ? !showLayerPanel : false);
     setShowSettingsPanel(panel === 'settings' ? !showSettingsPanel : false);
@@ -582,315 +154,263 @@ export const GISMap: React.FC<GISMapProps> = ({
     setShowAssetsPanel(panel === 'assets' ? !showAssetsPanel : false);
   };
 
+  const activeBaseLayer = activeLayers.has(MapLayer.SATELLITE) ? { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Esri' } : null;
+
+  // Helpers
+  const fmtTime = (isoString: string) => new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const fmtDay = (isoString: string) => new Date(isoString).toLocaleDateString([], { weekday: 'short', day: 'numeric' });
+
+  // Get current hour index
+  const getCurrentHourIndex = (weather: OpenMeteoResponse) => {
+    const now = new Date();
+    const currentHourStr = now.toISOString().slice(0, 13); // Match YYYY-MM-DDTHH
+    return weather.hourly.time.findIndex(t => t.startsWith(currentHourStr));
+  };
+
   return (
     <div className="w-full h-full relative">
+      
+      {/* MAP CONTAINER */}
       <MapContainer center={BIH_CENTER} zoom={8} className="w-full h-full" ref={setMap} zoomControl={false}>
-        {/* Base Layer Logic */}
-        {!activeBaseLayer ? (
-          <TileLayer
+        <TileLayer
             key={isDarkMode ? 'dark' : 'light'}
-            url={isDarkMode 
-              ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" 
-              : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"}
-          />
-        ) : (
-          <TileLayer 
-            key={activeBaseLayer.id} 
-            url={activeBaseLayer.url} 
-            attribution={activeBaseLayer.label} 
-            className={(activeBaseLayer.id === MapLayer.INFRARED) ? 'hue-rotate-180 invert' : ''} 
-            opacity={activeBaseLayer.id === MapLayer.METEOBLUE ? 0.7 : 1}
-          />
-        )}
-        
-        {/* Standard Overlays */}
-        {activeLayers.has(MapLayer.WEATHER_TEMP) && <WMSTileLayer url="https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=d22f66d48348243ed47c132845c48b2a" opacity={0.4} />}
-        {activeLayers.has(MapLayer.WIND_SPEED) && <WMSTileLayer url="https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=d22f66d48348243ed47c132845c48b2a" opacity={0.4} />}
-        
-        {/* New Detailed State Borders Layer */}
+            url={activeBaseLayer ? activeBaseLayer.url : (isDarkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png")}
+        />
         {activeLayers.has(MapLayer.BIH_BORDERS) && (
-          <GeoJSON 
-            data={bihBorderData as any} 
-            style={{ color: '#ec4899', weight: 3, fill: false, opacity: 0.8 }} 
-          />
+          <GeoJSON data={bihBorderData as any} style={{ color: '#ec4899', weight: 2, fill: false, opacity: 0.6 }} />
         )}
         
-        {/* Protected Areas Heatmap (Using heatmap.js) */}
-        <HeatmapLayer active={activeLayers.has(MapLayer.PROTECTED_AREAS)} isLoaded={pluginsLoaded} />
-        
-        {/* Wind Vector Animation (Using wind-js-leaflet) - Triggered by MapLayer.WINDY which we now treat as an overlay or special mode */}
-        <WindAnimationLayer active={activeLayers.has(MapLayer.WINDY)} isLoaded={pluginsLoaded} />
-
-        {/* Protected Areas Markers & Popups */}
-        {activeLayers.has(MapLayer.PROTECTED_AREAS) && (
-          <LayerGroup>
-            {PROTECTED_AREAS_DATA.map((area, idx) => (
-              <Marker key={`protected-${idx}`} position={[area.lat, area.lng]} icon={getProtectedAreaIcon(area.intensity)}>
-                <Popup className="google-style-popup" maxWidth={300}>
-                  <div className="p-4 bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700">
-                    <header className="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
-                      <div>
-                        <h3 className="font-bold text-sm text-yellow-400 leading-tight">{area.name}</h3>
-                        <div className="flex items-center gap-2 mt-1">
-                          <ShieldCheck size={12} className="text-yellow-500" />
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                            {area.type}
-                          </span>
-                        </div>
-                      </div>
-                    </header>
-                    <div className="space-y-4">
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
-                          <span>Protection Level</span>
-                          <span className={area.intensity > 0.8 ? 'text-red-500' : 'text-yellow-500'}>
-                            {area.intensity > 0.9 ? 'STRICT NATURE RESERVE' : 'MANAGED RESOURCE'}
-                          </span>
-                        </div>
-                        <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-                          <div className={`h-full transition-all duration-1000 ${area.intensity > 0.8 ? 'bg-red-500' : 'bg-yellow-500'}`} style={{ width: `${area.intensity * 100}%` }} />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                          <div className="text-[9px] font-bold text-slate-500 uppercase">{t.popup.dataSync}</div>
-                          <div className="text-xs font-black text-emerald-500 flex items-center gap-1">GOV.BA REGISTRY <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /></div>
-                        </div>
-                        <div className="bg-slate-950 p-2 rounded border border-slate-800">
-                          <div className="text-[9px] font-bold text-slate-500 uppercase">{t.popup.surfaceArea}</div>
-                          <div className="text-xs font-black text-white">{area.areaSqKm} km²</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </LayerGroup>
-        )}
-
-        {userPos && <Marker position={userPos} icon={UserIcon} />}
-
+        {/* FOREST MARKERS - Click triggers Full Screen Overlay */}
         <LayerGroup>
           {MOCK_FORESTS.map(forest => {
-            const isLandfill = forest.type === RegionType.LANDFILL;
-            
-            // Filtering Logic
-            if (isLandfill && !activeLayers.has(MapLayer.LANDFILLS)) return null;
-            if (!isLandfill && !activeLayers.has(MapLayer.FORESTS)) return null;
-
-            const style = REGION_STYLES[forest.type];
-            const iconPath = ICON_PATHS[style.iconType] || ICON_PATHS.tree;
-
-            // Weather Data
-            const weather = forestWeather[forest.id];
-            // Only show temp marker if data is available and is a number
-            const showTemp = activeLayers.has(MapLayer.FOREST_TEMP) && weather && (typeof weather.temperature === 'number');
-
-            return (
-              <React.Fragment key={forest.id}>
-                <Marker position={forest.coordinates} icon={getRegionIcon(forest.type)}>
-                  <Popup className="google-style-popup" maxWidth={600}>
-                    <div className="p-5 w-[550px] bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-700 flex gap-6">
-                      
-                      {/* Left Column: Core Info */}
-                      <div className="w-[40%] flex flex-col gap-4 border-r border-slate-800 pr-6">
-                        <header>
-                          <h3 className="font-bold text-base text-blue-400 leading-tight mb-2">{t.forests[forest.name as keyof typeof t.forests] || forest.name}</h3>
-                          <div className="flex items-center gap-2">
-                            <svg 
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="14" 
-                              height="14" 
-                              viewBox="0 0 24 24" 
-                              fill="none" 
-                              stroke={style.color} 
-                              strokeWidth="2.5" 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round"
-                              dangerouslySetInnerHTML={{ __html: iconPath }}
-                            />
-                            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: style.color }}>
-                              {t.regionTypes[forest.type] || forest.type}
-                            </span>
-                          </div>
-                        </header>
-
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500">
-                            <span>{t.popup.threatIndex}</span>
-                            <span className={forest.riskScore > 0.6 ? 'text-red-500' : 'text-blue-500'}>
-                              {(forest.riskScore * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                          <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div className={`h-full transition-all duration-1000 ${forest.riskScore > 0.6 ? 'bg-red-600' : 'bg-blue-600'}`} style={{ width: `${forest.riskScore * 100}%` }} />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-2">
-                          <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                            <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">{t.popup.surfaceArea}</div>
-                            <div className="text-sm font-black text-white flex items-center gap-2">
-                               <LandPlot size={14} className="text-slate-400" />
-                               {forest.area.toLocaleString()} ha
-                            </div>
-                          </div>
-                          <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                            <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">{t.popup.dataSync}</div>
-                            <div className="text-sm font-black text-emerald-500 flex items-center gap-2">
-                                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                                {t.popup.live}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right Column: Live Weather Telemetry */}
-                      <div className="w-[60%] flex flex-col">
-                        <div className="flex items-center justify-between mb-4">
-                           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                             <Satellite size={12} /> LIVE METEO TELEMETRY
-                           </span>
-                           {weather && (
-                             <span className="text-[9px] font-mono text-slate-600">METEOBLUE API</span>
-                           )}
-                        </div>
-
-                        {!weather ? (
-                           <div className="flex-1 flex items-center justify-center text-slate-600 text-xs font-medium">
-                              {activeLayers.has(MapLayer.FOREST_TEMP) ? "Loading weather data..." : "Enable Forest Temp layer for live data"}
-                           </div>
-                        ) : (
-                          <div className="flex-1 flex flex-col gap-4">
-                             <div className="flex items-center justify-between bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
-                                <div className="flex items-center gap-3">
-                                   {getWeatherIcon(weather.pictocode || 0)}
-                                   <div className="flex flex-col">
-                                      <span className="text-3xl font-black text-white leading-none">{weather.temperature?.toFixed(1) ?? '--'}°</span>
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase">Current Temp</span>
-                                   </div>
-                                </div>
-                                <div className="flex flex-col items-end border-l border-slate-700 pl-4">
-                                   <span className="text-lg font-bold text-slate-300 leading-none flex items-center gap-1">
-                                      <ThermometerSun size={14} /> {weather.felttemperature?.toFixed(1) ?? '--'}°
-                                   </span>
-                                   <span className="text-[9px] font-bold text-slate-500 uppercase">Feels Like</span>
-                                </div>
-                             </div>
-
-                             <div className="grid grid-cols-2 gap-2">
-                                {/* Wind */}
-                                <div className="bg-slate-950 p-2 rounded border border-slate-800 flex items-center justify-between">
-                                   <div className="flex items-center gap-2">
-                                      <Wind size={14} className="text-cyan-400" />
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase">Wind</span>
-                                   </div>
-                                   <div className="flex items-center gap-1">
-                                      <span className="text-xs font-bold text-white">{weather.windspeed?.toFixed(1) ?? '--'} km/h</span>
-                                      <ArrowUp size={10} className="text-slate-500" style={{ transform: `rotate(${weather.winddirection || 0}deg)` }} />
-                                   </div>
-                                </div>
-
-                                {/* Humidity */}
-                                <div className="bg-slate-950 p-2 rounded border border-slate-800 flex items-center justify-between">
-                                   <div className="flex items-center gap-2">
-                                      <Droplets size={14} className="text-blue-400" />
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase">Humidity</span>
-                                   </div>
-                                   <span className="text-xs font-bold text-white">{weather.relativehumidity ?? '--'}%</span>
-                                </div>
-
-                                {/* Precipitation */}
-                                <div className="bg-slate-950 p-2 rounded border border-slate-800 flex items-center justify-between">
-                                   <div className="flex items-center gap-2">
-                                      <CloudRain size={14} className="text-indigo-400" />
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase">Precip</span>
-                                   </div>
-                                   <div className="text-right leading-tight">
-                                      <div className="text-xs font-bold text-white">{weather.precipitation?.toFixed(1) ?? '--'} mm</div>
-                                      <div className="text-[9px] text-slate-500">{weather.precipitation_probability ?? '--'}% Prob</div>
-                                   </div>
-                                </div>
-
-                                {/* Snow Fraction */}
-                                <div className="bg-slate-950 p-2 rounded border border-slate-800 flex items-center justify-between">
-                                   <div className="flex items-center gap-2">
-                                      <Snowflake size={14} className="text-white" />
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase">Snow</span>
-                                   </div>
-                                   <span className="text-xs font-bold text-white">{(weather.snowfraction ?? 0) > 0 ? ((weather.snowfraction ?? 0) * 100).toFixed(0) + '%' : 'None'}</span>
-                                </div>
-
-                                {/* Convective Precip */}
-                                <div className="bg-slate-950 p-2 rounded border border-slate-800 flex items-center justify-between col-span-2">
-                                   <div className="flex items-center gap-2">
-                                      <Zap size={14} className="text-yellow-500" />
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase">Convective Storm Risk</span>
-                                   </div>
-                                   <span className="text-xs font-bold text-white">{(weather.convective_precipitation ?? 0) > 0 ? `${(weather.convective_precipitation ?? 0).toFixed(1)} mm` : 'Low'}</span>
-                                </div>
-                             </div>
-                             
-                             {/* RainSPOT (Simulated if present) */}
-                             {weather.rainspot && (
-                                <div className="mt-1">
-                                    <div className="text-[9px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
-                                        <Eye size={10} /> RainSPOT Matrix Detected
-                                    </div>
-                                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                        {/* Just a visual indicator that data is present */}
-                                        <div className="h-full bg-blue-500/50 w-full animate-pulse" /> 
-                                    </div>
-                                </div>
-                             )}
-
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </Popup>
-                </Marker>
-                
-                {/* Live Temperature Badge */}
-                {showTemp && (
-                  <Marker 
-                    position={forest.coordinates} 
-                    icon={getTempIcon(weather.temperature)} 
-                    zIndexOffset={1000} 
-                    interactive={false}
-                  />
-                )}
-              </React.Fragment>
-            );
+             if (forest.type === RegionType.LANDFILL && !activeLayers.has(MapLayer.LANDFILLS)) return null;
+             if (forest.type !== RegionType.LANDFILL && !activeLayers.has(MapLayer.FORESTS)) return null;
+             return (
+               <Marker 
+                 key={forest.id} 
+                 position={forest.coordinates} 
+                 icon={getRegionIcon(forest.type)}
+                 eventHandlers={{
+                   click: () => setSelectedForest(forest)
+                 }}
+               />
+             );
           })}
         </LayerGroup>
 
-        <LayerGroup>
-          {incidents.filter(inc => (inc.type === IncidentType.FIRE && activeLayers.has(MapLayer.FIRE_RISK)) || (inc.type === IncidentType.FLOOD && activeLayers.has(MapLayer.FLOOD_RISK))).map(incident => (
-            <Circle key={incident.id} center={[incident.lat, incident.lng]} radius={2000} pathOptions={{ 
-              color: incident.type === IncidentType.FIRE ? '#ea4335' : '#1a73e8', 
-              fillColor: incident.type === IncidentType.FIRE ? '#ea4335' : '#1a73e8',
-              fillOpacity: 0.35,
-              weight: 2
-            }}>
-              <Popup>
-                <div className="p-2">
-                  <div className={`text-[10px] font-black px-2 py-1 rounded mb-2 inline-flex items-center gap-1 ${incident.type === IncidentType.FIRE ? 'bg-red-600' : 'bg-blue-600'} text-white`}>
-                    {incident.type === IncidentType.FIRE ? <Flame size={12} /> : <Waves size={12} />}
-                    {incident.type === IncidentType.FIRE ? 'FIRE EMERGENCY' : 'FLOOD EMERGENCY'}
-                  </div>
-                  <p className="text-xs font-medium text-slate-200 mb-2 leading-relaxed">"{incident.description}"</p>
-                  <div className="flex items-center justify-between text-[9px] text-slate-500 font-bold uppercase border-t border-slate-800 pt-2">
-                    <span>Priority: {incident.urgency}</span>
-                    <span>WIND: {incident.windSpeed} km/h</span>
-                  </div>
-                </div>
-              </Popup>
-            </Circle>
-          ))}
-        </LayerGroup>
+        {userPos && <Marker position={userPos} icon={UserIcon} />}
       </MapContainer>
+
+      {/* --- FULL SCREEN WEATHER DASHBOARD OVERLAY --- */}
+      {selectedForest && (
+        <div className="fixed inset-0 z-[3000] bg-slate-950/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-300">
+           
+           {/* Header */}
+           <div className="flex items-center justify-between p-6 border-b border-slate-800 bg-slate-900/50">
+              <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center border border-slate-700 bg-slate-900 shadow-xl`}>
+                     <Trees size={24} className="text-emerald-500" />
+                  </div>
+                  <div>
+                      <h2 className="text-2xl font-bold text-white tracking-tight">{selectedForest.name}</h2>
+                      <div className="flex items-center gap-3 text-xs text-slate-400 font-mono mt-1">
+                          <span className="bg-slate-800 px-2 py-0.5 rounded text-blue-400">{selectedForest.coordinates[0].toFixed(4)}, {selectedForest.coordinates[1].toFixed(4)}</span>
+                          <span className="flex items-center gap-1"><LandPlot size={12}/> {selectedForest.area.toLocaleString()} ha</span>
+                          <span className="flex items-center gap-1"><Globe2 size={12}/> {forestWeather?.timezone || 'Loading...'}</span>
+                      </div>
+                  </div>
+              </div>
+              <button 
+                onClick={() => setSelectedForest(null)} 
+                className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-900 text-slate-400 hover:text-white hover:bg-red-500/20 hover:border-red-500 border border-slate-800 transition-all"
+              >
+                 <X size={24} />
+              </button>
+           </div>
+
+           {/* Content */}
+           <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-slate-700">
+              {loadingWeather || !forestWeather ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
+                      <Loader2 size={48} className="animate-spin text-blue-500" />
+                      <p className="font-mono text-sm tracking-widest uppercase">Acquiring Open-Meteo Telemetry...</p>
+                  </div>
+              ) : (
+                <div className="max-w-7xl mx-auto space-y-6">
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        
+                        {/* 2. CURRENT CONDITIONS HERO */}
+                        <div className="lg:col-span-2 bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-800 rounded-3xl p-8 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-8 opacity-20 text-white">
+                                {React.createElement(getWeatherInfo(forestWeather.current.weather_code).icon, { size: 160 })}
+                            </div>
+                            
+                            <div className="relative z-10">
+                                <div className="flex items-start justify-between mb-8">
+                                    <div>
+                                        <div className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-2">Current Conditions</div>
+                                        <div className="flex items-baseline gap-4">
+                                            <span className="text-8xl font-black text-white tracking-tighter">{Math.round(forestWeather.current.temperature_2m)}°</span>
+                                            <div className="flex flex-col">
+                                                <span className="text-2xl font-medium text-white capitalize">{getWeatherInfo(forestWeather.current.weather_code).label}</span>
+                                                <span className="text-slate-400">Feels like {Math.round(forestWeather.current.apparent_temperature)}°</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-right hidden sm:block">
+                                        <div className="flex items-center gap-2 text-slate-400 justify-end mb-1">
+                                            <Sunrise size={16} /> {fmtTime(forestWeather.daily.sunrise[0])}
+                                        </div>
+                                        <div className="flex items-center gap-2 text-slate-400 justify-end">
+                                            <Sunset size={16} /> {fmtTime(forestWeather.daily.sunset[0])}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    {[
+                                        { label: 'Wind', val: `${forestWeather.current.wind_speed_10m} km/h`, sub: `${forestWeather.current.wind_direction_10m}°`, icon: Wind, color: 'text-cyan-400' },
+                                        { label: 'Humidity', val: `${forestWeather.current.relative_humidity_2m}%`, sub: 'Relative', icon: Droplets, color: 'text-blue-400' },
+                                        { label: 'Pressure', val: `${Math.round(forestWeather.current.pressure_msl)} hPa`, sub: 'MSL', icon: Gauge, color: 'text-emerald-400' },
+                                        { label: 'Precipitation', val: `${forestWeather.current.precipitation} mm`, sub: 'Current', icon: Umbrella, color: 'text-blue-300' },
+                                        { label: 'Cloud Cover', val: `${forestWeather.current.cloud_cover}%`, sub: 'Sky', icon: Cloud, color: 'text-slate-400' },
+                                        { label: 'Wind Gusts', val: `${forestWeather.current.wind_gusts_10m} km/h`, sub: 'Max', icon: Wind, color: 'text-orange-400' },
+                                    ].map((stat, i) => (
+                                        <div key={i} className="bg-slate-950/50 border border-slate-800/50 rounded-xl p-3 backdrop-blur-sm">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <stat.icon size={14} className={stat.color} />
+                                                <span className="text-[10px] uppercase font-bold text-slate-500">{stat.label}</span>
+                                            </div>
+                                            <div className="text-lg font-bold text-white">{stat.val}</div>
+                                            {stat.sub && <div className="text-[10px] text-slate-500 font-mono">{stat.sub}</div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 3. RAIN PROBABILITY GRAPH (Next 12 Hours) */}
+                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col">
+                            <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
+                                <Umbrella size={14} /> Precip. Prob (12h)
+                            </h3>
+                            <div className="flex-1 flex items-end gap-1 min-h-[150px]">
+                                {(() => {
+                                  const startIdx = getCurrentHourIndex(forestWeather);
+                                  // Show next 12 hours or fallback
+                                  const hoursToShow = startIdx !== -1 ? forestWeather.hourly.precipitation_probability.slice(startIdx, startIdx + 12) : [];
+                                  
+                                  if (hoursToShow.length === 0) return <div className="text-slate-500 text-xs w-full text-center">No hourly data</div>;
+
+                                  return hoursToShow.map((prob, i) => (
+                                      <div 
+                                          key={i} 
+                                          className="flex-1 bg-blue-500/50 rounded-t-sm hover:bg-blue-400 transition-colors relative group"
+                                          style={{ 
+                                              height: `${prob}%`, 
+                                              minHeight: prob > 0 ? '4px' : '2px',
+                                              opacity: prob > 0 ? 1 : 0.1 
+                                          }}
+                                      >
+                                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-white text-slate-900 text-[9px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10">
+                                              +{i}h: {prob}%
+                                          </div>
+                                      </div>
+                                  ));
+                                })()}
+                            </div>
+                            <div className="flex justify-between text-[10px] text-slate-600 font-mono mt-2 pt-2 border-t border-slate-800">
+                                <span>Now</span>
+                                <span>+6h</span>
+                                <span>+12h</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 4. HOURLY FORECAST SCROLL (Next 24h) */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
+                        <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                            <Clock size={14} /> 24-Hour Trajectory
+                        </h3>
+                        <div className="flex overflow-x-auto pb-4 gap-4 scrollbar-thin scrollbar-track-slate-900 scrollbar-thumb-slate-700">
+                            {(() => {
+                                const startIdx = getCurrentHourIndex(forestWeather);
+                                if (startIdx === -1) return null;
+                                // Grab next 24 hours
+                                return forestWeather.hourly.time.slice(startIdx, startIdx + 24).map((timeStr, i) => {
+                                    const actualIndex = startIdx + i;
+                                    const temp = forestWeather.hourly.temperature_2m[actualIndex];
+                                    const code = forestWeather.hourly.weather_code[actualIndex];
+                                    const pop = forestWeather.hourly.precipitation_probability[actualIndex];
+                                    const wind = forestWeather.hourly.wind_speed_10m[actualIndex];
+                                    const windDir = forestWeather.hourly.wind_direction_10m[actualIndex];
+                                    const wInfo = getWeatherInfo(code);
+                                    
+                                    return (
+                                        <div key={i} className="flex-shrink-0 w-20 flex flex-col items-center gap-3 p-3 bg-slate-950 border border-slate-800 rounded-2xl">
+                                            <span className="text-[10px] font-bold text-slate-500">{i === 0 ? 'Now' : fmtTime(timeStr)}</span>
+                                            <wInfo.icon size={24} className="text-white" />
+                                            <span className="text-xl font-bold text-white">{Math.round(temp)}°</span>
+                                            <div className="w-full text-center">
+                                                <div className="text-[9px] font-bold text-blue-400 flex items-center justify-center gap-1">
+                                                    <Droplets size={8} /> {pop}%
+                                                </div>
+                                                <div className="text-[9px] text-slate-600 mt-1 flex items-center justify-center gap-1">
+                                                    <Navigation size={8} style={{ transform: `rotate(${windDir}deg)`}}/> {Math.round(wind)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                            })()}
+                        </div>
+                    </div>
+
+                    {/* 5. DAILY FORECAST GRID */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
+                        <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                            <Calendar size={14} /> 7-Day Forecast
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {forestWeather.daily.time.map((timeStr, i) => {
+                                const code = forestWeather.daily.weather_code[i];
+                                const max = forestWeather.daily.temperature_2m_max[i];
+                                const min = forestWeather.daily.temperature_2m_min[i];
+                                const precip = forestWeather.daily.precipitation_sum[i];
+                                const prob = forestWeather.daily.precipitation_probability_max[i];
+                                const wInfo = getWeatherInfo(code);
+
+                                return (
+                                    <div key={i} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex items-center justify-between hover:border-slate-700 transition-colors group">
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{i === 0 ? 'Today' : fmtDay(timeStr)}</span>
+                                            <span className="text-[10px] text-slate-500 capitalize">{wInfo.label}</span>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex flex-col items-end">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-white font-bold">{Math.round(max)}°</span>
+                                                    <span className="text-slate-600 text-xs">/ {Math.round(min)}°</span>
+                                                </div>
+                                                {(prob > 0 || precip > 0) && (
+                                                    <span className="text-[10px] font-bold text-blue-500 flex items-center gap-1">
+                                                        <CloudRain size={10} /> {prob}% {precip > 0 ? `(${precip}mm)` : ''}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <wInfo.icon size={32} className="text-slate-300" />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+              )}
+           </div>
+        </div>
+      )}
 
       {/* Floating Operations Header (Aesthetic) */}
       <div className="absolute top-4 left-4 md:left-20 z-[2000] pointer-events-none">
@@ -942,15 +462,6 @@ export const GISMap: React.FC<GISMapProps> = ({
             <Thermometer size={18} className={activeLayers.has(MapLayer.WEATHER_TEMP) ? 'animate-pulse' : ''} />
           </button>
 
-          {/* Forest Temp Toggle (Meteoblue Live) */}
-          <button 
-            onClick={() => onToggleLayer(MapLayer.FOREST_TEMP)} 
-            className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.FOREST_TEMP) ? 'text-emerald-400 bg-emerald-950/30 shadow-[0_0_10px_rgba(52,211,153,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
-            title={t.forestTemp}
-          >
-            <ThermometerSun size={18} className={activeLayers.has(MapLayer.FOREST_TEMP) ? 'animate-pulse' : ''} />
-          </button>
-
           <div className="w-px h-6 bg-slate-800 mx-1" />
 
           {/* Assets & Regions Toggle */}
@@ -996,7 +507,7 @@ export const GISMap: React.FC<GISMapProps> = ({
           {/* Satellite Chooser */}
           <button 
             onClick={() => togglePanel('sat')} 
-            className={`p-2.5 rounded-lg transition-colors ${showSatPanel || activeBaseLayer ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+            className={`p-2.5 rounded-lg transition-colors ${showSatPanel || (activeLayers.has(MapLayer.SATELLITE)) ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
             title={t.imagerySource}
           >
             <Globe2 size={18} />
@@ -1017,24 +528,21 @@ export const GISMap: React.FC<GISMapProps> = ({
                 <button 
                   onClick={() => { onSetBaseLayer(null); setShowSatPanel(false); }}
                   className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    !activeBaseLayer ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                    !activeLayers.has(MapLayer.SATELLITE) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
                   }`}
                 >
-                  <MapIcon size={20} className={!activeBaseLayer ? 'text-blue-500' : 'text-slate-500'} />
+                  <MapIcon size={20} className={!activeLayers.has(MapLayer.SATELLITE) ? 'text-blue-500' : 'text-slate-500'} />
                   <span className="text-[10px] font-bold text-white uppercase">{t.vector}</span>
                 </button>
-                {imagerySources.map(layer => (
-                  <button 
-                    key={layer.id}
-                    onClick={() => { onSetBaseLayer(layer.id); setShowSatPanel(false); }}
+                <button 
+                    onClick={() => { onSetBaseLayer(MapLayer.SATELLITE); setShowSatPanel(false); }}
                     className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                      activeLayers.has(layer.id) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                      activeLayers.has(MapLayer.SATELLITE) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
                     }`}
                   >
-                    <layer.icon size={20} className={activeLayers.has(layer.id) ? 'text-blue-500' : 'text-slate-500'} />
-                    <span className="text-[10px] font-bold text-white uppercase text-center leading-tight">{layer.label}</span>
-                  </button>
-                ))}
+                    <Satellite size={20} className={activeLayers.has(MapLayer.SATELLITE) ? 'text-blue-500' : 'text-slate-500'} />
+                    <span className="text-[10px] font-bold text-white uppercase text-center leading-tight">Satellite</span>
+                </button>
               </div>
             </div>
           )}
