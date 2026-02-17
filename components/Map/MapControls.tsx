@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Sun, Moon, LandPlot, Wind, Thermometer, Trees, Settings2, Info, Satellite, X, Map as MapIcon, Globe2, ShieldCheck, Trash2, Flame, Waves, Eye, Cloud, Radar, Mountain } from 'lucide-react';
+import { Sun, Moon, LandPlot, Wind, Thermometer, Trees, Settings2, Info, Satellite, X, Map as MapIcon, Globe2, ShieldCheck, Trash2, Flame, Waves, Eye, Cloud, Radar, Mountain, ThermometerSun } from 'lucide-react';
 import { MapLayer, Language, RegionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 
@@ -70,6 +70,15 @@ export const MapControls: React.FC<MapControlsProps> = ({
           title={t.liveWindVector}
         >
           <Wind size={18} className={activeLayers.has(MapLayer.WINDY) ? 'animate-pulse' : ''} />
+        </button>
+
+        {/* Meteoblue Temp Toggle */}
+        <button 
+          onClick={() => activeLayers.has(MapLayer.METEOBLUE) ? onSetBaseLayer(MapLayer.SATELLITE_CLARITY) : onSetBaseLayer(MapLayer.METEOBLUE)} 
+          className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.METEOBLUE) ? 'text-blue-400 bg-blue-950/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
+          title="Meteoblue Temperature"
+        >
+          <ThermometerSun size={18} className={activeLayers.has(MapLayer.METEOBLUE) ? 'animate-pulse' : ''} />
         </button>
 
         {/* Heat Index */}
@@ -210,17 +219,6 @@ export const MapControls: React.FC<MapControlsProps> = ({
               >
                 <Sun size={20} className={isBaseLayerActive(MapLayer.INFRARED) ? 'text-blue-500' : 'text-slate-500'} />
                 <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Infrared</span>
-              </button>
-
-              {/* Meteoblue */}
-                <button 
-                onClick={() => { onSetBaseLayer(MapLayer.METEOBLUE); setActivePanel(null); }}
-                className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                  isBaseLayerActive(MapLayer.METEOBLUE) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                }`}
-              >
-                <Cloud size={20} className={isBaseLayerActive(MapLayer.METEOBLUE) ? 'text-blue-500' : 'text-slate-500'} />
-                <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Meteoblue</span>
               </button>
 
               {/* NASA FIRMS */}
