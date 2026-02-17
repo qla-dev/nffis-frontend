@@ -1,8 +1,7 @@
-
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp } from 'lucide-react';
+import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteoResponse, ForestRegion } from '../../types';
 import { bihBorderData } from '../../bihData';
@@ -75,6 +74,20 @@ const getWeatherInfo = (code: number) => {
   return codes[code] || { label: 'Unknown', icon: Cloud };
 };
 
+// --- BASE LAYER CONFIGURATION ---
+const BASE_LAYER_CONFIG: Record<string, { url: string; attribution: string }> = {
+  [MapLayer.SATELLITE]: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Esri' },
+  [MapLayer.SATELLITE_CLARITY]: { url: 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Esri Clarity' },
+  [MapLayer.SATELLITE_GOOGLE]: { url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', attribution: 'Google' },
+  [MapLayer.TERRAIN]: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: 'OpenTopoMap' },
+  [MapLayer.SENTINEL]: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Sentinel2/Scientific/ImageServer/tile/{z}/{y}/{x}', attribution: 'Sentinel' },
+  [MapLayer.INFRARED]: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', attribution: 'NatGeo (Sim)' }, // Fallback for aesthetic
+  [MapLayer.METEOBLUE]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'Meteoblue Base' },
+  [MapLayer.NASA_FIRMS]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'NASA FIRMS Base' },
+  [MapLayer.THERMAL]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'Thermal Base' },
+  [MapLayer.WINDY]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'Windy Base' },
+};
+
 // --- COMPONENTS ---
 
 interface GISMapProps {
@@ -109,6 +122,13 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [forecastMode, setForecastMode] = useState<'hourly' | 'daily'>('hourly');
 
   const t = TRANSLATIONS[language];
+
+  // Derive Active Base Layer Object
+  const activeBaseLayerId = useMemo(() => {
+    return Object.values(MapLayer).find(layer => activeLayers.has(layer) && BASE_LAYER_CONFIG[layer]);
+  }, [activeLayers]);
+  
+  const activeBaseLayer = activeBaseLayerId ? BASE_LAYER_CONFIG[activeBaseLayerId] : null;
 
   // Fetch Weather from Open-Meteo with Advanced Params
   useEffect(() => {
@@ -170,8 +190,6 @@ export const GISMap: React.FC<GISMapProps> = ({
     setShowSatPanel(panel === 'sat' ? !showSatPanel : false);
     setShowAssetsPanel(panel === 'assets' ? !showAssetsPanel : false);
   };
-
-  const activeBaseLayer = activeLayers.has(MapLayer.SATELLITE) ? { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Esri' } : null;
 
   // Helpers
   const fmtTime = (isoString: string) => new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -261,8 +279,9 @@ export const GISMap: React.FC<GISMapProps> = ({
       {/* MAP CONTAINER */}
       <MapContainer center={BIH_CENTER} zoom={8} className="w-full h-full" ref={setMap} zoomControl={false}>
         <TileLayer
-            key={isDarkMode ? 'dark' : 'light'}
+            key={activeBaseLayerId || (isDarkMode ? 'dark' : 'light')}
             url={activeBaseLayer ? activeBaseLayer.url : (isDarkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png")}
+            attribution={activeBaseLayer?.attribution}
         />
         {activeLayers.has(MapLayer.BIH_BORDERS) && (
           <GeoJSON data={bihBorderData as any} style={{ color: '#ec4899', weight: 2, fill: false, opacity: 0.6 }} />
@@ -278,9 +297,11 @@ export const GISMap: React.FC<GISMapProps> = ({
                  key={forest.id} 
                  position={forest.coordinates} 
                  icon={getRegionIcon(forest.type)}
-                 eventHandlers={{
-                   click: () => setSelectedForest(forest)
-                 }}
+                 {...({
+                   eventHandlers: {
+                     click: () => setSelectedForest(forest)
+                   }
+                 } as any)}
                />
              );
           })}
@@ -760,7 +781,7 @@ export const GISMap: React.FC<GISMapProps> = ({
           {/* Satellite Chooser */}
           <button 
             onClick={() => togglePanel('sat')} 
-            className={`p-2.5 rounded-lg transition-colors ${showSatPanel || (activeLayers.has(MapLayer.SATELLITE)) ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+            className={`p-2.5 rounded-lg transition-colors ${showSatPanel || (activeBaseLayerId !== null) ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
             title={t.imagerySource}
           >
             <Globe2 size={18} />
@@ -770,63 +791,134 @@ export const GISMap: React.FC<GISMapProps> = ({
         {/* Dropdown Panels Container */}
         <div className="relative w-64">
           
-          {/* Floating Satellite Panel */}
+          {/* Floating Satellite Panel - RESTORED FULL LIST */}
           {showSatPanel && (
-            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-full animate-in slide-in-from-top-2 duration-200">
+            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200">
               <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
                 {t.imagerySource}
                 <button onClick={() => setShowSatPanel(false)} className="hover:text-white"><X size={14} /></button>
               </h4>
               <div className="grid grid-cols-2 gap-2">
-                <button 
+                 {/* Vector (None) */}
+                 <button 
                   onClick={() => { onSetBaseLayer(null); setShowSatPanel(false); }}
-                  className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                    !activeLayers.has(MapLayer.SATELLITE) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    !activeBaseLayerId ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
                   }`}
                 >
-                  <MapIcon size={20} className={!activeLayers.has(MapLayer.SATELLITE) ? 'text-blue-500' : 'text-slate-500'} />
-                  <span className="text-[10px] font-bold text-white uppercase">{t.vector}</span>
+                  <MapIcon size={20} className={!activeBaseLayerId ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Vector</span>
                 </button>
-                <button 
-                    onClick={() => { onSetBaseLayer(MapLayer.SATELLITE); setShowSatPanel(false); }}
-                    className={`p-3 rounded-lg border flex flex-col items-center gap-2 transition-all ${
-                      activeLayers.has(MapLayer.SATELLITE) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
-                    }`}
-                  >
-                    <Satellite size={20} className={activeLayers.has(MapLayer.SATELLITE) ? 'text-blue-500' : 'text-slate-500'} />
-                    <span className="text-[10px] font-bold text-white uppercase text-center leading-tight">Satellite</span>
-                </button>
-              </div>
-            </div>
-          )}
 
-          {/* Floating Settings Panel */}
-          {showSettingsPanel && (
-            <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-full animate-in slide-in-from-top-2 duration-200">
-              <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
-                {t.systemConfig}
-                <button onClick={() => setShowSettingsPanel(false)} className="hover:text-white"><X size={14} /></button>
-              </h4>
-              
-              <div className="space-y-4">
-                <section>
-                  <div className="text-[9px] font-bold text-slate-600 uppercase mb-2 tracking-tighter">{t.activeLanguage}</div>
-                  <div className="grid grid-cols-3 gap-1">
-                    {Object.values(Language).map((lang) => (
-                      <button 
-                        key={lang}
-                        onClick={() => onSetLanguage(lang)}
-                        className={`py-1.5 rounded-md text-[10px] font-black transition-all border ${
-                          language === lang 
-                            ? 'bg-blue-600 border-blue-500 text-white' 
-                            : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
-                        }`}
-                      >
-                        {lang.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-                </section>
+                 {/* Standard Sat */}
+                 <button 
+                  onClick={() => { onSetBaseLayer(MapLayer.SATELLITE); setShowSatPanel(false); }}
+                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    activeBaseLayerId === MapLayer.SATELLITE ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <Satellite size={20} className={activeBaseLayerId === MapLayer.SATELLITE ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Standard</span>
+                </button>
+
+                {/* Clarity */}
+                <button 
+                  onClick={() => { onSetBaseLayer(MapLayer.SATELLITE_CLARITY); setShowSatPanel(false); }}
+                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    activeBaseLayerId === MapLayer.SATELLITE_CLARITY ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <Eye size={20} className={activeBaseLayerId === MapLayer.SATELLITE_CLARITY ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Clarity</span>
+                </button>
+
+                {/* Google */}
+                <button 
+                  onClick={() => { onSetBaseLayer(MapLayer.SATELLITE_GOOGLE); setShowSatPanel(false); }}
+                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    activeBaseLayerId === MapLayer.SATELLITE_GOOGLE ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <Globe2 size={20} className={activeBaseLayerId === MapLayer.SATELLITE_GOOGLE ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Google</span>
+                </button>
+
+                 {/* Sentinel */}
+                 <button 
+                  onClick={() => { onSetBaseLayer(MapLayer.SENTINEL); setShowSatPanel(false); }}
+                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    activeBaseLayerId === MapLayer.SENTINEL ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <Radar size={20} className={activeBaseLayerId === MapLayer.SENTINEL ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Sentinel</span>
+                </button>
+                
+                 {/* Terrain */}
+                 <button 
+                  onClick={() => { onSetBaseLayer(MapLayer.TERRAIN); setShowSatPanel(false); }}
+                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    activeBaseLayerId === MapLayer.TERRAIN ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <Mountain size={20} className={activeBaseLayerId === MapLayer.TERRAIN ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Terrain</span>
+                </button>
+
+                 {/* Infrared */}
+                 <button 
+                  onClick={() => { onSetBaseLayer(MapLayer.INFRARED); setShowSatPanel(false); }}
+                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    activeBaseLayerId === MapLayer.INFRARED ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <Sun size={20} className={activeBaseLayerId === MapLayer.INFRARED ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Infrared</span>
+                </button>
+
+                {/* Meteoblue */}
+                 <button 
+                  onClick={() => { onSetBaseLayer(MapLayer.METEOBLUE); setShowSatPanel(false); }}
+                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    activeBaseLayerId === MapLayer.METEOBLUE ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <Cloud size={20} className={activeBaseLayerId === MapLayer.METEOBLUE ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Meteoblue</span>
+                </button>
+
+                {/* NASA FIRMS */}
+                 <button 
+                  onClick={() => { onSetBaseLayer(MapLayer.NASA_FIRMS); setShowSatPanel(false); }}
+                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    activeBaseLayerId === MapLayer.NASA_FIRMS ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <Flame size={20} className={activeBaseLayerId === MapLayer.NASA_FIRMS ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">NASA FIRMS</span>
+                </button>
+
+                 {/* Thermal */}
+                 <button 
+                  onClick={() => { onSetBaseLayer(MapLayer.THERMAL); setShowSatPanel(false); }}
+                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    activeBaseLayerId === MapLayer.THERMAL ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <Thermometer size={20} className={activeBaseLayerId === MapLayer.THERMAL ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Thermal</span>
+                </button>
+
+                 {/* Windy */}
+                 <button 
+                  onClick={() => { onSetBaseLayer(MapLayer.WINDY); setShowSatPanel(false); }}
+                  className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
+                    activeBaseLayerId === MapLayer.WINDY ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <Wind size={20} className={activeBaseLayerId === MapLayer.WINDY ? 'text-blue-500' : 'text-slate-500'} />
+                  <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Windy</span>
+                </button>
               </div>
             </div>
           )}
