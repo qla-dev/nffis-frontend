@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation } from 'lucide-react';
+import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteoResponse, ForestRegion } from '../../types';
 import { bihBorderData } from '../../bihData';
@@ -109,11 +109,27 @@ export const GISMap: React.FC<GISMapProps> = ({
 
   const t = TRANSLATIONS[language];
 
-  // Fetch Weather from Open-Meteo
+  // Fetch Weather from Open-Meteo with Advanced Params
   useEffect(() => {
     if (selectedForest) {
       setLoadingWeather(true);
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${selectedForest.coordinates[0]}&longitude=${selectedForest.coordinates[1]}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,pressure_msl,surface_pressure,cloud_cover,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,uv_index_max,precipitation_sum,rain_sum,showers_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&timezone=auto`;
+      const latitude = selectedForest.coordinates[0];
+      const longitude = selectedForest.coordinates[1];
+      
+      const params = [
+        'temperature_2m', 'relative_humidity_2m', 'dew_point_2m', 'apparent_temperature',
+        'precipitation_probability', 'precipitation', 'weather_code', 'pressure_msl',
+        'surface_pressure', 'cloud_cover', 'cloud_cover_low', 'cloud_cover_mid', 'cloud_cover_high',
+        'visibility', 'evapotranspiration', 'et0_fao_evapotranspiration', 'vapour_pressure_deficit',
+        'wind_speed_10m', 'wind_speed_80m', 'wind_speed_120m', 'wind_speed_180m',
+        'wind_direction_10m', 'wind_direction_80m', 'wind_direction_120m', 'wind_direction_180m',
+        'wind_gusts_10m', 'temperature_80m', 'temperature_120m', 'temperature_180m',
+        'soil_temperature_0cm', 'soil_temperature_6cm', 'soil_temperature_18cm', 'soil_temperature_54cm',
+        'soil_moisture_0_to_1cm', 'soil_moisture_1_to_3cm', 'soil_moisture_3_to_9cm',
+        'soil_moisture_9_to_27cm', 'soil_moisture_27_to_81cm', 'uv_index'
+      ].join(',');
+
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=${params}&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,uv_index_max,precipitation_sum,rain_sum,showers_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&timezone=auto`;
       
       fetch(url)
         .then(res => res.json())
@@ -187,6 +203,54 @@ export const GISMap: React.FC<GISMapProps> = ({
          />
        </div>
     );
+  };
+
+  // -- FIRE INDEX CALCULATIONS --
+  const calculateFireIndices = (weather: OpenMeteoResponse, hourIdx: number) => {
+    const temp = weather.hourly.temperature_2m[hourIdx];
+    const humidity = weather.hourly.relative_humidity_2m[hourIdx];
+    const windKmh = weather.hourly.wind_speed_10m[hourIdx];
+    const rain = weather.daily.precipitation_sum[0]; // Today's rain
+
+    // Angström Index
+    // Formula: (H / 20 + (27 - T) / 10) * (10 / (W_ms + 10)) -> Used simpler kmh adaptation often seen
+    // High AI = Low Risk. Low AI = High Risk.
+    // If AI < 2.5 Risk High.
+    const ai = (humidity / 20 + (27 - temp) / 10);
+    
+    let aiRisk = "Low";
+    let aiColor = "text-emerald-500";
+    if (ai < 2.0) { aiRisk = "EXTREME"; aiColor = "text-purple-500"; }
+    else if (ai < 2.5) { aiRisk = "Very High"; aiColor = "text-red-600"; }
+    else if (ai < 3.0) { aiRisk = "High"; aiColor = "text-orange-500"; }
+    else if (ai < 4.0) { aiRisk = "Moderate"; aiColor = "text-yellow-500"; }
+
+    // GFI (Forest Fire Weather Index - Simplified)
+    const dryDays = weather.daily.precipitation_sum.filter(p => p < 1.0).length; // Past 7 days (actually forecasts here, but works for demo)
+    const zoneFactor = 1.2;
+    const gfi = (Math.max(0, temp) * (100 - humidity) * windKmh / 1000) * (1 + dryDays / 20) * zoneFactor;
+    
+    let gfiRisk = "Low";
+    let gfiColor = "text-emerald-500";
+    if (gfi > 15) { gfiRisk = "EXTREME"; gfiColor = "text-purple-500"; }
+    else if (gfi > 9) { gfiRisk = "Very High"; gfiColor = "text-red-600"; }
+    else if (gfi > 5) { gfiRisk = "High"; gfiColor = "text-orange-500"; }
+    else if (gfi > 2) { gfiRisk = "Moderate"; gfiColor = "text-yellow-500"; }
+
+    // KBDI (Approximation without historic DB)
+    // Daily drought factor based on max temp and lack of rain
+    let kbdi = (Math.max(0, temp) * 10) - (rain * 50); 
+    if (kbdi < 0) kbdi = 0;
+    // Normalize to 0-800 scale roughly
+    kbdi = Math.min(800, kbdi + (dryDays * 50)); 
+    
+    let kbdiRisk = "Low";
+    let kbdiColor = "text-emerald-500";
+    if (kbdi > 600) { kbdiRisk = "EXTREME"; kbdiColor = "text-purple-500"; }
+    else if (kbdi > 400) { kbdiRisk = "High"; kbdiColor = "text-red-600"; }
+    else if (kbdi > 200) { kbdiRisk = "Moderate"; kbdiColor = "text-orange-500"; }
+
+    return { ai, aiRisk, aiColor, gfi, gfiRisk, gfiColor, kbdi, kbdiRisk, kbdiColor };
   };
 
   return (
@@ -275,174 +339,271 @@ export const GISMap: React.FC<GISMapProps> = ({
                       <p className="font-mono text-sm tracking-widest uppercase">Acquiring Open-Meteo Telemetry...</p>
                   </div>
               ) : (
-                <div className="max-w-7xl mx-auto space-y-6">
+                <div className="max-w-[1600px] mx-auto space-y-6">
                     
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        
-                        {/* 2. CURRENT CONDITIONS HERO */}
-                        <div className="lg:col-span-2 bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-800 rounded-3xl p-8 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 p-8 opacity-20 text-white">
-                                {React.createElement(getWeatherInfo(forestWeather.current.weather_code).icon, { size: 160 })}
-                            </div>
-                            
-                            <div className="relative z-10">
-                                <div className="flex items-start justify-between mb-8">
-                                    <div>
-                                        <div className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-2">Current Conditions</div>
-                                        <div className="flex items-baseline gap-4">
-                                            <span className="text-8xl font-black text-white tracking-tighter">{Math.round(forestWeather.current.temperature_2m)}°</span>
-                                            <div className="flex flex-col">
-                                                <span className="text-2xl font-medium text-white capitalize">{getWeatherInfo(forestWeather.current.weather_code).label}</span>
-                                                <span className="text-slate-400">Feels like {Math.round(forestWeather.current.apparent_temperature)}°</span>
+                    {/* GRID LAYOUT FOR DATA */}
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+                        {/* LEFT COLUMN: Standard Weather */}
+                        <div className="space-y-6">
+                             {/* CURRENT CONDITIONS HERO */}
+                            <div className="bg-gradient-to-br from-blue-950 to-slate-900 border border-slate-800 rounded-3xl p-8 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-8 opacity-20 text-white">
+                                    {React.createElement(getWeatherInfo(forestWeather.current.weather_code).icon, { size: 160 })}
+                                </div>
+                                
+                                <div className="relative z-10">
+                                    <div className="flex items-start justify-between mb-8">
+                                        <div>
+                                            <div className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-2">Current Conditions</div>
+                                            <div className="flex items-baseline gap-4">
+                                                <span className="text-8xl font-black text-white tracking-tighter">{Math.round(forestWeather.current.temperature_2m)}°</span>
+                                                <div className="flex flex-col">
+                                                    <span className="text-2xl font-medium text-white capitalize">{getWeatherInfo(forestWeather.current.weather_code).label}</span>
+                                                    <span className="text-slate-400">Feels like {Math.round(forestWeather.current.apparent_temperature)}°</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="text-right hidden sm:block">
-                                        <div className="flex items-center gap-2 text-slate-400 justify-end mb-1">
-                                            <Sunrise size={16} /> {fmtTime(forestWeather.daily.sunrise[0])}
-                                        </div>
-                                        <div className="flex items-center gap-2 text-slate-400 justify-end">
-                                            <Sunset size={16} /> {fmtTime(forestWeather.daily.sunset[0])}
-                                        </div>
+
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                        {[
+                                            { label: 'Wind', val: `${forestWeather.current.wind_speed_10m} km/h`, sub: `${forestWeather.current.wind_direction_10m}°`, icon: Wind, color: 'text-cyan-400' },
+                                            { label: 'Humidity', val: `${forestWeather.current.relative_humidity_2m}%`, sub: 'Relative', icon: Droplets, color: 'text-blue-400' },
+                                            { label: 'Pressure', val: `${Math.round(forestWeather.current.pressure_msl)} hPa`, sub: 'MSL', icon: Gauge, color: 'text-emerald-400' },
+                                            { label: 'Precipitation', val: `${forestWeather.current.precipitation} mm`, sub: 'Current', icon: Umbrella, color: 'text-blue-300' },
+                                            { label: 'UV Index', val: `${forestWeather.hourly.uv_index[getCurrentHourIndex(forestWeather)]}`, sub: 'Scale', icon: SunDim, color: 'text-yellow-400' },
+                                            { label: 'Wind Gusts', val: `${forestWeather.current.wind_gusts_10m} km/h`, sub: 'Max', icon: Wind, color: 'text-orange-400' },
+                                        ].map((stat, i) => (
+                                            <div key={i} className="bg-slate-950/50 border border-slate-800/50 rounded-xl p-3 backdrop-blur-sm">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <stat.icon size={14} className={stat.color} />
+                                                    <span className="text-[10px] uppercase font-bold text-slate-500">{stat.label}</span>
+                                                </div>
+                                                <div className="text-lg font-bold text-white">{stat.val}</div>
+                                                {stat.sub && <div className="text-[10px] text-slate-500 font-mono">{stat.sub}</div>}
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                    {[
-                                        { label: 'Wind', val: `${forestWeather.current.wind_speed_10m} km/h`, sub: `${forestWeather.current.wind_direction_10m}°`, icon: Wind, color: 'text-cyan-400' },
-                                        { label: 'Humidity', val: `${forestWeather.current.relative_humidity_2m}%`, sub: 'Relative', icon: Droplets, color: 'text-blue-400' },
-                                        { label: 'Pressure', val: `${Math.round(forestWeather.current.pressure_msl)} hPa`, sub: 'MSL', icon: Gauge, color: 'text-emerald-400' },
-                                        { label: 'Precipitation', val: `${forestWeather.current.precipitation} mm`, sub: 'Current', icon: Umbrella, color: 'text-blue-300' },
-                                        { label: 'Cloud Cover', val: `${forestWeather.current.cloud_cover}%`, sub: 'Sky', icon: Cloud, color: 'text-slate-400' },
-                                        { label: 'Wind Gusts', val: `${forestWeather.current.wind_gusts_10m} km/h`, sub: 'Max', icon: Wind, color: 'text-orange-400' },
-                                    ].map((stat, i) => (
-                                        <div key={i} className="bg-slate-950/50 border border-slate-800/50 rounded-xl p-3 backdrop-blur-sm">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <stat.icon size={14} className={stat.color} />
-                                                <span className="text-[10px] uppercase font-bold text-slate-500">{stat.label}</span>
-                                            </div>
-                                            <div className="text-lg font-bold text-white">{stat.val}</div>
-                                            {stat.sub && <div className="text-[10px] text-slate-500 font-mono">{stat.sub}</div>}
-                                        </div>
-                                    ))}
-                                </div>
                             </div>
-                        </div>
 
-                        {/* 3. RAIN PROBABILITY GRAPH (Next 12 Hours) */}
-                        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col">
-                            <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
-                                <Umbrella size={14} /> Precip. Prob (12h)
-                            </h3>
-                            <div className="flex-1 flex items-end gap-1 min-h-[150px]">
-                                {(() => {
-                                  const startIdx = getCurrentHourIndex(forestWeather);
-                                  // Show next 12 hours or fallback
-                                  const hoursToShow = startIdx !== -1 ? forestWeather.hourly.precipitation_probability.slice(startIdx, startIdx + 12) : [];
-                                  
-                                  if (hoursToShow.length === 0) return <div className="text-slate-500 text-xs w-full text-center">No hourly data</div>;
-
-                                  return hoursToShow.map((prob, i) => (
-                                      <div 
-                                          key={i} 
-                                          className="flex-1 bg-blue-500/50 rounded-t-sm hover:bg-blue-400 transition-colors relative group"
-                                          style={{ 
-                                              height: `${prob}%`, 
-                                              minHeight: prob > 0 ? '4px' : '2px',
-                                              opacity: prob > 0 ? 1 : 0.1 
-                                          }}
-                                      >
-                                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-white text-slate-900 text-[9px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10">
-                                              +{i}h: {prob}%
-                                          </div>
-                                      </div>
-                                  ));
-                                })()}
-                            </div>
-                            <div className="flex justify-between text-[10px] text-slate-600 font-mono mt-2 pt-2 border-t border-slate-800">
-                                <span>Now</span>
-                                <span>+6h</span>
-                                <span>+12h</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 4. HOURLY FORECAST SCROLL (Next 24h) */}
-                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
-                        <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
-                            <Clock size={14} /> 24-Hour Trajectory
-                        </h3>
-                        <div className="flex overflow-x-auto pb-4 gap-4 scrollbar-thin scrollbar-track-slate-900 scrollbar-thumb-slate-700">
-                            {(() => {
-                                const startIdx = getCurrentHourIndex(forestWeather);
-                                if (startIdx === -1) return null;
-                                // Grab next 24 hours
-                                return forestWeather.hourly.time.slice(startIdx, startIdx + 24).map((timeStr, i) => {
-                                    const actualIndex = startIdx + i;
-                                    const temp = forestWeather.hourly.temperature_2m[actualIndex];
-                                    const code = forestWeather.hourly.weather_code[actualIndex];
-                                    const pop = forestWeather.hourly.precipitation_probability[actualIndex];
-                                    const wind = forestWeather.hourly.wind_speed_10m[actualIndex];
-                                    const windDir = forestWeather.hourly.wind_direction_10m[actualIndex];
-                                    const wInfo = getWeatherInfo(code);
+                             {/* RAIN PROBABILITY GRAPH (Next 12 Hours) */}
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col">
+                                <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
+                                    <Umbrella size={14} /> Precip. Prob (12h)
+                                </h3>
+                                <div className="flex-1 flex items-end gap-1 min-h-[150px]">
+                                    {(() => {
+                                    const startIdx = getCurrentHourIndex(forestWeather);
+                                    // Show next 12 hours or fallback
+                                    const hoursToShow = startIdx !== -1 ? forestWeather.hourly.precipitation_probability.slice(startIdx, startIdx + 12) : [];
                                     
-                                    return (
-                                        <div key={i} className="flex-shrink-0 w-20 flex flex-col items-center gap-3 p-3 bg-slate-950 border border-slate-800 rounded-2xl">
-                                            <span className="text-[10px] font-bold text-slate-500">{i === 0 ? 'Now' : fmtTime(timeStr)}</span>
-                                            <wInfo.icon size={24} className="text-white" />
-                                            <span className="text-xl font-bold text-white">{Math.round(temp)}°</span>
-                                            <div className="w-full text-center">
-                                                <div className="text-[9px] font-bold text-blue-400 flex items-center justify-center gap-1">
-                                                    <Droplets size={8} /> {pop}%
-                                                </div>
-                                                <div className="text-[9px] text-slate-600 mt-1 flex items-center justify-center gap-1">
-                                                    <Navigation size={8} style={{ transform: `rotate(${windDir}deg)`}}/> {Math.round(wind)}
-                                                </div>
+                                    if (hoursToShow.length === 0) return <div className="text-slate-500 text-xs w-full text-center">No hourly data</div>;
+
+                                    return hoursToShow.map((prob, i) => (
+                                        <div 
+                                            key={i} 
+                                            className="flex-1 bg-blue-500/50 rounded-t-sm hover:bg-blue-400 transition-colors relative group"
+                                            style={{ 
+                                                height: `${prob}%`, 
+                                                minHeight: prob > 0 ? '4px' : '2px',
+                                                opacity: prob > 0 ? 1 : 0.1 
+                                            }}
+                                        >
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-white text-slate-900 text-[9px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10">
+                                                +{i}h: {prob}%
                                             </div>
                                         </div>
-                                    );
-                                });
-                            })()}
+                                    ));
+                                    })()}
+                                </div>
+                                <div className="flex justify-between text-[10px] text-slate-600 font-mono mt-2 pt-2 border-t border-slate-800">
+                                    <span>Now</span>
+                                    <span>+6h</span>
+                                    <span>+12h</span>
+                                </div>
+                            </div>
+
+                             {/* DAILY FORECAST GRID */}
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
+                                <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                                    <Calendar size={14} /> 7-Day Forecast
+                                </h3>
+                                <div className="grid grid-cols-1 gap-3">
+                                    {forestWeather.daily.time.slice(0,5).map((timeStr, i) => {
+                                        const code = forestWeather.daily.weather_code[i];
+                                        const max = forestWeather.daily.temperature_2m_max[i];
+                                        const min = forestWeather.daily.temperature_2m_min[i];
+                                        const prob = forestWeather.daily.precipitation_probability_max[i];
+                                        const wInfo = getWeatherInfo(code);
+
+                                        return (
+                                            <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-slate-950/50 border border-slate-800 hover:border-slate-700 transition-colors group">
+                                                <div className="flex items-center gap-4">
+                                                    <wInfo.icon size={24} className="text-blue-400" />
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{i === 0 ? 'Today' : fmtDay(timeStr)}</span>
+                                                        <span className="text-[10px] text-slate-500">{wInfo.label}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-6">
+                                                     {(prob > 0) && (
+                                                        <span className="text-[10px] font-bold text-blue-500 flex items-center gap-1 bg-blue-900/20 px-2 py-0.5 rounded">
+                                                            <CloudRain size={10} /> {prob}%
+                                                        </span>
+                                                    )}
+                                                    <div className="flex items-center gap-2 w-24 justify-end">
+                                                        <span className="text-white font-bold">{Math.round(max)}°</span>
+                                                        <span className="text-slate-600 text-xs">/ {Math.round(min)}°</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* 5. DAILY FORECAST GRID */}
-                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
-                        <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
-                            <Calendar size={14} /> 7-Day Forecast
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {forestWeather.daily.time.map((timeStr, i) => {
-                                const code = forestWeather.daily.weather_code[i];
-                                const max = forestWeather.daily.temperature_2m_max[i];
-                                const min = forestWeather.daily.temperature_2m_min[i];
-                                const precip = forestWeather.daily.precipitation_sum[i];
-                                const prob = forestWeather.daily.precipitation_probability_max[i];
-                                const wInfo = getWeatherInfo(code);
-
+                        {/* RIGHT COLUMN: Advanced Analysis */}
+                        <div className="space-y-6">
+                            
+                            {/* FIRE RISK INDICES */}
+                            {(() => {
+                                const hIdx = getCurrentHourIndex(forestWeather);
+                                const risk = calculateFireIndices(forestWeather, hIdx);
                                 return (
-                                    <div key={i} className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex items-center justify-between hover:border-slate-700 transition-colors group">
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{i === 0 ? 'Today' : fmtDay(timeStr)}</span>
-                                            <span className="text-[10px] text-slate-500 capitalize">{wInfo.label}</span>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex flex-col items-end">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-white font-bold">{Math.round(max)}°</span>
-                                                    <span className="text-slate-600 text-xs">/ {Math.round(min)}°</span>
+                                    <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
+                                        <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
+                                            <Flame size={14} className="text-red-500" /> Fire Risk Analysis (Live)
+                                        </h3>
+                                        <div className="space-y-4">
+                                            {/* Angstrom */}
+                                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="text-xs font-bold text-slate-300">Angström Index</span>
+                                                    <span className={`text-xs font-black uppercase ${risk.aiColor}`}>{risk.aiRisk}</span>
                                                 </div>
-                                                {(prob > 0 || precip > 0) && (
-                                                    <span className="text-[10px] font-bold text-blue-500 flex items-center gap-1">
-                                                        <CloudRain size={10} /> {prob}% {precip > 0 ? `(${precip}mm)` : ''}
-                                                    </span>
-                                                )}
+                                                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                                     {/* Reverse scale logic visualization */}
+                                                    <div className="h-full bg-gradient-to-r from-red-500 via-orange-500 to-green-500" style={{ width: `${Math.min(100, Math.max(0, (risk.ai / 5) * 100))}%` }}></div> 
+                                                </div>
+                                                <div className="mt-1 text-[10px] text-slate-500 font-mono text-right">{risk.ai.toFixed(2)}</div>
                                             </div>
-                                            <wInfo.icon size={32} className="text-slate-300" />
+
+                                            {/* GFI */}
+                                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="text-xs font-bold text-slate-300">GFI (Forest Fire)</span>
+                                                    <span className={`text-xs font-black uppercase ${risk.gfiColor}`}>{risk.gfiRisk}</span>
+                                                </div>
+                                                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-gradient-to-r from-green-500 via-orange-500 to-red-600" style={{ width: `${Math.min(100, (risk.gfi / 20) * 100)}%` }}></div>
+                                                </div>
+                                                <div className="mt-1 text-[10px] text-slate-500 font-mono text-right">{risk.gfi.toFixed(2)}</div>
+                                            </div>
+
+                                             {/* KBDI */}
+                                             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="text-xs font-bold text-slate-300">KBDI (Drought)</span>
+                                                    <span className={`text-xs font-black uppercase ${risk.kbdiColor}`}>{risk.kbdiRisk}</span>
+                                                </div>
+                                                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-gradient-to-r from-blue-500 via-yellow-500 to-red-800" style={{ width: `${Math.min(100, (risk.kbdi / 800) * 100)}%` }}></div>
+                                                </div>
+                                                <div className="mt-1 text-[10px] text-slate-500 font-mono text-right">{Math.round(risk.kbdi)}</div>
+                                            </div>
                                         </div>
                                     </div>
                                 );
-                            })}
+                            })()}
+
+                            {/* ADVANCED ATMOSPHERIC DATA */}
+                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
+                                <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
+                                    <LayersIcon size={14} className="text-blue-400" /> Advanced Atmosphere
+                                </h3>
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                     {[
+                                        { l: 'Sea Level Press.', v: `${Math.round(forestWeather.hourly.pressure_msl[getCurrentHourIndex(forestWeather)])} hPa`, i: Gauge },
+                                        { l: 'Surface Press.', v: `${Math.round(forestWeather.hourly.surface_pressure[getCurrentHourIndex(forestWeather)])} hPa`, i: ArrowUp },
+                                        { l: 'Visibility', v: `${(forestWeather.hourly.visibility[getCurrentHourIndex(forestWeather)] / 1000).toFixed(1)} km`, i: Eye },
+                                        { l: 'Evapotranspiration', v: `${forestWeather.hourly.evapotranspiration[getCurrentHourIndex(forestWeather)]} mm`, i: Droplets },
+                                        { l: 'ET₀ (Reference)', v: `${forestWeather.hourly.et0_fao_evapotranspiration[getCurrentHourIndex(forestWeather)]} mm`, i: Sprout },
+                                        { l: 'Vapour Press. Def.', v: `${forestWeather.hourly.vapour_pressure_deficit[getCurrentHourIndex(forestWeather)]} kPa`, i: Cloud },
+                                        { l: 'Total Cloud Cover', v: `${forestWeather.hourly.cloud_cover[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
+                                        { l: 'Low Clouds', v: `${forestWeather.hourly.cloud_cover_low[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
+                                        { l: 'Mid Clouds', v: `${forestWeather.hourly.cloud_cover_mid[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
+                                        { l: 'High Clouds', v: `${forestWeather.hourly.cloud_cover_high[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
+                                     ].map((item, i) => (
+                                         <div key={i} className="flex items-center justify-between p-2 rounded bg-slate-950 border border-slate-800">
+                                             <div className="flex items-center gap-2 text-slate-400">
+                                                 <item.i size={12} /> {item.l}
+                                             </div>
+                                             <span className="font-mono text-white">{item.v}</span>
+                                         </div>
+                                     ))}
+                                </div>
+                            </div>
+
+                            {/* WIND & SOIL PROFILES */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                {/* Wind Profile */}
+                                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
+                                    <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                                        <Wind size={14} className="text-cyan-400" /> Vertical Wind
+                                    </h3>
+                                    <div className="space-y-2">
+                                        {[180, 120, 80, 10].map(h => {
+                                            const hIdx = getCurrentHourIndex(forestWeather);
+                                            const speed = forestWeather.hourly[`wind_speed_${h}m` as keyof typeof forestWeather.hourly][hIdx];
+                                            const dir = forestWeather.hourly[`wind_direction_${h}m` as keyof typeof forestWeather.hourly][hIdx];
+                                            return (
+                                                <div key={h} className="flex justify-between items-center text-xs p-2 bg-slate-950 rounded border border-slate-800/50">
+                                                    <span className="text-slate-500 font-mono w-12">{h}m</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <Navigation size={10} style={{ transform: `rotate(${dir}deg)`}} className="text-cyan-500" />
+                                                        <span className="text-white font-bold">{speed} <span className="text-[9px] text-slate-600 font-normal">km/h</span></span>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Soil Profile */}
+                                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
+                                    <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                                        <LayersIcon size={14} className="text-amber-600" /> Soil Profile
+                                    </h3>
+                                     <div className="space-y-2">
+                                        {[0, 6, 18, 54].map(d => {
+                                            const hIdx = getCurrentHourIndex(forestWeather);
+                                            const temp = forestWeather.hourly[`soil_temperature_${d}cm` as keyof typeof forestWeather.hourly][hIdx];
+                                            // Handle varying moisture depths key names broadly or approximate
+                                            let moistureKey = '';
+                                            if (d === 0) moistureKey = 'soil_moisture_0_to_1cm';
+                                            else if (d === 6) moistureKey = 'soil_moisture_3_to_9cm'; // approx
+                                            else if (d === 18) moistureKey = 'soil_moisture_9_to_27cm'; // approx
+                                            else moistureKey = 'soil_moisture_27_to_81cm';
+                                            
+                                            const moisture = forestWeather.hourly[moistureKey as keyof typeof forestWeather.hourly]?.[hIdx] ?? 0;
+
+                                            return (
+                                                <div key={d} className="flex justify-between items-center text-xs p-2 bg-slate-950 rounded border border-slate-800/50">
+                                                    <span className="text-slate-500 font-mono w-12">{d}cm</span>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-amber-200 flex items-center gap-1"><Thermometer size={10}/> {temp}°</span>
+                                                        <span className="text-blue-400 flex items-center gap-1"><Droplets size={10}/> {moisture}</span>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
