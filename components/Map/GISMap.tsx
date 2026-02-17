@@ -226,7 +226,8 @@ export const GISMap: React.FC<GISMapProps> = ({
     else if (ai < 4.0) { aiRisk = "Moderate"; aiColor = "text-yellow-500"; }
 
     // GFI (Forest Fire Weather Index - Simplified)
-    const dryDays = weather.daily.precipitation_sum.filter(p => p < 1.0).length; // Past 7 days (actually forecasts here, but works for demo)
+    // Count dry days (rain < 2mm in forecast as proxy for trend)
+    const dryDays = weather.daily.precipitation_sum.filter(p => p < 2.0).length; 
     const zoneFactor = 1.2;
     const gfi = (Math.max(0, temp) * (100 - humidity) * windKmh / 1000) * (1 + dryDays / 20) * zoneFactor;
     
@@ -393,26 +394,31 @@ export const GISMap: React.FC<GISMapProps> = ({
                                 <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
                                     <Umbrella size={14} /> Precip. Prob (12h)
                                 </h3>
-                                <div className="flex-1 flex items-end gap-1 min-h-[150px]">
+                                {/* Explicit height is required for child percentage heights to work reliably in flex containers */}
+                                <div className="h-40 flex items-end gap-1 w-full"> 
                                     {(() => {
                                     const startIdx = getCurrentHourIndex(forestWeather);
                                     // Show next 12 hours or fallback
                                     const hoursToShow = startIdx !== -1 ? forestWeather.hourly.precipitation_probability.slice(startIdx, startIdx + 12) : [];
                                     
-                                    if (hoursToShow.length === 0) return <div className="text-slate-500 text-xs w-full text-center">No hourly data</div>;
+                                    if (hoursToShow.length === 0) return <div className="text-slate-500 text-xs w-full text-center self-center">No hourly data</div>;
 
                                     return hoursToShow.map((prob, i) => (
                                         <div 
                                             key={i} 
-                                            className="flex-1 bg-blue-500/50 rounded-t-sm hover:bg-blue-400 transition-colors relative group"
-                                            style={{ 
-                                                height: `${prob}%`, 
-                                                minHeight: prob > 0 ? '4px' : '2px',
-                                                opacity: prob > 0 ? 1 : 0.1 
-                                            }}
+                                            className="flex-1 bg-slate-950/50 rounded-t-sm relative group mx-0.5 flex flex-col justify-end h-full"
                                         >
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-white text-slate-900 text-[9px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10">
-                                                +{i}h: {prob}%
+                                            <div 
+                                                className="w-full bg-blue-500 hover:bg-blue-400 transition-all duration-500 rounded-t-sm relative"
+                                                style={{ 
+                                                    height: `${Math.max(prob, 2)}%`, 
+                                                    opacity: prob > 0 ? 1 : 0.2
+                                                }}
+                                            >
+                                                 {/* Tooltip */}
+                                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-white text-slate-900 text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-10 shadow-xl pointer-events-none transition-opacity">
+                                                    +{i}h: {prob}%
+                                                </div>
                                             </div>
                                         </div>
                                     ));
@@ -425,13 +431,13 @@ export const GISMap: React.FC<GISMapProps> = ({
                                 </div>
                             </div>
 
-                             {/* DAILY FORECAST GRID */}
+                             {/* DAILY FORECAST VERTICAL LIST */}
                             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
                                 <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
                                     <Calendar size={14} /> 7-Day Forecast
                                 </h3>
-                                <div className="grid grid-cols-1 gap-3">
-                                    {forestWeather.daily.time.slice(0,5).map((timeStr, i) => {
+                                <div className="flex flex-col gap-2">
+                                    {forestWeather.daily.time.slice(0, 7).map((timeStr, i) => {
                                         const code = forestWeather.daily.weather_code[i];
                                         const max = forestWeather.daily.temperature_2m_max[i];
                                         const min = forestWeather.daily.temperature_2m_min[i];
@@ -439,22 +445,25 @@ export const GISMap: React.FC<GISMapProps> = ({
                                         const wInfo = getWeatherInfo(code);
 
                                         return (
-                                            <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-slate-950/50 border border-slate-800 hover:border-slate-700 transition-colors group">
+                                            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 border border-slate-800 hover:border-slate-700 transition-colors group">
                                                 <div className="flex items-center gap-4">
-                                                    <wInfo.icon size={24} className="text-blue-400" />
+                                                    <div className="bg-slate-900 p-2 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors">
+                                                         <wInfo.icon size={20} />
+                                                    </div>
                                                     <div className="flex flex-col">
-                                                        <span className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{i === 0 ? 'Today' : fmtDay(timeStr)}</span>
+                                                        <span className="text-xs font-bold text-white uppercase">{i === 0 ? 'Today' : fmtDay(timeStr)}</span>
                                                         <span className="text-[10px] text-slate-500">{wInfo.label}</span>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-6">
-                                                     {(prob > 0) && (
-                                                        <span className="text-[10px] font-bold text-blue-500 flex items-center gap-1 bg-blue-900/20 px-2 py-0.5 rounded">
-                                                            <CloudRain size={10} /> {prob}%
-                                                        </span>
+                                                
+                                                <div className="flex items-center gap-4">
+                                                    {prob > 0 && (
+                                                        <div className="flex items-center gap-1 text-[10px] font-bold text-blue-500 bg-blue-900/10 px-2 py-1 rounded-md">
+                                                            <Droplets size={10} /> {prob}%
+                                                        </div>
                                                     )}
-                                                    <div className="flex items-center gap-2 w-24 justify-end">
-                                                        <span className="text-white font-bold">{Math.round(max)}°</span>
+                                                    <div className="flex items-center gap-2 w-20 justify-end">
+                                                        <span className="text-white font-bold text-sm">{Math.round(max)}°</span>
                                                         <span className="text-slate-600 text-xs">/ {Math.round(min)}°</span>
                                                     </div>
                                                 </div>
