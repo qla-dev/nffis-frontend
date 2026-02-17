@@ -84,7 +84,7 @@ const BASE_LAYER_CONFIG: Record<string, { url: string; attribution: string }> = 
   [MapLayer.TERRAIN]: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: 'OpenTopoMap' },
   [MapLayer.SENTINEL]: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Sentinel2/Scientific/ImageServer/tile/{z}/{y}/{x}', attribution: 'Sentinel' },
   [MapLayer.INFRARED]: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', attribution: 'NatGeo (Sim)' },
-  [MapLayer.METEOBLUE]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'Meteoblue Base' },
+  // METEOBLUE is handled dynamically
   [MapLayer.NASA_FIRMS]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'NASA FIRMS Base' },
   [MapLayer.THERMAL]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'Thermal Base' },
   [MapLayer.WINDY]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'Windy Base' },
@@ -119,14 +119,65 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [forecastMode, setForecastMode] = useState<'hourly' | 'daily'>('hourly');
 
+  // -- METEOBLUE DYNAMIC STATE --
+  const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
+
   const t = TRANSLATIONS[language];
 
   // Derive Active Base Layer Object
   const activeBaseLayerId = useMemo(() => {
-    return Object.values(MapLayer).find(layer => activeLayers.has(layer) && BASE_LAYER_CONFIG[layer]);
+    return Object.values(MapLayer).find(layer => activeLayers.has(layer) && (BASE_LAYER_CONFIG[layer] || layer === MapLayer.METEOBLUE));
   }, [activeLayers]);
   
-  const activeBaseLayer = activeBaseLayerId ? BASE_LAYER_CONFIG[activeBaseLayerId] : null;
+  const activeBaseLayer = useMemo(() => {
+      if (activeBaseLayerId === MapLayer.METEOBLUE && meteoblueUrl) {
+          return { url: meteoblueUrl, attribution: 'Meteoblue' };
+      }
+      return activeBaseLayerId ? BASE_LAYER_CONFIG[activeBaseLayerId] : null;
+  }, [activeBaseLayerId, meteoblueUrl]);
+
+  // Fetch Meteoblue Tile URL
+  useEffect(() => {
+    const fetchMeteoblue = async () => {
+        try {
+            const apiKey = "be72f76237db";
+            const response = await fetch(`https://maps-api.meteoblue.com/v1/time/hourly/ICONAUTO?lang=en&apikey=${apiKey}`);
+            const data = await response.json();
+            const date = data.current;
+            const url = `https://maps-api.meteoblue.com/v1/map/raster/ICONAUTO/${date}/` +
+            "11~2%20m%20above%20gnd~hourly~none~contourSteps~" +
+            "-10.0~rgba(52,140,237,1.0)~" +
+            "-8.0~rgba(68,177,246,1.0)~" +
+            "-6.0~rgba(81,203,250,1.0)~" +
+            "-4.0~rgba(128,224,247,1.0)~" +
+            "-2.0~rgba(160,234,247,1.0)~" +
+            "0.0~rgba(0,239,124,1.0)~" +
+            "2.0~rgba(0,228,82,1.0)~" +
+            "4.0~rgba(0,200,72,1.0)~" +
+            "6.0~rgba(16,184,122,1.0)~" +
+            "8.0~rgba(41,123,93,1.0)~" +
+            "10.0~rgba(0,114,41,1.0)~" +
+            "12.0~rgba(60,161,44,1.0)~" +
+            "14.0~rgba(121,208,48,1.0)~" +
+            "16.0~rgba(181,255,51,1.0)~" +
+            "18.0~rgba(216,247,161,1.0)~" +
+            "20.0~rgba(255,246,0,1.0)~" +
+            "22.0~rgba(248,223,11,1.0)~" +
+            "24.0~rgba(253,202,12,1.0)~" +
+            "26.0~rgba(252,172,5,1.0)~" +
+            "28.0~rgba(248,141,0,1.0)~" +
+            "30.0~rgba(255,102,0,1.0)~" +
+            "/{z}/{x}/{y}" +
+            "?temperatureUnit=C" +
+            `&apikey=${apiKey}` +
+            `&lastUpdate=${data.lastUpdate}`;
+            setMeteoblueUrl(url);
+        } catch (e) {
+            console.error("Failed to fetch Meteoblue config", e);
+        }
+    };
+    fetchMeteoblue();
+  }, []);
 
   // Fetch Weather from Open-Meteo with Advanced Params
   useEffect(() => {
@@ -273,6 +324,7 @@ export const GISMap: React.FC<GISMapProps> = ({
             key={activeBaseLayerId || (isDarkMode ? 'dark' : 'light')}
             url={activeBaseLayer ? activeBaseLayer.url : (isDarkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png")}
             attribution={activeBaseLayer?.attribution}
+            opacity={activeBaseLayerId === MapLayer.METEOBLUE ? 0.7 : 1}
         />
         {activeLayers.has(MapLayer.BIH_BORDERS) && (
           <GeoJSON data={bihBorderData as any} style={{ color: '#ec4899', weight: 2, fill: false, opacity: 0.6 }} />
