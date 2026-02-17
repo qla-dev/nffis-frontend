@@ -106,6 +106,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [selectedForest, setSelectedForest] = useState<ForestRegion | null>(null);
   const [forestWeather, setForestWeather] = useState<OpenMeteoResponse | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
+  const [forecastMode, setForecastMode] = useState<'hourly' | 'daily'>('hourly');
 
   const t = TRANSLATIONS[language];
 
@@ -357,7 +358,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                                     <div className="flex items-start justify-between mb-8">
                                         <div>
                                             <div className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-2">Current Conditions</div>
-                                            <div className="flex items-baseline gap-4">
+                                            <div className="flex gap-4">
                                                 <span className="text-8xl font-black text-white tracking-tighter">{Math.round(forestWeather.current.temperature_2m)}°</span>
                                                 <div className="flex flex-col">
                                                     <span className="text-2xl font-medium text-white capitalize">{getWeatherInfo(forestWeather.current.weather_code).label}</span>
@@ -389,10 +390,94 @@ export const GISMap: React.FC<GISMapProps> = ({
                                 </div>
                             </div>
 
+                             {/* FORECAST SECTION (TOGGLEABLE) */}
+                             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs flex items-center gap-2">
+                                        {forecastMode === 'daily' ? <Calendar size={14} /> : <Clock size={14} />} 
+                                        {forecastMode === 'daily' ? '7-Day Forecast' : '24-Hour Forecast'}
+                                    </h3>
+                                    <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800">
+                                        <button 
+                                            onClick={() => setForecastMode('hourly')}
+                                            className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${forecastMode === 'hourly' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                                        >
+                                            HOURLY
+                                        </button>
+                                        <button 
+                                            onClick={() => setForecastMode('daily')}
+                                            className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${forecastMode === 'daily' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                                        >
+                                            7-DAY
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                                    {forecastMode === 'daily' ? (
+                                        // DAILY FORECAST CARDS (SQUARE)
+                                        forestWeather.daily.time.slice(0, 7).map((timeStr, i) => {
+                                            const code = forestWeather.daily.weather_code[i];
+                                            const max = forestWeather.daily.temperature_2m_max[i];
+                                            const min = forestWeather.daily.temperature_2m_min[i];
+                                            const prob = forestWeather.daily.precipitation_probability_max[i];
+                                            const wInfo = getWeatherInfo(code);
+
+                                            return (
+                                                <div key={i} className="flex-shrink-0 w-32 h-32 flex flex-col items-center justify-between p-4 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-600 transition-all group shadow-lg">
+                                                    <span className="text-xs font-bold text-slate-400 group-hover:text-blue-400 transition-colors uppercase tracking-wider">{i === 0 ? 'Today' : fmtDay(timeStr)}</span>
+                                                    
+                                                    <wInfo.icon size={32} className="text-white" />
+                                                    
+                                                    <div className="flex flex-col items-center">
+                                                        <div className="flex items-baseline gap-1">
+                                                             <span className="text-white font-black text-lg">{Math.round(max)}°</span>
+                                                             <span className="text-slate-600 text-xs font-bold">/ {Math.round(min)}°</span>
+                                                        </div>
+                                                    </div>
+                                                    {prob > 0 ? (
+                                                        <div className="flex items-center gap-1 text-[10px] font-bold text-blue-400 bg-blue-900/20 px-2 py-0.5 rounded-full w-full justify-center">
+                                                            <Droplets size={10} /> {prob}%
+                                                        </div>
+                                                    ) : (
+                                                         <div className="h-[22px]" /> // Spacer
+                                                    )}
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        // HOURLY FORECAST CARDS (SQUARE)
+                                        (() => {
+                                            const startIdx = getCurrentHourIndex(forestWeather);
+                                            if (startIdx === -1) return <div className="text-slate-500 text-xs p-4">No hourly data available</div>;
+                                            
+                                            return forestWeather.hourly.time.slice(startIdx, startIdx + 24).map((timeStr, i) => {
+                                                const idx = startIdx + i;
+                                                const temp = forestWeather.hourly.temperature_2m[idx];
+                                                const code = forestWeather.hourly.weather_code[idx];
+                                                const prob = forestWeather.hourly.precipitation_probability[idx];
+                                                const wInfo = getWeatherInfo(code);
+
+                                                return (
+                                                    <div key={i} className="flex-shrink-0 w-32 h-32 flex flex-col items-center justify-between p-4 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-600 transition-all group shadow-lg">
+                                                        <span className="text-xs font-bold text-slate-500 group-hover:text-blue-400 transition-colors uppercase tracking-wider">{i === 0 ? 'Now' : fmtTime(timeStr)}</span>
+                                                        <wInfo.icon size={32} className="text-slate-300 group-hover:text-white transition-colors" />
+                                                        <span className="text-white font-black text-2xl">{Math.round(temp)}°</span>
+                                                        <div className={`text-[10px] font-bold flex items-center gap-1.5 px-2 py-1 rounded-full ${prob > 0 ? 'text-blue-400 bg-blue-500/10' : 'text-slate-700 bg-slate-900'}`}>
+                                                            <Droplets size={10} /> {prob}%
+                                                        </div>
+                                                    </div>
+                                                );
+                                            });
+                                        })()
+                                    )}
+                                </div>
+                            </div>
+
                              {/* RAIN PROBABILITY GRAPH (Next 12 Hours) */}
                             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col">
                                 <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
-                                    <Umbrella size={14} /> Precip. Prob (12h)
+                                    <Umbrella size={14} /> Precipitation Probability (12 Hours)
                                 </h3>
                                 {/* Explicit height is required for child percentage heights to work reliably in flex containers */}
                                 <div className="h-40 flex items-end gap-1 w-full"> 
@@ -411,7 +496,8 @@ export const GISMap: React.FC<GISMapProps> = ({
                                             <div 
                                                 className="w-full bg-blue-500 hover:bg-blue-400 transition-all duration-500 rounded-t-sm relative"
                                                 style={{ 
-                                                    height: `${Math.max(prob, 2)}%`, 
+                                                    height: `${Math.max(prob || 0, 4)}%`, // Ensure minimal visibility
+                                                    minHeight: '4px',
                                                     opacity: prob > 0 ? 1 : 0.2
                                                 }}
                                             >
@@ -428,48 +514,6 @@ export const GISMap: React.FC<GISMapProps> = ({
                                     <span>Now</span>
                                     <span>+6h</span>
                                     <span>+12h</span>
-                                </div>
-                            </div>
-
-                             {/* DAILY FORECAST VERTICAL LIST */}
-                            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
-                                <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
-                                    <Calendar size={14} /> 7-Day Forecast
-                                </h3>
-                                <div className="flex flex-col gap-2">
-                                    {forestWeather.daily.time.slice(0, 7).map((timeStr, i) => {
-                                        const code = forestWeather.daily.weather_code[i];
-                                        const max = forestWeather.daily.temperature_2m_max[i];
-                                        const min = forestWeather.daily.temperature_2m_min[i];
-                                        const prob = forestWeather.daily.precipitation_probability_max[i];
-                                        const wInfo = getWeatherInfo(code);
-
-                                        return (
-                                            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-950/50 border border-slate-800 hover:border-slate-700 transition-colors group">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="bg-slate-900 p-2 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors">
-                                                         <wInfo.icon size={20} />
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <span className="text-xs font-bold text-white uppercase">{i === 0 ? 'Today' : fmtDay(timeStr)}</span>
-                                                        <span className="text-[10px] text-slate-500">{wInfo.label}</span>
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="flex items-center gap-4">
-                                                    {prob > 0 && (
-                                                        <div className="flex items-center gap-1 text-[10px] font-bold text-blue-500 bg-blue-900/10 px-2 py-1 rounded-md">
-                                                            <Droplets size={10} /> {prob}%
-                                                        </div>
-                                                    )}
-                                                    <div className="flex items-center gap-2 w-20 justify-end">
-                                                        <span className="text-white font-bold text-sm">{Math.round(max)}°</span>
-                                                        <span className="text-slate-600 text-xs">/ {Math.round(min)}°</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
                                 </div>
                             </div>
                         </div>
