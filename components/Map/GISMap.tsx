@@ -1,12 +1,13 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, useMap, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteoResponse, ForestRegion } from '../../types';
 import { bihBorderData } from '../../bihData';
 import { MapControls } from './MapControls';
+import { ForestHoverCard } from './ForestHoverCard';
 
 const GlobalLeaflet = (L as any).default || L;
 
@@ -40,41 +41,6 @@ const UserIcon = GlobalLeaflet.divIcon({
   iconSize: [32, 32],
   iconAnchor: [16, 16]
 });
-
-// --- WMO Weather Codes Helper ---
-const getWeatherInfo = (code: number) => {
-  const codes: Record<number, { label: string; icon: any }> = {
-    0: { label: 'Clear Sky', icon: Sun },
-    1: { label: 'Mainly Clear', icon: Sun },
-    2: { label: 'Partly Cloudy', icon: Cloud },
-    3: { label: 'Overcast', icon: Cloud },
-    45: { label: 'Fog', icon: Cloud },
-    48: { label: 'Depositing Rime Fog', icon: Cloud },
-    51: { label: 'Light Drizzle', icon: CloudRain },
-    53: { label: 'Moderate Drizzle', icon: CloudRain },
-    55: { label: 'Dense Drizzle', icon: CloudRain },
-    56: { label: 'Light Freezing Drizzle', icon: Snowflake },
-    57: { label: 'Dense Freezing Drizzle', icon: Snowflake },
-    61: { label: 'Slight Rain', icon: CloudRain },
-    63: { label: 'Moderate Rain', icon: CloudRain },
-    65: { label: 'Heavy Rain', icon: CloudRain },
-    66: { label: 'Light Freezing Rain', icon: Snowflake },
-    67: { label: 'Heavy Freezing Rain', icon: Snowflake },
-    71: { label: 'Slight Snow', icon: Snowflake },
-    73: { label: 'Moderate Snow', icon: Snowflake },
-    75: { label: 'Heavy Snow', icon: Snowflake },
-    77: { label: 'Snow Grains', icon: Snowflake },
-    80: { label: 'Slight Rain Showers', icon: CloudRain },
-    81: { label: 'Moderate Rain Showers', icon: CloudRain },
-    82: { label: 'Violent Rain Showers', icon: CloudRain },
-    85: { label: 'Slight Snow Showers', icon: Snowflake },
-    86: { label: 'Heavy Snow Showers', icon: Snowflake },
-    95: { label: 'Thunderstorm', icon: CloudLightning },
-    96: { label: 'Thunderstorm with Hail', icon: CloudLightning },
-    99: { label: 'Heavy Thunderstorm with Hail', icon: CloudLightning },
-  };
-  return codes[code] || { label: 'Unknown', icon: Cloud };
-};
 
 // --- BASE LAYER CONFIGURATION ---
 const BASE_LAYER_CONFIG: Record<string, { url: string; attribution: string }> = {
@@ -123,6 +89,25 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
 
   const t = TRANSLATIONS[language];
+
+  // Helper to get translated weather info
+  const getWeatherInfo = (code: number) => {
+    const codes: Record<number, { icon: any }> = {
+      0: { icon: Sun }, 1: { icon: Sun }, 2: { icon: Cloud }, 3: { icon: Cloud },
+      45: { icon: Cloud }, 48: { icon: Cloud }, 51: { icon: CloudRain },
+      53: { icon: CloudRain }, 55: { icon: CloudRain }, 56: { icon: Snowflake },
+      57: { icon: Snowflake }, 61: { icon: CloudRain }, 63: { icon: CloudRain },
+      65: { icon: CloudRain }, 66: { icon: Snowflake }, 67: { icon: Snowflake },
+      71: { icon: Snowflake }, 73: { icon: Snowflake }, 75: { icon: Snowflake },
+      77: { icon: Snowflake }, 80: { icon: CloudRain }, 81: { icon: CloudRain },
+      82: { icon: CloudRain }, 85: { icon: Snowflake }, 86: { icon: Snowflake },
+      95: { icon: CloudLightning }, 96: { icon: CloudLightning }, 99: { icon: CloudLightning },
+    };
+    return { 
+        label: t.weather[code as keyof typeof t.weather] || 'Unknown', 
+        icon: codes[code]?.icon || Cloud 
+    };
+  };
 
   // Derive Active Base Layer Object
   const activeBaseLayerId = useMemo(() => {
@@ -279,12 +264,12 @@ export const GISMap: React.FC<GISMapProps> = ({
     // If AI < 2.5 Risk High.
     const ai = (humidity / 20 + (27 - temp) / 10);
     
-    let aiRisk = "Low";
+    let aiRisk = t.riskLevels.low;
     let aiColor = "text-emerald-500";
-    if (ai < 2.0) { aiRisk = "EXTREME"; aiColor = "text-purple-500"; }
-    else if (ai < 2.5) { aiRisk = "Very High"; aiColor = "text-red-600"; }
-    else if (ai < 3.0) { aiRisk = "High"; aiColor = "text-orange-500"; }
-    else if (ai < 4.0) { aiRisk = "Moderate"; aiColor = "text-yellow-500"; }
+    if (ai < 2.0) { aiRisk = t.riskLevels.extreme; aiColor = "text-purple-500"; }
+    else if (ai < 2.5) { aiRisk = t.riskLevels.veryHigh; aiColor = "text-red-600"; }
+    else if (ai < 3.0) { aiRisk = t.riskLevels.high; aiColor = "text-orange-500"; }
+    else if (ai < 4.0) { aiRisk = t.riskLevels.moderate; aiColor = "text-yellow-500"; }
 
     // GFI (Forest Fire Weather Index - Simplified)
     // Count dry days (rain < 2mm in forecast as proxy for trend)
@@ -292,12 +277,12 @@ export const GISMap: React.FC<GISMapProps> = ({
     const zoneFactor = 1.2;
     const gfi = (Math.max(0, temp) * (100 - humidity) * windKmh / 1000) * (1 + dryDays / 20) * zoneFactor;
     
-    let gfiRisk = "Low";
+    let gfiRisk = t.riskLevels.low;
     let gfiColor = "text-emerald-500";
-    if (gfi > 15) { gfiRisk = "EXTREME"; gfiColor = "text-purple-500"; }
-    else if (gfi > 9) { gfiRisk = "Very High"; gfiColor = "text-red-600"; }
-    else if (gfi > 5) { gfiRisk = "High"; gfiColor = "text-orange-500"; }
-    else if (gfi > 2) { gfiRisk = "Moderate"; gfiColor = "text-yellow-500"; }
+    if (gfi > 15) { gfiRisk = t.riskLevels.extreme; gfiColor = "text-purple-500"; }
+    else if (gfi > 9) { gfiRisk = t.riskLevels.veryHigh; gfiColor = "text-red-600"; }
+    else if (gfi > 5) { gfiRisk = t.riskLevels.high; gfiColor = "text-orange-500"; }
+    else if (gfi > 2) { gfiRisk = t.riskLevels.moderate; gfiColor = "text-yellow-500"; }
 
     // KBDI (Approximation without historic DB)
     // Daily drought factor based on max temp and lack of rain
@@ -306,11 +291,11 @@ export const GISMap: React.FC<GISMapProps> = ({
     // Normalize to 0-800 scale roughly
     kbdi = Math.min(800, kbdi + (dryDays * 50)); 
     
-    let kbdiRisk = "Low";
+    let kbdiRisk = t.riskLevels.low;
     let kbdiColor = "text-emerald-500";
-    if (kbdi > 600) { kbdiRisk = "EXTREME"; kbdiColor = "text-purple-500"; }
-    else if (kbdi > 400) { kbdiRisk = "High"; kbdiColor = "text-red-600"; }
-    else if (kbdi > 200) { kbdiRisk = "Moderate"; kbdiColor = "text-orange-500"; }
+    if (kbdi > 600) { kbdiRisk = t.riskLevels.extreme; kbdiColor = "text-purple-500"; }
+    else if (kbdi > 400) { kbdiRisk = t.riskLevels.high; kbdiColor = "text-red-600"; }
+    else if (kbdi > 200) { kbdiRisk = t.riskLevels.moderate; kbdiColor = "text-orange-500"; }
 
     return { ai, aiRisk, aiColor, gfi, gfiRisk, gfiColor, kbdi, kbdiRisk, kbdiColor };
   };
@@ -330,7 +315,7 @@ export const GISMap: React.FC<GISMapProps> = ({
           <GeoJSON data={bihBorderData as any} style={{ color: '#ec4899', weight: 2, fill: false, opacity: 0.6 }} />
         )}
         
-        {/* FOREST MARKERS - Click triggers Full Screen Overlay */}
+        {/* FOREST MARKERS - Hover triggers Tooltip card, Button in Tooltip triggers Full Screen */}
         <LayerGroup>
           {MOCK_FORESTS.map(forest => {
              if (forest.type === RegionType.LANDFILL && !activeLayers.has(MapLayer.LANDFILLS)) return null;
@@ -340,12 +325,14 @@ export const GISMap: React.FC<GISMapProps> = ({
                  key={forest.id} 
                  position={forest.coordinates} 
                  icon={getRegionIcon(forest.type)}
-                 {...({
-                   eventHandlers: {
-                     click: () => setSelectedForest(forest)
-                   }
-                 } as any)}
-               />
+                 eventHandlers={{
+                   click: () => setSelectedForest(forest) // Fallback or direct interaction if preferred
+                 }}
+               >
+                 <Tooltip direction="top" offset={[0, -20]} opacity={1} interactive>
+                    <ForestHoverCard forest={forest} language={language} onExpand={() => setSelectedForest(forest)} />
+                 </Tooltip>
+               </Marker>
              );
           })}
         </LayerGroup>
@@ -373,12 +360,12 @@ export const GISMap: React.FC<GISMapProps> = ({
                   <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-2 text-[10px] md:text-xs font-bold text-slate-400 bg-slate-950/60 px-6 py-2 rounded-full border border-slate-800/60 shadow-inner backdrop-blur-md">
                       <span className="flex items-center gap-2 text-blue-300">
                         <MapIcon size={14} className="opacity-70"/> 
-                        <span className="font-mono">{selectedForest.coordinates[0].toFixed(3)}, {selectedForest.coordinates[1].toFixed(3)}</span>
+                        <span className="font-mono">{t.dashboard.coordinates}: {selectedForest.coordinates[0].toFixed(3)}, {selectedForest.coordinates[1].toFixed(3)}</span>
                       </span>
                       <div className="hidden md:block w-px h-3 bg-slate-800"></div>
                       <span className="flex items-center gap-2 text-emerald-400">
                         <LandPlot size={14} className="opacity-70"/> 
-                        <span>{selectedForest.area.toLocaleString()} ha</span>
+                        <span>{t.dashboard.area}: {selectedForest.area.toLocaleString()} ha</span>
                       </span>
                       <div className="hidden md:block w-px h-3 bg-slate-800"></div>
                       <span className="flex items-center gap-2 text-purple-400">
@@ -402,7 +389,7 @@ export const GISMap: React.FC<GISMapProps> = ({
               {loadingWeather || !forestWeather ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
                       <Loader2 size={48} className="animate-spin text-blue-500" />
-                      <p className="font-mono text-sm tracking-widest uppercase">Acquiring Open-Meteo Telemetry...</p>
+                      <p className="font-mono text-sm tracking-widest uppercase">{t.dashboard.loading}</p>
                   </div>
               ) : (
                 <div className="max-w-[1600px] mx-auto space-y-6">
@@ -421,12 +408,12 @@ export const GISMap: React.FC<GISMapProps> = ({
                                 <div className="relative z-10">
                                     <div className="flex items-start justify-between mb-8">
                                         <div>
-                                            <div className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-2">Current Conditions</div>
+                                            <div className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-2">{t.dashboard.currentConditions}</div>
                                             <div className="flex gap-4">
                                                 <span className="text-8xl font-black text-white tracking-tighter">{Math.round(forestWeather.current.temperature_2m)}°</span>
                                                 <div className="flex flex-col">
                                                     <span className="text-2xl font-medium text-white capitalize">{getWeatherInfo(forestWeather.current.weather_code).label}</span>
-                                                    <span className="text-slate-400">Feels like {Math.round(forestWeather.current.apparent_temperature)}°</span>
+                                                    <span className="text-slate-400">{t.dashboard.feelsLike} {Math.round(forestWeather.current.apparent_temperature)}°</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -434,12 +421,12 @@ export const GISMap: React.FC<GISMapProps> = ({
 
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                                         {[
-                                            { label: 'Wind', val: `${forestWeather.current.wind_speed_10m} km/h`, sub: `${forestWeather.current.wind_direction_10m}°`, icon: Wind, color: 'text-cyan-400' },
-                                            { label: 'Humidity', val: `${forestWeather.current.relative_humidity_2m}%`, sub: 'Relative', icon: Droplets, color: 'text-blue-400' },
-                                            { label: 'Pressure', val: `${Math.round(forestWeather.current.pressure_msl)} hPa`, sub: 'MSL', icon: Gauge, color: 'text-emerald-400' },
-                                            { label: 'Precipitation', val: `${forestWeather.current.precipitation} mm`, sub: 'Current', icon: Umbrella, color: 'text-blue-300' },
-                                            { label: 'UV Index', val: `${forestWeather.hourly.uv_index[getCurrentHourIndex(forestWeather)]}`, sub: 'Scale', icon: SunDim, color: 'text-yellow-400' },
-                                            { label: 'Wind Gusts', val: `${forestWeather.current.wind_gusts_10m} km/h`, sub: 'Max', icon: Wind, color: 'text-orange-400' },
+                                            { label: t.dashboard.wind, val: `${forestWeather.current.wind_speed_10m} km/h`, sub: `${forestWeather.current.wind_direction_10m}°`, icon: Wind, color: 'text-cyan-400' },
+                                            { label: t.dashboard.humidity, val: `${forestWeather.current.relative_humidity_2m}%`, sub: 'Relative', icon: Droplets, color: 'text-blue-400' },
+                                            { label: t.dashboard.pressure, val: `${Math.round(forestWeather.current.pressure_msl)} hPa`, sub: 'MSL', icon: Gauge, color: 'text-emerald-400' },
+                                            { label: t.dashboard.precipitation, val: `${forestWeather.current.precipitation} mm`, sub: 'Current', icon: Umbrella, color: 'text-blue-300' },
+                                            { label: t.dashboard.uvIndex, val: `${forestWeather.hourly.uv_index[getCurrentHourIndex(forestWeather)]}`, sub: 'Scale', icon: SunDim, color: 'text-yellow-400' },
+                                            { label: t.dashboard.windGusts, val: `${forestWeather.current.wind_gusts_10m} km/h`, sub: 'Max', icon: Wind, color: 'text-orange-400' },
                                         ].map((stat, i) => (
                                             <div key={i} className="bg-slate-950/50 border border-slate-800/50 rounded-xl p-3 backdrop-blur-sm">
                                                 <div className="flex items-center gap-2 mb-1">
@@ -459,20 +446,20 @@ export const GISMap: React.FC<GISMapProps> = ({
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs flex items-center gap-2">
                                         {forecastMode === 'daily' ? <Calendar size={14} /> : <Clock size={14} />} 
-                                        {forecastMode === 'daily' ? '7-Day Forecast' : '24-Hour Forecast'}
+                                        {forecastMode === 'daily' ? t.dashboard.forecast7d : t.dashboard.forecast24h}
                                     </h3>
                                     <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800">
                                         <button 
                                             onClick={() => setForecastMode('hourly')}
                                             className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${forecastMode === 'hourly' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
                                         >
-                                            HOURLY
+                                            {t.dashboard.hourlyBtn}
                                         </button>
                                         <button 
                                             onClick={() => setForecastMode('daily')}
                                             className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${forecastMode === 'daily' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
                                         >
-                                            7-DAY
+                                            {t.dashboard.dailyBtn}
                                         </button>
                                     </div>
                                 </div>
@@ -489,7 +476,7 @@ export const GISMap: React.FC<GISMapProps> = ({
 
                                             return (
                                                 <div key={i} className="flex-shrink-0 w-32 h-32 flex flex-col items-center justify-between p-4 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-600 transition-all group shadow-lg">
-                                                    <span className="text-xs font-bold text-slate-400 group-hover:text-blue-400 transition-colors uppercase tracking-wider">{i === 0 ? 'Today' : fmtDay(timeStr)}</span>
+                                                    <span className="text-xs font-bold text-slate-400 group-hover:text-blue-400 transition-colors uppercase tracking-wider">{i === 0 ? t.dashboard.today : fmtDay(timeStr)}</span>
                                                     
                                                     <wInfo.icon size={32} className="text-white" />
                                                     
@@ -524,7 +511,7 @@ export const GISMap: React.FC<GISMapProps> = ({
 
                                                 return (
                                                     <div key={i} className="flex-shrink-0 w-32 h-32 flex flex-col items-center justify-between p-4 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-600 transition-all group shadow-lg">
-                                                        <span className="text-xs font-bold text-slate-500 group-hover:text-blue-400 transition-colors uppercase tracking-wider">{i === 0 ? 'Now' : fmtTime(timeStr)}</span>
+                                                        <span className="text-xs font-bold text-slate-500 group-hover:text-blue-400 transition-colors uppercase tracking-wider">{i === 0 ? t.dashboard.now : fmtTime(timeStr)}</span>
                                                         <wInfo.icon size={32} className="text-slate-300 group-hover:text-white transition-colors" />
                                                         <span className="text-white font-black text-2xl">{Math.round(temp)}°</span>
                                                         <div className={`text-[10px] font-bold flex items-center gap-1.5 px-2 py-1 rounded-full ${prob > 0 ? 'text-blue-400 bg-blue-500/10' : 'text-slate-700 bg-slate-900'}`}>
@@ -541,7 +528,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                              {/* RAIN PROBABILITY GRAPH (Next 12 Hours) */}
                             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col">
                                 <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
-                                    <Umbrella size={14} /> Precipitation Probability (12 Hours)
+                                    <Umbrella size={14} /> {t.dashboard.rainProb}
                                 </h3>
                                 {/* Explicit height is required for child percentage heights to work reliably in flex containers */}
                                 <div className="h-40 flex items-end gap-1 w-full"> 
@@ -575,7 +562,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                                     })()}
                                 </div>
                                 <div className="flex justify-between text-[10px] text-slate-600 font-mono mt-2 pt-2 border-t border-slate-800">
-                                    <span>Now</span>
+                                    <span>{t.dashboard.now}</span>
                                     <span>+6h</span>
                                     <span>+12h</span>
                                 </div>
@@ -592,13 +579,13 @@ export const GISMap: React.FC<GISMapProps> = ({
                                 return (
                                     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
                                         <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
-                                            <Flame size={14} className="text-red-500" /> Fire Risk Analysis (Live)
+                                            <Flame size={14} className="text-red-500" /> {t.dashboard.fireRisk}
                                         </h3>
                                         <div className="space-y-4">
                                             {/* Angstrom */}
                                             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
                                                 <div className="flex justify-between items-center mb-2">
-                                                    <span className="text-xs font-bold text-slate-300">Angström Index</span>
+                                                    <span className="text-xs font-bold text-slate-300">{t.dashboard.angstrom}</span>
                                                     <span className={`text-xs font-black uppercase ${risk.aiColor}`}>{risk.aiRisk}</span>
                                                 </div>
                                                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -611,7 +598,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                                             {/* GFI */}
                                             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
                                                 <div className="flex justify-between items-center mb-2">
-                                                    <span className="text-xs font-bold text-slate-300">GFI (Forest Fire)</span>
+                                                    <span className="text-xs font-bold text-slate-300">{t.dashboard.gfi}</span>
                                                     <span className={`text-xs font-black uppercase ${risk.gfiColor}`}>{risk.gfiRisk}</span>
                                                 </div>
                                                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -623,7 +610,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                                              {/* KBDI */}
                                              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
                                                 <div className="flex justify-between items-center mb-2">
-                                                    <span className="text-xs font-bold text-slate-300">KBDI (Drought)</span>
+                                                    <span className="text-xs font-bold text-slate-300">{t.dashboard.kbdi}</span>
                                                     <span className={`text-xs font-black uppercase ${risk.kbdiColor}`}>{risk.kbdiRisk}</span>
                                                 </div>
                                                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -639,20 +626,20 @@ export const GISMap: React.FC<GISMapProps> = ({
                             {/* ADVANCED ATMOSPHERIC DATA */}
                             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
                                 <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 flex items-center gap-2">
-                                    <LayersIcon size={14} className="text-blue-400" /> Advanced Atmosphere
+                                    <LayersIcon size={14} className="text-blue-400" /> {t.dashboard.advancedAtmosphere}
                                 </h3>
                                 <div className="grid grid-cols-2 gap-3 text-xs">
                                      {[
-                                        { l: 'Sea Level Press.', v: `${Math.round(forestWeather.hourly.pressure_msl[getCurrentHourIndex(forestWeather)])} hPa`, i: Gauge },
-                                        { l: 'Surface Press.', v: `${Math.round(forestWeather.hourly.surface_pressure[getCurrentHourIndex(forestWeather)])} hPa`, i: ArrowUp },
-                                        { l: 'Visibility', v: `${(forestWeather.hourly.visibility[getCurrentHourIndex(forestWeather)] / 1000).toFixed(1)} km`, i: Eye },
-                                        { l: 'Evapotranspiration', v: `${forestWeather.hourly.evapotranspiration[getCurrentHourIndex(forestWeather)]} mm`, i: Droplets },
-                                        { l: 'ET₀ (Reference)', v: `${forestWeather.hourly.et0_fao_evapotranspiration[getCurrentHourIndex(forestWeather)]} mm`, i: Sprout },
-                                        { l: 'Vapour Press. Def.', v: `${forestWeather.hourly.vapour_pressure_deficit[getCurrentHourIndex(forestWeather)]} kPa`, i: Cloud },
-                                        { l: 'Total Cloud Cover', v: `${forestWeather.hourly.cloud_cover[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
-                                        { l: 'Low Clouds', v: `${forestWeather.hourly.cloud_cover_low[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
-                                        { l: 'Mid Clouds', v: `${forestWeather.hourly.cloud_cover_mid[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
-                                        { l: 'High Clouds', v: `${forestWeather.hourly.cloud_cover_high[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
+                                        { l: t.dashboard.seaLevelPress, v: `${Math.round(forestWeather.hourly.pressure_msl[getCurrentHourIndex(forestWeather)])} hPa`, i: Gauge },
+                                        { l: t.dashboard.surfacePress, v: `${Math.round(forestWeather.hourly.surface_pressure[getCurrentHourIndex(forestWeather)])} hPa`, i: ArrowUp },
+                                        { l: t.dashboard.visibility, v: `${(forestWeather.hourly.visibility[getCurrentHourIndex(forestWeather)] / 1000).toFixed(1)} km`, i: Eye },
+                                        { l: t.dashboard.evapotranspiration, v: `${forestWeather.hourly.evapotranspiration[getCurrentHourIndex(forestWeather)]} mm`, i: Droplets },
+                                        { l: t.dashboard.et0, v: `${forestWeather.hourly.et0_fao_evapotranspiration[getCurrentHourIndex(forestWeather)]} mm`, i: Sprout },
+                                        { l: t.dashboard.vapourPress, v: `${forestWeather.hourly.vapour_pressure_deficit[getCurrentHourIndex(forestWeather)]} kPa`, i: Cloud },
+                                        { l: t.dashboard.cloudCover, v: `${forestWeather.hourly.cloud_cover[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
+                                        { l: t.dashboard.lowClouds, v: `${forestWeather.hourly.cloud_cover_low[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
+                                        { l: t.dashboard.midClouds, v: `${forestWeather.hourly.cloud_cover_mid[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
+                                        { l: t.dashboard.highClouds, v: `${forestWeather.hourly.cloud_cover_high[getCurrentHourIndex(forestWeather)]}%`, i: Cloud },
                                      ].map((item, i) => (
                                          <div key={i} className="flex items-center justify-between p-2 rounded bg-slate-950 border border-slate-800">
                                              <div className="flex items-center gap-2 text-slate-400">
@@ -669,7 +656,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                                 {/* Wind Profile */}
                                 <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
                                     <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
-                                        <Wind size={14} className="text-cyan-400" /> Vertical Wind
+                                        <Wind size={14} className="text-cyan-400" /> {t.dashboard.verticalWind}
                                     </h3>
                                     <div className="space-y-2">
                                         {[180, 120, 80, 10].map(h => {
@@ -692,7 +679,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                                 {/* Soil Profile */}
                                 <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
                                     <h3 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
-                                        <LayersIcon size={14} className="text-amber-600" /> Soil Profile
+                                        <LayersIcon size={14} className="text-amber-600" /> {t.dashboard.soilProfile}
                                     </h3>
                                      <div className="space-y-2">
                                         {[0, 6, 18, 54].map(d => {

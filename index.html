@@ -73,6 +73,21 @@
             background-color: #f1f5f9 !important;
             color: #0f172a !important;
         }
+
+        /* Tooltip Overrides for Custom Hover Cards */
+        .leaflet-tooltip {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            font-size: 0; /* Hides default text handling if any */
+        }
+        .leaflet-tooltip-left:before, 
+        .leaflet-tooltip-right:before, 
+        .leaflet-tooltip-top:before, 
+        .leaflet-tooltip-bottom:before {
+            display: none !important;
+        }
         
         /* Velocity Control Customization */
         .leaflet-control-velocity {
