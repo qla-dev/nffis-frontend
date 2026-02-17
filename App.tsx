@@ -22,8 +22,8 @@ const BASE_LAYER_IDS = [
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     language: Language.EN,
-    // Added MapLayer.WINDY to activeLayers by default
-    activeLayers: new Set([MapLayer.FIRE_RISK, MapLayer.COUNTRY_BORDERS, MapLayer.FORESTS, MapLayer.LANDFILLS, MapLayer.WINDY]),
+    // Removed MapLayer.COUNTRY_BORDERS and added MapLayer.BIH_BORDERS to activeLayers by default
+    activeLayers: new Set([MapLayer.FIRE_RISK, MapLayer.BIH_BORDERS, MapLayer.FORESTS, MapLayer.LANDFILLS, MapLayer.WINDY]),
     incidents: INITIAL_INCIDENTS as any,
     view: 'map',
     isReporting: false,

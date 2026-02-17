@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { X, Send, MapPin, Loader2, AlertCircle, Wind } from 'lucide-react';
 import { IncidentType, Language } from '../../types';
@@ -94,13 +93,13 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
             <div className="text-xs">
               <p className="text-slate-500 font-bold uppercase tracking-tighter">{t.location}</p>
               <p className="text-slate-300 font-mono">
-                {location?.lat.toFixed(4)}, {location?.lng.toFixed(4)}
+                {location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : 'Select location'}
               </p>
             </div>
           </div>
 
           <button
-            disabled={isSubmitting}
+            disabled={isSubmitting || !location}
             type="submit"
             className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
           >
