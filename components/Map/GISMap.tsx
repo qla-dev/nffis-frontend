@@ -167,6 +167,28 @@ export const GISMap: React.FC<GISMapProps> = ({
     return weather.hourly.time.findIndex(t => t.startsWith(currentHourStr));
   };
 
+  // Helper for dynamic header icon
+  const getForestIconElement = (type: RegionType) => {
+    const style = REGION_STYLES[type];
+    const path = ICON_PATHS[style.iconType] || ICON_PATHS.tree;
+    return (
+       <div className={`p-3 rounded-2xl bg-slate-950 border shadow-[0_0_30px_-5px_rgba(0,0,0,0.3)]`} style={{ borderColor: style.color, boxShadow: `0 0 20px ${style.color}20` }}>
+         <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="32" 
+            height="32" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke={style.color} 
+            strokeWidth="2.5" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+            dangerouslySetInnerHTML={{ __html: path }}
+         />
+       </div>
+    );
+  };
+
   return (
     <div className="w-full h-full relative">
       
@@ -203,33 +225,50 @@ export const GISMap: React.FC<GISMapProps> = ({
 
       {/* --- FULL SCREEN WEATHER DASHBOARD OVERLAY --- */}
       {selectedForest && (
-        <div className="fixed inset-0 z-[3000] bg-slate-950/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[3000] bg-slate-950/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-300 md:pl-[60px]">
            
-           {/* Header */}
-           <div className="flex items-center justify-between p-6 border-b border-slate-800 bg-slate-900/50">
-              <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center border border-slate-700 bg-slate-900 shadow-xl`}>
-                     <Trees size={24} className="text-emerald-500" />
+           {/* Header - Centralized with Sidebar Padding */}
+           <div className="flex-none flex items-center justify-center p-6 border-b border-slate-800 bg-slate-900/50 relative min-h-[120px]">
+              
+              {/* Centered Title Group */}
+              <div className="flex flex-col items-center gap-4 animate-in slide-in-from-bottom-4 duration-500 max-w-4xl text-center">
+                  <div className="flex items-center gap-5 justify-center flex-wrap">
+                       {getForestIconElement(selectedForest.type)}
+                       <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight uppercase drop-shadow-[0_0_15px_rgba(0,0,0,0.5)] leading-tight">
+                         {selectedForest.name}
+                       </h2>
                   </div>
-                  <div>
-                      <h2 className="text-2xl font-bold text-white tracking-tight">{selectedForest.name}</h2>
-                      <div className="flex items-center gap-3 text-xs text-slate-400 font-mono mt-1">
-                          <span className="bg-slate-800 px-2 py-0.5 rounded text-blue-400">{selectedForest.coordinates[0].toFixed(4)}, {selectedForest.coordinates[1].toFixed(4)}</span>
-                          <span className="flex items-center gap-1"><LandPlot size={12}/> {selectedForest.area.toLocaleString()} ha</span>
-                          <span className="flex items-center gap-1"><Globe2 size={12}/> {forestWeather?.timezone || 'Loading...'}</span>
-                      </div>
+                  
+                  {/* Metadata Pill */}
+                  <div className="flex flex-wrap justify-center items-center gap-x-6 gap-y-2 text-[10px] md:text-xs font-bold text-slate-400 bg-slate-950/60 px-6 py-2 rounded-full border border-slate-800/60 shadow-inner backdrop-blur-md">
+                      <span className="flex items-center gap-2 text-blue-300">
+                        <MapIcon size={14} className="opacity-70"/> 
+                        <span className="font-mono">{selectedForest.coordinates[0].toFixed(3)}, {selectedForest.coordinates[1].toFixed(3)}</span>
+                      </span>
+                      <div className="hidden md:block w-px h-3 bg-slate-800"></div>
+                      <span className="flex items-center gap-2 text-emerald-400">
+                        <LandPlot size={14} className="opacity-70"/> 
+                        <span>{selectedForest.area.toLocaleString()} ha</span>
+                      </span>
+                      <div className="hidden md:block w-px h-3 bg-slate-800"></div>
+                      <span className="flex items-center gap-2 text-purple-400">
+                        <Globe2 size={14} className="opacity-70"/> 
+                        <span>{forestWeather?.timezone || 'Europe/Sarajevo'}</span>
+                      </span>
                   </div>
               </div>
+
+              {/* Close Button - Absolute Right */}
               <button 
                 onClick={() => setSelectedForest(null)} 
-                className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-900 text-slate-400 hover:text-white hover:bg-red-500/20 hover:border-red-500 border border-slate-800 transition-all"
+                className="absolute right-6 top-6 md:top-1/2 md:-translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full bg-slate-900/80 text-slate-400 hover:text-white hover:bg-red-500/20 hover:border-red-500 border border-slate-800 transition-all shadow-2xl z-50 group backdrop-blur-sm"
               >
-                 <X size={24} />
+                 <X size={24} className="group-hover:rotate-90 transition-transform duration-300" />
               </button>
            </div>
 
            {/* Content */}
-           <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-slate-700">
+           <div className="flex-1 overflow-y-auto p-4 md:p-8 scrollbar-thin scrollbar-thumb-slate-700">
               {loadingWeather || !forestWeather ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
                       <Loader2 size={48} className="animate-spin text-blue-500" />
