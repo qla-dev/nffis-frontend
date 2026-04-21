@@ -1,6 +1,6 @@
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, useMap, Tooltip } from 'react-leaflet';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, Tooltip, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
@@ -62,6 +62,7 @@ interface GISMapProps {
   incidents: IncidentReport[];
   activeLayers: Set<MapLayer>;
   onReportClick: (lat: number, lng: number) => void;
+  onCancelReport: () => void;
   isReporting: boolean;
   onToggleLayer: (layer: MapLayer) => void;
   onSetBaseLayer: (layer: MapLayer | null) => void;
@@ -72,9 +73,17 @@ interface GISMapProps {
 }
 
 export const GISMap: React.FC<GISMapProps> = ({ 
-  incidents, activeLayers, onReportClick, isReporting, onToggleLayer, onSetBaseLayer, isDarkMode, onToggleTheme, language, onSetLanguage
+  incidents, activeLayers, onReportClick, onCancelReport, isReporting, onToggleLayer, onSetBaseLayer, isDarkMode, onToggleTheme, language, onSetLanguage
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const hasAdjustedInitialView = useRef(false);
+  const bihBounds = useMemo(() => GlobalLeaflet.geoJSON(bihBorderData as any).getBounds(), []);
+  const statusPanelRef = useRef<HTMLDivElement | null>(null);
+  const mapControlsRef = useRef<HTMLDivElement | null>(null);
+  const legendPanelRef = useRef<HTMLDivElement | null>(null);
+  const gpsFabRef = useRef<HTMLDivElement | null>(null);
+  const reportingBannerRef = useRef<HTMLDivElement | null>(null);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [showLegend, setShowLegend] = useState(true);
@@ -218,15 +227,119 @@ export const GISMap: React.FC<GISMapProps> = ({
     );
   }, [map]);
 
+  useEffect(() => {
+    if (!map) return;
+
+    const syncMapSize = () => {
+      map.invalidateSize({ animate: false });
+    };
+
+    const applyInitialViewport = () => {
+      if (hasAdjustedInitialView.current) return;
+      if (!mapContainerRef.current) return;
+
+      const containerRect = mapContainerRef.current.getBoundingClientRect();
+      const isMobile = window.innerWidth < 768;
+      const edgeGap = 16;
+      const padding = {
+        top: edgeGap,
+        right: edgeGap,
+        bottom: edgeGap,
+        left: edgeGap,
+      };
+
+      const applyOverlayPadding = (
+        element: HTMLDivElement | null,
+        edges: Array<'top' | 'right' | 'bottom' | 'left'>
+      ) => {
+        if (!element) return;
+
+        const rect = element.getBoundingClientRect();
+
+        if (edges.includes('top')) {
+          padding.top = Math.max(padding.top, Math.max(0, rect.bottom - containerRect.top) + edgeGap);
+        }
+        if (edges.includes('right')) {
+          padding.right = Math.max(padding.right, Math.max(0, containerRect.right - rect.left) + edgeGap);
+        }
+        if (edges.includes('bottom')) {
+          padding.bottom = Math.max(padding.bottom, Math.max(0, containerRect.bottom - rect.top) + edgeGap);
+        }
+        if (edges.includes('left')) {
+          padding.left = Math.max(padding.left, Math.max(0, rect.right - containerRect.left) + edgeGap);
+        }
+      };
+
+      applyOverlayPadding(statusPanelRef.current, isMobile ? ['top', 'left'] : ['top']);
+      applyOverlayPadding(mapControlsRef.current, isMobile ? ['top', 'right'] : ['top']);
+      applyOverlayPadding(legendPanelRef.current, isMobile ? ['bottom', 'left'] : ['left']);
+      applyOverlayPadding(gpsFabRef.current, isMobile ? ['bottom', 'right'] : ['bottom']);
+      applyOverlayPadding(reportingBannerRef.current, ['top']);
+
+      map.fitBounds(bihBounds, {
+        paddingTopLeft: [padding.left, padding.top],
+        paddingBottomRight: [padding.right, padding.bottom],
+        maxZoom: isMobile ? 7 : 8,
+        animate: false
+      });
+      hasAdjustedInitialView.current = true;
+    };
+
+    let firstFrame = 0;
+    let secondFrame = 0;
+    const timeoutId = window.setTimeout(() => {
+      syncMapSize();
+      applyInitialViewport();
+    }, 250);
+
+    firstFrame = window.requestAnimationFrame(() => {
+      syncMapSize();
+      applyInitialViewport();
+      secondFrame = window.requestAnimationFrame(() => {
+        syncMapSize();
+        applyInitialViewport();
+      });
+    });
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined' && mapContainerRef.current
+        ? new ResizeObserver(syncMapSize)
+        : null;
+
+    if (resizeObserver && mapContainerRef.current) {
+      resizeObserver.observe(mapContainerRef.current);
+    }
+
+    window.addEventListener('resize', syncMapSize);
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      window.clearTimeout(timeoutId);
+      window.removeEventListener('resize', syncMapSize);
+      resizeObserver?.disconnect();
+    };
+  }, [bihBounds, isReporting, map, showLegend]);
+
   // Helpers
   const fmtTime = (isoString: string) => new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const fmtDay = (isoString: string) => new Date(isoString).toLocaleDateString([], { weekday: 'short', day: 'numeric' });
 
   // Get current hour index
   const getCurrentHourIndex = (weather: OpenMeteoResponse) => {
-    const now = new Date();
-    const currentHourStr = now.toISOString().slice(0, 13); // Match YYYY-MM-DDTHH
-    return weather.hourly.time.findIndex(t => t.startsWith(currentHourStr));
+    if (!weather.hourly.time.length) return -1;
+
+    // Use the API's own current timestamp so we stay in the same timezone
+    // as the hourly arrays returned by Open-Meteo.
+    const currentHourStr = weather.current.time.slice(0, 13); // YYYY-MM-DDTHH
+    const exactHourIndex = weather.hourly.time.findIndex(t => t.startsWith(currentHourStr));
+
+    if (exactHourIndex !== -1) {
+      return exactHourIndex;
+    }
+
+    const nextAvailableIndex = weather.hourly.time.findIndex(t => t >= weather.current.time);
+    return nextAvailableIndex !== -1 ? nextAvailableIndex : 0;
   };
 
   // Helper for dynamic header icon
@@ -300,11 +413,23 @@ export const GISMap: React.FC<GISMapProps> = ({
     return { ai, aiRisk, aiColor, gfi, gfiRisk, gfiColor, kbdi, kbdiRisk, kbdiColor };
   };
 
+  const ReportLocationPicker = () => {
+    useMapEvents({
+      click(event) {
+        if (!isReporting) return;
+        onReportClick(event.latlng.lat, event.latlng.lng);
+      },
+    });
+
+    return null;
+  };
+
   return (
-    <div className="w-full h-full relative">
+    <div ref={mapContainerRef} className="w-full h-full min-h-0 relative">
       
       {/* MAP CONTAINER */}
       <MapContainer center={BIH_CENTER} zoom={8} className="w-full h-full" ref={setMap} zoomControl={false}>
+        <ReportLocationPicker />
         <TileLayer
             key={activeBaseLayerId || (isDarkMode ? 'dark' : 'light')}
             url={activeBaseLayer ? activeBaseLayer.url : (isDarkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png")}
@@ -326,7 +451,13 @@ export const GISMap: React.FC<GISMapProps> = ({
                  position={forest.coordinates} 
                  icon={getRegionIcon(forest.type)}
                  eventHandlers={{
-                   click: () => setSelectedForest(forest) // Fallback or direct interaction if preferred
+                   click: () => {
+                     if (isReporting) {
+                       onReportClick(forest.coordinates[0], forest.coordinates[1]);
+                       return;
+                     }
+                     setSelectedForest(forest);
+                   }
                  }}
                >
                  <Tooltip direction="top" offset={[0, -20]} opacity={1} interactive>
@@ -717,7 +848,7 @@ export const GISMap: React.FC<GISMapProps> = ({
       )}
 
       {/* Floating Operations Header (Aesthetic) */}
-      <div className="absolute top-4 left-4 md:left-20 z-[2000] pointer-events-none">
+      <div ref={statusPanelRef} className="absolute top-4 left-4 md:left-20 z-[2000] pointer-events-none">
         <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 px-4 py-2 rounded-lg shadow-2xl flex items-center gap-4">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <div className="flex flex-col">
@@ -729,6 +860,7 @@ export const GISMap: React.FC<GISMapProps> = ({
 
       {/* Map Controls */}
       <MapControls 
+        containerRef={mapControlsRef}
         activeLayers={activeLayers} 
         onToggleLayer={onToggleLayer} 
         onSetBaseLayer={onSetBaseLayer}
@@ -741,7 +873,7 @@ export const GISMap: React.FC<GISMapProps> = ({
 
       {/* Stacked Legends Container (Left) */}
       {showLegend && (
-        <div className="absolute bottom-24 left-4 md:bottom-8 md:left-[4.5rem] z-[2000] flex flex-col gap-2 animate-in slide-in-from-left-2 duration-300">
+        <div ref={legendPanelRef} className="absolute bottom-24 left-4 md:bottom-8 md:left-[4.5rem] z-[2000] flex flex-col gap-2 animate-in slide-in-from-left-2 duration-300">
           
           {/* New Classification Legend */}
           <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 p-3 rounded-xl shadow-2xl min-w-[160px]">
@@ -795,7 +927,7 @@ export const GISMap: React.FC<GISMapProps> = ({
       )}
 
       {/* GPS FAB */}
-      <div className="absolute bottom-6 right-6 z-[2000]">
+      <div ref={gpsFabRef} className="absolute bottom-6 right-6 z-[2000]">
         <button 
           onClick={handleLocateMe}
           title="My Location"
@@ -807,11 +939,11 @@ export const GISMap: React.FC<GISMapProps> = ({
 
       {/* Incident Reporting Banner */}
       {isReporting && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[3000] bg-blue-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+        <div ref={reportingBannerRef} className="absolute top-20 left-1/2 -translate-x-1/2 z-[3000] bg-blue-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
           <NavIcon size={16} className="animate-pulse" />
           <span className="text-xs font-black uppercase tracking-widest">TAP MAP TO SELECT INCIDENT COORDINATES</span>
           <div className="h-4 w-px bg-white/20 mx-2" />
-          <button onClick={() => onReportClick(0,0)} className="text-[10px] font-black hover:text-white/80">CANCEL</button>
+          <button onClick={onCancelReport} className="text-[10px] font-black hover:text-white/80">CANCEL</button>
         </div>
       )}
     </div>

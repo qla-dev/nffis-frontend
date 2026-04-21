@@ -117,9 +117,18 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
 
   // Get current hour index
   const getCurrentHourIndex = (w: OpenMeteoResponse) => {
-    const now = new Date();
-    const currentHourStr = now.toISOString().slice(0, 13); // Match YYYY-MM-DDTHH
-    return w.hourly.time.findIndex(t => t.startsWith(currentHourStr));
+    if (!w.hourly.time.length) return -1;
+
+    // Stay aligned with the timezone used by the API response itself.
+    const currentHourStr = w.current.time.slice(0, 13); // YYYY-MM-DDTHH
+    const exactHourIndex = w.hourly.time.findIndex(t => t.startsWith(currentHourStr));
+
+    if (exactHourIndex !== -1) {
+      return exactHourIndex;
+    }
+
+    const nextAvailableIndex = w.hourly.time.findIndex(t => t >= w.current.time);
+    return nextAvailableIndex !== -1 ? nextAvailableIndex : 0;
   };
 
   if (!location) return null;

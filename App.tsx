@@ -40,7 +40,15 @@ const App: React.FC = () => {
   const handleSetView = (view: AppState['view']) => setState(prev => ({ ...prev, view }));
   const handleSetLang = (language: Language) => setState(prev => ({ ...prev, language }));
   const handleToggleTheme = () => setState(prev => ({ ...prev, isDarkMode: !prev.isDarkMode }));
-  const toggleReporting = () => setState(prev => ({ ...prev, isReporting: !prev.isReporting }));
+  const startReporting = () => {
+    setShowModal(false);
+    setReportLocation(null);
+    setState(prev => ({ ...prev, view: 'map', isReporting: true }));
+  };
+  const cancelReporting = () => {
+    setReportLocation(null);
+    setState(prev => ({ ...prev, isReporting: false }));
+  };
 
   const toggleLayer = useCallback((layer: MapLayer) => {
     setState(prev => {
@@ -82,6 +90,7 @@ const App: React.FC = () => {
     };
     setState(prev => ({ ...prev, incidents: [newIncident, ...prev.incidents] }));
     setShowModal(false);
+    setReportLocation(null);
   };
 
   // Filter out base layers for the main "Layers" list view
@@ -89,14 +98,15 @@ const App: React.FC = () => {
 
   return (
     <div className={`flex h-screen w-full overflow-hidden ${state.isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      <Navigation state={state} onSetView={handleSetView} onSetLang={handleSetLang} onOpenReport={toggleReporting} />
+      <Navigation state={state} onSetView={handleSetView} onSetLang={handleSetLang} onOpenReport={startReporting} />
       
-      <main className="flex-1 relative md:ml-auto h-full overflow-hidden transition-all duration-300">
+      <main className="flex-1 relative md:ml-auto h-full min-h-0 min-w-0 overflow-hidden transition-all duration-300">
         {state.view === 'map' && (
           <GISMap 
             incidents={state.incidents} 
             activeLayers={state.activeLayers} 
             onReportClick={handleMapClick} 
+            onCancelReport={cancelReporting}
             isReporting={state.isReporting} 
             onToggleLayer={toggleLayer}
             onSetBaseLayer={setBaseLayer}
@@ -248,7 +258,10 @@ const App: React.FC = () => {
           <ReportModal 
             language={state.language} 
             location={reportLocation} 
-            onClose={() => setShowModal(false)} 
+            onClose={() => {
+              setShowModal(false);
+              setReportLocation(null);
+            }} 
             onSubmit={handleReportSubmit} 
           />
         )}

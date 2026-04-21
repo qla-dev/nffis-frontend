@@ -13,6 +13,7 @@ interface MapControlsProps {
   showLegend: boolean;
   onToggleLegend: () => void;
   language: Language;
+  containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export const MapControls: React.FC<MapControlsProps> = ({
@@ -23,7 +24,8 @@ export const MapControls: React.FC<MapControlsProps> = ({
   onToggleTheme,
   showLegend,
   onToggleLegend,
-  language
+  language,
+  containerRef
 }) => {
   const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | null>(null);
   const t = TRANSLATIONS[language];
@@ -42,7 +44,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
   ].some(l => activeLayers.has(l));
 
   return (
-    <div className="absolute top-4 right-4 z-[2000] flex flex-col items-end gap-2">
+    <div ref={containerRef} className="absolute top-4 right-4 z-[2000] flex flex-col items-end gap-2">
       {/* HORIZONTAL Control Cluster */}
       <div className="bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-xl shadow-2xl p-1 flex items-center gap-1">
         {/* Theme */}
