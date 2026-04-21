@@ -415,13 +415,24 @@ export const INITIAL_INCIDENTS: IncidentReport[] = [
   {
     id: 'inc-001',
     type: IncidentType.FIRE,
-    lat: 43.8563,
-    lng: 18.4131,
-    description: 'Smoke reported near Trebević peak, strong wind carrying it north.',
+    lat: 44.7347,
+    lng: 18.0878,
+    description: 'Smoke and elevated surface heat reported on the Ozren slopes near Doboj.',
     timestamp: Date.now() - 3600000,
     urgency: 'high',
-    windDirection: 180,
-    windSpeed: 25
+    windDirection: 165,
+    windSpeed: 22
+  },
+  {
+    id: 'inc-003',
+    type: IncidentType.FIRE,
+    lat: 44.9794,
+    lng: 16.7144,
+    description: 'Active fire-risk hotspot flagged west of Prijedor toward the Kozara approach.',
+    timestamp: Date.now() - 5400000,
+    urgency: 'medium',
+    windDirection: 210,
+    windSpeed: 18
   },
   {
     id: 'inc-002',

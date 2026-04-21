@@ -1,7 +1,8 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, Tooltip, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
+import 'leaflet.heat';
 import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteoResponse, ForestRegion } from '../../types';
@@ -10,6 +11,18 @@ import { MapControls } from './MapControls';
 import { ForestHoverCard } from './ForestHoverCard';
 
 const GlobalLeaflet = (L as any).default || L;
+const FIRE_HEAT_GRADIENT = {
+  0.2: '#f59e0b',
+  0.45: '#f97316',
+  0.7: '#ef4444',
+  1.0: '#7f1d1d',
+};
+const FLOOD_HEAT_GRADIENT = {
+  0.2: '#60a5fa',
+  0.45: '#3b82f6',
+  0.7: '#2563eb',
+  1.0: '#1e3a8a',
+};
 
 // --- ICONS & STYLES ---
 const ICON_PATHS: Record<string, string> = {
@@ -129,6 +142,14 @@ export const GISMap: React.FC<GISMapProps> = ({
       }
       return activeBaseLayerId ? BASE_LAYER_CONFIG[activeBaseLayerId] : null;
   }, [activeBaseLayerId, meteoblueUrl]);
+  const fireIncidents = useMemo(
+    () => incidents.filter(incident => incident.type === IncidentType.FIRE),
+    [incidents]
+  );
+  const floodIncidents = useMemo(
+    () => incidents.filter(incident => incident.type === IncidentType.FLOOD),
+    [incidents]
+  );
 
   // Fetch Meteoblue Tile URL
   useEffect(() => {
@@ -413,6 +434,12 @@ export const GISMap: React.FC<GISMapProps> = ({
     return { ai, aiRisk, aiColor, gfi, gfiRisk, gfiColor, kbdi, kbdiRisk, kbdiColor };
   };
 
+  const getIncidentIntensity = (incident: IncidentReport) => {
+    if (incident.urgency === 'high') return 1;
+    if (incident.urgency === 'medium') return 0.7;
+    return 0.45;
+  };
+
   const ReportLocationPicker = () => {
     useMapEvents({
       click(event) {
@@ -420,6 +447,99 @@ export const GISMap: React.FC<GISMapProps> = ({
         onReportClick(event.latlng.lat, event.latlng.lng);
       },
     });
+
+    return null;
+  };
+
+  const ThreatHeatmapLayer: React.FC<{
+    data: IncidentReport[];
+    gradient: Record<number, string>;
+    radius: number;
+    blur: number;
+    visible: boolean;
+  }> = ({ data, gradient, radius, blur, visible }) => {
+    const map = useMap();
+    const heatLayerRef = useRef<L.HeatLayer | null>(null);
+    const retryFrameRef = useRef<number | null>(null);
+
+    useEffect(() => {
+      const clearRetryFrame = () => {
+        if (retryFrameRef.current !== null) {
+          window.cancelAnimationFrame(retryFrameRef.current);
+          retryFrameRef.current = null;
+        }
+      };
+
+      const removeHeatLayer = () => {
+        if (!heatLayerRef.current) return;
+        heatLayerRef.current.remove();
+        heatLayerRef.current = null;
+      };
+
+      const syncHeatLayer = () => {
+        clearRetryFrame();
+
+        if (!visible || data.length === 0) {
+          removeHeatLayer();
+          return;
+        }
+
+        const mapSize = map.getSize();
+        if (mapSize.x <= 0 || mapSize.y <= 0) {
+          retryFrameRef.current = window.requestAnimationFrame(syncHeatLayer);
+          return;
+        }
+
+        const heatPoints: L.HeatLatLngTuple[] = data.map((incident) => [
+          incident.lat,
+          incident.lng,
+          getIncidentIntensity(incident),
+        ]);
+
+        if (!heatLayerRef.current) {
+          heatLayerRef.current = L.heatLayer([], {
+            radius,
+            blur,
+            maxZoom: 10,
+            minOpacity: 0.35,
+            gradient,
+          });
+        } else {
+          heatLayerRef.current.setOptions({
+            radius,
+            blur,
+            maxZoom: 10,
+            minOpacity: 0.35,
+            gradient,
+          });
+        }
+
+        heatLayerRef.current.setLatLngs(heatPoints);
+
+        if (!map.hasLayer(heatLayerRef.current)) {
+          try {
+            heatLayerRef.current.addTo(map);
+          } catch (error) {
+            console.error('Heatmap layer failed to initialize; retrying after resize.', error);
+            removeHeatLayer();
+            retryFrameRef.current = window.requestAnimationFrame(syncHeatLayer);
+          }
+        }
+      };
+
+      const handleMapResize = () => {
+        syncHeatLayer();
+      };
+
+      syncHeatLayer();
+      map.on('resize', handleMapResize);
+
+      return () => {
+        clearRetryFrame();
+        map.off('resize', handleMapResize);
+        removeHeatLayer();
+      };
+    }, [blur, data, gradient, map, radius, visible]);
 
     return null;
   };
@@ -435,6 +555,20 @@ export const GISMap: React.FC<GISMapProps> = ({
             url={activeBaseLayer ? activeBaseLayer.url : (isDarkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png")}
             attribution={activeBaseLayer?.attribution}
             opacity={activeBaseLayerId === MapLayer.METEOBLUE ? 0.7 : 1}
+        />
+        <ThreatHeatmapLayer
+          data={fireIncidents}
+          gradient={FIRE_HEAT_GRADIENT}
+          radius={30}
+          blur={24}
+          visible={activeLayers.has(MapLayer.FIRE_RISK)}
+        />
+        <ThreatHeatmapLayer
+          data={floodIncidents}
+          gradient={FLOOD_HEAT_GRADIENT}
+          radius={34}
+          blur={28}
+          visible={activeLayers.has(MapLayer.FLOOD_RISK)}
         />
         {activeLayers.has(MapLayer.BIH_BORDERS) && (
           <GeoJSON data={bihBorderData as any} style={{ color: '#ec4899', weight: 2, fill: false, opacity: 0.6 }} />
