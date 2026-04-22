@@ -27,6 +27,7 @@ interface FWIGeoTiffLayerProps<TPoint extends FwiRasterPoint> {
   debugLabel?: string;
   opacity?: number;
   influenceRadius?: number;
+  pane?: string;
 }
 
 const NO_DATA_VALUE = -9999;
@@ -92,6 +93,7 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
   debugLabel = colorScaleName,
   opacity = 0.72,
   influenceRadius = 0.42,
+  pane,
 }: FWIGeoTiffLayerProps<TPoint>) => {
   const map = useMap();
   const layerRef = useRef<any>(null);
@@ -205,6 +207,7 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
           [raster.north, raster.east],
         ],
         opacity,
+        pane,
         renderer: leafletWithRaster.LeafletGeotiff.plotty({
           clampLow: true,
           clampHigh: true,
@@ -238,6 +241,7 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
     influenceRadius,
     map,
     opacity,
+    pane,
     points,
     rasterBounds,
     serializedPoints,

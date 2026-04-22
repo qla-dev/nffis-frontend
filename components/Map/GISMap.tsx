@@ -26,6 +26,8 @@ const FLOOD_HEAT_GRADIENT = {
   0.7: '#2563eb',
   1.0: '#1e3a8a',
 };
+const FWI_OVERLAY_PANE = 'fwi-overlay-pane';
+const METEOBLUE_OVERLAY_PANE = 'meteoblue-overlay-pane';
 
 // --- ICONS & STYLES ---
 const ICON_PATHS: Record<string, string> = {
@@ -137,6 +139,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [forecastMode, setForecastMode] = useState<'hourly' | 'daily'>('hourly');
   const [forestFwiData, setForestFwiData] = useState<ForestFireIndexSnapshot[]>([]);
   const [isLoadingFwi, setIsLoadingFwi] = useState(false);
+  const [isMeteoblueUnavailable, setIsMeteoblueUnavailable] = useState(false);
 
   // -- METEOBLUE DYNAMIC STATE --
   const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
@@ -162,17 +165,23 @@ export const GISMap: React.FC<GISMapProps> = ({
     };
   };
 
+  const isMeteoblueActive = activeLayers.has(MapLayer.METEOBLUE);
+
   // Derive Active Base Layer Object
   const activeBaseLayerId = useMemo(() => {
-    return Object.values(MapLayer).find(layer => activeLayers.has(layer) && (BASE_LAYER_CONFIG[layer] || layer === MapLayer.METEOBLUE));
+    return Object.values(MapLayer).find(
+      (layer) => layer !== MapLayer.METEOBLUE && activeLayers.has(layer) && BASE_LAYER_CONFIG[layer]
+    );
   }, [activeLayers]);
   
   const activeBaseLayer = useMemo(() => {
-      if (activeBaseLayerId === MapLayer.METEOBLUE && meteoblueUrl) {
-          return { url: meteoblueUrl, attribution: 'Meteoblue' };
+      if (activeBaseLayerId) {
+          return BASE_LAYER_CONFIG[activeBaseLayerId];
       }
-      return activeBaseLayerId ? BASE_LAYER_CONFIG[activeBaseLayerId] : null;
-  }, [activeBaseLayerId, meteoblueUrl]);
+      return null;
+  }, [activeBaseLayerId]);
+  const activeBaseLayerKey = activeBaseLayerId ?? (isDarkMode ? 'dark' : 'light');
+  const shouldRenderStandaloneMeteoblue = isMeteoblueActive && !isMeteoblueUnavailable;
   const fireIncidents = useMemo(
     () => incidents.filter(incident => incident.type === IncidentType.FIRE),
     [incidents]
@@ -201,13 +210,31 @@ export const GISMap: React.FC<GISMapProps> = ({
     }),
     [bihBounds]
   );
+  const meteoblueBounds = useMemo(
+    () =>
+      [
+        [bihBounds.getSouth() - 0.15, bihBounds.getWest() - 0.15],
+        [bihBounds.getNorth() + 0.15, bihBounds.getEast() + 0.15],
+      ] as L.LatLngBoundsExpression,
+    [bihBounds]
+  );
+  const handleMeteoblueTileError = useCallback(() => {
+    setIsMeteoblueUnavailable(true);
+  }, []);
 
-  // Fetch Meteoblue Tile URL
+  // Fetch Meteoblue Tile URL only when the layer is requested.
   useEffect(() => {
+    if (!isMeteoblueActive || meteoblueUrl) {
+      return;
+    }
+
     const fetchMeteoblue = async () => {
         try {
             const apiKey = "be72f76237db";
             const response = await fetch(`https://maps-api.meteoblue.com/v1/time/hourly/ICONAUTO?lang=en&apikey=${apiKey}`);
+            if (!response.ok) {
+              throw new Error(`Meteoblue config request failed with status ${response.status}`);
+            }
             const data = await response.json();
             const date = data.current;
             const url = `https://maps-api.meteoblue.com/v1/map/raster/ICONAUTO/${date}/` +
@@ -240,10 +267,41 @@ export const GISMap: React.FC<GISMapProps> = ({
             setMeteoblueUrl(url);
         } catch (e) {
             console.error("Failed to fetch Meteoblue config", e);
+            setIsMeteoblueUnavailable(true);
         }
     };
     fetchMeteoblue();
-  }, []);
+  }, [isMeteoblueActive, meteoblueUrl]);
+
+  useEffect(() => {
+    if (!isMeteoblueActive) {
+      setIsMeteoblueUnavailable(false);
+    }
+  }, [isMeteoblueActive]);
+
+  useEffect(() => {
+    if (!isMeteoblueActive || !isMeteoblueUnavailable) {
+      return;
+    }
+
+    console.warn('Meteoblue tiles unavailable; disabling Meteoblue overlay.');
+    onToggleLayer(MapLayer.METEOBLUE);
+  }, [isMeteoblueActive, isMeteoblueUnavailable, onToggleLayer]);
+
+  useEffect(() => {
+    if (!map) {
+      return;
+    }
+
+    const ensurePane = (name: string, zIndex: number) => {
+      const pane = map.getPane(name) ?? map.createPane(name);
+      pane.style.zIndex = `${zIndex}`;
+      pane.style.pointerEvents = 'none';
+    };
+
+    ensurePane(FWI_OVERLAY_PANE, 360);
+    ensurePane(METEOBLUE_OVERLAY_PANE, 380);
+  }, [map]);
 
   // Fetch Weather from Open-Meteo with Advanced Params
   useEffect(() => {
@@ -780,12 +838,28 @@ export const GISMap: React.FC<GISMapProps> = ({
       {/* MAP CONTAINER */}
       <MapContainer center={BIH_CENTER} zoom={8} className="w-full h-full" ref={setMap} zoomControl={false}>
         <ReportLocationPicker />
-        <TileLayer
-            key={activeBaseLayerId || (isDarkMode ? 'dark' : 'light')}
-            url={activeBaseLayer ? activeBaseLayer.url : (isDarkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png")}
-            attribution={activeBaseLayer?.attribution}
-            opacity={activeBaseLayerId === MapLayer.METEOBLUE ? 0.7 : 1}
-        />
+        {!shouldRenderStandaloneMeteoblue && (
+          <TileLayer
+              key={activeBaseLayerKey}
+              url={activeBaseLayer ? activeBaseLayer.url : (isDarkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png")}
+              attribution={activeBaseLayer?.attribution}
+          />
+        )}
+        {shouldRenderStandaloneMeteoblue && meteoblueUrl && (
+          <TileLayer
+            key={`meteoblue-${meteoblueUrl}`}
+            url={meteoblueUrl}
+            attribution="Meteoblue"
+            opacity={0.78}
+            pane={METEOBLUE_OVERLAY_PANE}
+            zIndex={380}
+            bounds={meteoblueBounds}
+            keepBuffer={0}
+            updateWhenIdle={true}
+            updateWhenZooming={false}
+            eventHandlers={{ tileerror: handleMeteoblueTileError }}
+          />
+        )}
         <ThreatHeatmapLayer
           data={fireIncidents}
           gradient={FIRE_HEAT_GRADIENT}
@@ -804,16 +878,19 @@ export const GISMap: React.FC<GISMapProps> = ({
         <AngstromHeatLayer
           points={forestFwiData}
           rasterBounds={fwiRasterBounds}
+          pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_ANGSTROM)}
         />
         <GFIHeatLayer
           points={forestFwiData}
           rasterBounds={fwiRasterBounds}
+          pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_GFI)}
         />
         <KBDIHeatLayer
           points={forestFwiData}
           rasterBounds={fwiRasterBounds}
+          pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_KBDI)}
         />
         {activeLayers.has(MapLayer.BIH_BORDERS) && (
@@ -841,7 +918,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                  }}
                >
                  <Tooltip direction="top" offset={[0, -20]} opacity={1} interactive>
-                    <ForestHoverCard forest={forest} language={language} onExpand={() => setSelectedForest(forest)} />
+                    <ForestHoverCard forest={forest} language={language} />
                  </Tooltip>
                </Marker>
              );

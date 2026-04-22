@@ -5,7 +5,7 @@ export const BIH_CENTER: [number, number] = [44.1, 17.9];
 
 export const TRANSLATIONS = {
   [Language.EN]: {
-    appName: 'Forest Guard',
+    appName: 'NFFIS',
     map: 'Map',
     reports: 'Reports',
     stats: 'Statistics',
@@ -140,7 +140,7 @@ export const TRANSLATIONS = {
     }
   },
   [Language.BS]: {
-    appName: 'Šumska Straža',
+    appName: 'NFFIS',
     map: 'Mapa',
     reports: 'Izvještaji',
     stats: 'Statistika',
@@ -275,7 +275,7 @@ export const TRANSLATIONS = {
     }
   },
   [Language.JA]: {
-    appName: 'Forest Guard',
+    appName: 'NFFIS',
     map: '地図',
     reports: 'レポート',
     stats: '統計',

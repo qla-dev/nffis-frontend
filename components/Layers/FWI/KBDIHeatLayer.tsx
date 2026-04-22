@@ -14,12 +14,14 @@ interface KBDIHeatLayerProps {
     south: number;
     north: number;
   };
+  pane?: string;
   visible: boolean;
 }
 
 export const KBDIHeatLayer: React.FC<KBDIHeatLayerProps> = ({
   points,
   rasterBounds,
+  pane,
   visible,
 }) => {
   const getKbdiValue = useCallback(
@@ -39,6 +41,7 @@ export const KBDIHeatLayer: React.FC<KBDIHeatLayerProps> = ({
       debugLabel="KBDI"
       opacity={0.72}
       influenceRadius={1.05}
+      pane={pane}
     />
   );
 };

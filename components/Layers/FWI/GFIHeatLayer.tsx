@@ -14,10 +14,11 @@ interface GFIHeatLayerProps {
     south: number;
     north: number;
   };
+  pane?: string;
   visible: boolean;
 }
 
-export const GFIHeatLayer: React.FC<GFIHeatLayerProps> = ({ points, rasterBounds, visible }) => {
+export const GFIHeatLayer: React.FC<GFIHeatLayerProps> = ({ points, rasterBounds, pane, visible }) => {
   const getGfiValue = useCallback((point: GFIHeatLayerProps['points'][number]) => point.gfi, []);
 
   return (
@@ -32,6 +33,7 @@ export const GFIHeatLayer: React.FC<GFIHeatLayerProps> = ({ points, rasterBounds
       debugLabel="GFI"
       opacity={0.72}
       influenceRadius={0.95}
+      pane={pane}
     />
   );
 };

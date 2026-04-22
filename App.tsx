@@ -13,7 +13,6 @@ const BASE_LAYER_IDS = [
   MapLayer.SATELLITE_GOOGLE,
   MapLayer.SENTINEL,
   MapLayer.INFRARED,
-  MapLayer.METEOBLUE,
   MapLayer.NASA_FIRMS,
   MapLayer.THERMAL,
   MapLayer.TERRAIN,
@@ -122,7 +121,9 @@ const App: React.FC = () => {
   };
 
   // Filter out base layers for the main "Layers" list view
-  const overlayLayers = Object.values(MapLayer).filter(layer => !BASE_LAYER_IDS.includes(layer));
+  const overlayLayers = Object.values(MapLayer).filter(
+    (layer) => !BASE_LAYER_IDS.includes(layer) && layer !== MapLayer.METEOBLUE
+  );
 
   return (
     <div className={`flex h-screen w-full overflow-hidden ${state.isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>

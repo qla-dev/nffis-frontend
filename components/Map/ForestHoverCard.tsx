@@ -1,16 +1,15 @@
 
 import React from 'react';
-import { ChevronRight, Activity, ShieldAlert, Trees } from 'lucide-react';
+import { Activity, ShieldAlert, Trees } from 'lucide-react';
 import { ForestRegion, Language } from '../../types';
 import { REGION_STYLES, TRANSLATIONS } from '../../constants';
 
 interface ForestHoverCardProps {
   forest: ForestRegion;
-  onExpand: () => void;
   language: Language;
 }
 
-export const ForestHoverCard: React.FC<ForestHoverCardProps> = ({ forest, onExpand, language }) => {
+export const ForestHoverCard: React.FC<ForestHoverCardProps> = ({ forest, language }) => {
   const style = REGION_STYLES[forest.type];
   const t = TRANSLATIONS[language];
 
@@ -40,7 +39,7 @@ export const ForestHoverCard: React.FC<ForestHoverCardProps> = ({ forest, onExpa
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-2 mb-4">
+        <div className="grid grid-cols-2 gap-2">
            <div className="bg-slate-900/50 p-2 rounded-lg border border-slate-800">
               <span className="block text-[9px] text-slate-500 uppercase font-bold">{t.dashboard.area}</span>
               <span className="block text-xs font-mono text-slate-300">{forest.area.toLocaleString()} ha</span>
@@ -52,18 +51,6 @@ export const ForestHoverCard: React.FC<ForestHoverCardProps> = ({ forest, onExpa
               </span>
            </div>
         </div>
-
-        {/* Action Button */}
-        <button 
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent map click
-            onExpand();
-          }}
-          className="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-[10px] font-bold py-2 rounded-lg flex items-center justify-center gap-2 transition-colors group"
-        >
-          <span>{t.dashboard.fullData}</span>
-          <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
-        </button>
       </div>
     </div>
   );

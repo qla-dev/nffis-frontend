@@ -39,9 +39,14 @@ export const MapControls: React.FC<MapControlsProps> = ({
   // List of known base layers to check if any is active for the main button state
   const isAnyBaseLayerActive = [
     MapLayer.SATELLITE, MapLayer.SATELLITE_CLARITY, MapLayer.SATELLITE_GOOGLE,
-    MapLayer.SENTINEL, MapLayer.INFRARED, MapLayer.METEOBLUE, MapLayer.NASA_FIRMS,
+    MapLayer.SENTINEL, MapLayer.INFRARED, MapLayer.NASA_FIRMS,
     MapLayer.THERMAL, MapLayer.WINDY, MapLayer.TERRAIN
   ].some(l => activeLayers.has(l));
+  const activeFwiLayer = [
+    MapLayer.FWI_ANGSTROM,
+    MapLayer.FWI_GFI,
+    MapLayer.FWI_KBDI
+  ].find((layer) => activeLayers.has(layer)) ?? null;
   const isAnyFwiActive = [
     MapLayer.FWI_ANGSTROM,
     MapLayer.FWI_GFI,
@@ -81,7 +86,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
 
         {/* Meteoblue Temp Toggle */}
         <button 
-          onClick={() => activeLayers.has(MapLayer.METEOBLUE) ? onSetBaseLayer(MapLayer.SATELLITE_CLARITY) : onSetBaseLayer(MapLayer.METEOBLUE)} 
+          onClick={() => onToggleLayer(MapLayer.METEOBLUE)}
           className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.METEOBLUE) ? 'text-blue-400 bg-blue-950/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
           title="Meteoblue Temperature"
         >
@@ -91,10 +96,10 @@ export const MapControls: React.FC<MapControlsProps> = ({
         {/* FWI */}
         <button 
           onClick={() => togglePanel('fwi')}
-          className={`px-3 py-2.5 rounded-lg transition-colors ${activePanel === 'fwi' || isAnyFwiActive ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+          className={`inline-flex items-center justify-center px-3 py-2.5 rounded-lg leading-none transition-colors ${activePanel === 'fwi' || isAnyFwiActive ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
           title="FWI"
         >
-          <span className="text-[11px] font-black tracking-[0.18em]">FWI</span>
+          <span className="text-[11px] font-black leading-none tracking-[0.18em]">FWI</span>
         </button>
 
         <div className="w-px h-6 bg-slate-800 mx-1" />
@@ -274,26 +279,39 @@ export const MapControls: React.FC<MapControlsProps> = ({
             </h4>
             <div className="space-y-1">
               {[
+                { id: null, label: 'Off', icon: X, color: 'text-slate-400' },
                 { id: MapLayer.FWI_ANGSTROM, label: t.dashboard.angstrom, icon: Flame, color: 'text-red-500' },
                 { id: MapLayer.FWI_GFI, label: t.dashboard.gfi, icon: Trees, color: 'text-emerald-500' },
                 { id: MapLayer.FWI_KBDI, label: t.dashboard.kbdi, icon: Thermometer, color: 'text-amber-400' },
               ].map((layer) => (
                 <button
-                  key={layer.id}
-                  onClick={() => onToggleLayer(layer.id)}
+                  key={layer.id ?? 'fwi-off'}
+                  onClick={() => {
+                    if (layer.id) {
+                      onToggleLayer(layer.id);
+                      return;
+                    }
+
+                    if (activeFwiLayer) {
+                      onToggleLayer(activeFwiLayer);
+                    }
+                  }}
                   className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
-                    activeLayers.has(layer.id)
+                    layer.id ? activeLayers.has(layer.id) : !activeFwiLayer
                       ? 'bg-blue-600/10 border-blue-600/50'
                       : 'bg-slate-900/50 border-transparent hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <layer.icon size={16} className={activeLayers.has(layer.id) ? layer.color : 'text-slate-600'} />
-                    <span className={`text-[11px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>
+                    <layer.icon
+                      size={16}
+                      className={layer.id ? (activeLayers.has(layer.id) ? layer.color : 'text-slate-600') : (!activeFwiLayer ? layer.color : 'text-slate-600')}
+                    />
+                    <span className={`text-[11px] font-bold ${layer.id ? (activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500') : (!activeFwiLayer ? 'text-white' : 'text-slate-500')}`}>
                       {layer.label}
                     </span>
                   </div>
-                  {activeLayers.has(layer.id) && <ShieldCheck size={12} className="text-blue-500" />}
+                  {(layer.id ? activeLayers.has(layer.id) : !activeFwiLayer) && <ShieldCheck size={12} className="text-blue-500" />}
                 </button>
               ))}
             </div>

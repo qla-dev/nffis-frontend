@@ -14,12 +14,14 @@ interface AngstromHeatLayerProps {
     south: number;
     north: number;
   };
+  pane?: string;
   visible: boolean;
 }
 
 export const AngstromHeatLayer: React.FC<AngstromHeatLayerProps> = ({
   points,
   rasterBounds,
+  pane,
   visible,
 }) => {
   const getAngstromSeverity = useCallback(
@@ -39,6 +41,7 @@ export const AngstromHeatLayer: React.FC<AngstromHeatLayerProps> = ({
       debugLabel="Angstrom"
       opacity={0.74}
       influenceRadius={0.9}
+      pane={pane}
     />
   );
 };
