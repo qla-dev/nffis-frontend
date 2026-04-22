@@ -27,10 +27,10 @@ export const MapControls: React.FC<MapControlsProps> = ({
   language,
   containerRef
 }) => {
-  const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | null>(null);
+  const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | 'fwi' | null>(null);
   const t = TRANSLATIONS[language];
 
-  const togglePanel = (panel: 'assets' | 'layers' | 'satellite') => {
+  const togglePanel = (panel: 'assets' | 'layers' | 'satellite' | 'fwi') => {
     setActivePanel(activePanel === panel ? null : panel);
   };
 
@@ -42,6 +42,11 @@ export const MapControls: React.FC<MapControlsProps> = ({
     MapLayer.SENTINEL, MapLayer.INFRARED, MapLayer.METEOBLUE, MapLayer.NASA_FIRMS,
     MapLayer.THERMAL, MapLayer.WINDY, MapLayer.TERRAIN
   ].some(l => activeLayers.has(l));
+  const isAnyFwiActive = [
+    MapLayer.FWI_ANGSTROM,
+    MapLayer.FWI_GFI,
+    MapLayer.FWI_KBDI
+  ].some((layer) => activeLayers.has(layer));
 
   return (
     <div ref={containerRef} className="absolute top-4 right-4 z-[2000] flex flex-col items-end gap-2">
@@ -83,13 +88,13 @@ export const MapControls: React.FC<MapControlsProps> = ({
           <ThermometerSun size={18} className={activeLayers.has(MapLayer.METEOBLUE) ? 'animate-pulse' : ''} />
         </button>
 
-        {/* Heat Index */}
+        {/* FWI */}
         <button 
-          onClick={() => onToggleLayer(MapLayer.WEATHER_TEMP)} 
-          className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.WEATHER_TEMP) ? 'text-orange-500 bg-orange-950/30 shadow-[0_0_10px_rgba(249,115,22,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
-          title={t.heatIndex}
+          onClick={() => togglePanel('fwi')}
+          className={`px-3 py-2.5 rounded-lg transition-colors ${activePanel === 'fwi' || isAnyFwiActive ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+          title="FWI"
         >
-          <Thermometer size={18} className={activeLayers.has(MapLayer.WEATHER_TEMP) ? 'animate-pulse' : ''} />
+          <span className="text-[11px] font-black tracking-[0.18em]">FWI</span>
         </button>
 
         <div className="w-px h-6 bg-slate-800 mx-1" />
@@ -255,6 +260,42 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 <Wind size={20} className={isBaseLayerActive(MapLayer.WINDY) ? 'text-blue-500' : 'text-slate-500'} />
                 <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Windy</span>
               </button>
+            </div>
+          </div>
+        )}
+
+        {activePanel === 'fwi' && (
+          <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200">
+            <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+              FWI
+              <button onClick={() => setActivePanel(null)} className="hover:text-white">
+                <X size={14} />
+              </button>
+            </h4>
+            <div className="space-y-1">
+              {[
+                { id: MapLayer.FWI_ANGSTROM, label: t.dashboard.angstrom, icon: Flame, color: 'text-red-500' },
+                { id: MapLayer.FWI_GFI, label: t.dashboard.gfi, icon: Trees, color: 'text-emerald-500' },
+                { id: MapLayer.FWI_KBDI, label: t.dashboard.kbdi, icon: Thermometer, color: 'text-amber-400' },
+              ].map((layer) => (
+                <button
+                  key={layer.id}
+                  onClick={() => onToggleLayer(layer.id)}
+                  className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
+                    activeLayers.has(layer.id)
+                      ? 'bg-blue-600/10 border-blue-600/50'
+                      : 'bg-slate-900/50 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <layer.icon size={16} className={activeLayers.has(layer.id) ? layer.color : 'text-slate-600'} />
+                    <span className={`text-[11px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>
+                      {layer.label}
+                    </span>
+                  </div>
+                  {activeLayers.has(layer.id) && <ShieldCheck size={12} className="text-blue-500" />}
+                </button>
+              ))}
             </div>
           </div>
         )}

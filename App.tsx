@@ -20,6 +20,14 @@ const BASE_LAYER_IDS = [
   MapLayer.WINDY
 ];
 
+const FWI_LAYER_IDS = [
+  MapLayer.FWI_ANGSTROM,
+  MapLayer.FWI_GFI,
+  MapLayer.FWI_KBDI
+];
+
+const FWI_DEBUG_PREFIX = '[FWI DEBUG]';
+
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     language: Language.EN,
@@ -53,6 +61,26 @@ const App: React.FC = () => {
   const toggleLayer = useCallback((layer: MapLayer) => {
     setState(prev => {
       const newLayers = new Set(prev.activeLayers);
+
+      if (FWI_LAYER_IDS.includes(layer)) {
+        const isAlreadyActive = newLayers.has(layer);
+        const activeBefore = FWI_LAYER_IDS.filter(id => newLayers.has(id));
+        FWI_LAYER_IDS.forEach(id => newLayers.delete(id));
+        if (!isAlreadyActive) {
+          newLayers.add(layer);
+        }
+
+        const activeAfter = FWI_LAYER_IDS.filter(id => newLayers.has(id));
+        console.info(FWI_DEBUG_PREFIX, 'toggleLayer(FWI)', {
+          clickedLayer: layer,
+          wasAlreadyActive: isAlreadyActive,
+          activeBefore,
+          activeAfter,
+        });
+
+        return { ...prev, activeLayers: newLayers };
+      }
+
       if (newLayers.has(layer)) {
         newLayers.delete(layer);
       } else {

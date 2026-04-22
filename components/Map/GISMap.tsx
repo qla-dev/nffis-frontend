@@ -9,12 +9,15 @@ import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteo
 import { bihBorderData } from '../../bihData';
 import { MapControls } from './MapControls';
 import { ForestHoverCard } from './ForestHoverCard';
+import { AngstromHeatLayer } from '../Layers/FWI/AngstromHeatLayer';
+import { GFIHeatLayer } from '../Layers/FWI/GFIHeatLayer';
+import { KBDIHeatLayer } from '../Layers/FWI/KBDIHeatLayer';
 
 const GlobalLeaflet = (L as any).default || L;
 const FIRE_HEAT_GRADIENT = {
-  0.2: '#f59e0b',
-  0.45: '#f97316',
-  0.7: '#ef4444',
+  0.12: '#fde68a',
+  0.32: '#fb923c',
+  0.62: '#ef4444',
   1.0: '#7f1d1d',
 };
 const FLOOD_HEAT_GRADIENT = {
@@ -85,6 +88,32 @@ interface GISMapProps {
   onSetLanguage: (lang: Language) => void;
 }
 
+interface FireIndexWeatherData {
+  current: {
+    time: string;
+  };
+  hourly: {
+    time: string[];
+    temperature_2m: number[];
+    relative_humidity_2m: number[];
+    wind_speed_10m: number[];
+  };
+  daily: {
+    precipitation_sum: number[];
+  };
+}
+
+interface ForestFireIndexSnapshot {
+  id: string;
+  lat: number;
+  lng: number;
+  angstrom: number;
+  gfi: number;
+  kbdi: number;
+}
+
+const FWI_DEBUG_PREFIX = '[FWI DEBUG][GISMap]';
+
 export const GISMap: React.FC<GISMapProps> = ({ 
   incidents, activeLayers, onReportClick, onCancelReport, isReporting, onToggleLayer, onSetBaseLayer, isDarkMode, onToggleTheme, language, onSetLanguage
 }) => {
@@ -106,6 +135,8 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [forestWeather, setForestWeather] = useState<OpenMeteoResponse | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [forecastMode, setForecastMode] = useState<'hourly' | 'daily'>('hourly');
+  const [forestFwiData, setForestFwiData] = useState<ForestFireIndexSnapshot[]>([]);
+  const [isLoadingFwi, setIsLoadingFwi] = useState(false);
 
   // -- METEOBLUE DYNAMIC STATE --
   const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
@@ -149,6 +180,26 @@ export const GISMap: React.FC<GISMapProps> = ({
   const floodIncidents = useMemo(
     () => incidents.filter(incident => incident.type === IncidentType.FLOOD),
     [incidents]
+  );
+  const isAnyFwiLayerActive = useMemo(
+    () =>
+      [MapLayer.FWI_ANGSTROM, MapLayer.FWI_GFI, MapLayer.FWI_KBDI].some((layer) =>
+        activeLayers.has(layer)
+      ),
+    [activeLayers]
+  );
+  const fwiSourceForests = useMemo(
+    () => MOCK_FORESTS.filter((forest) => forest.type !== RegionType.LANDFILL),
+    []
+  );
+  const fwiRasterBounds = useMemo(
+    () => ({
+      west: bihBounds.getWest() - 0.45,
+      east: bihBounds.getEast() + 0.45,
+      south: bihBounds.getSouth() - 0.35,
+      north: bihBounds.getNorth() + 0.35,
+    }),
+    [bihBounds]
   );
 
   // Fetch Meteoblue Tile URL
@@ -347,7 +398,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   const fmtDay = (isoString: string) => new Date(isoString).toLocaleDateString([], { weekday: 'short', day: 'numeric' });
 
   // Get current hour index
-  const getCurrentHourIndex = (weather: OpenMeteoResponse) => {
+  const getCurrentHourIndex = (weather: FireIndexWeatherData) => {
     if (!weather.hourly.time.length) return -1;
 
     // Use the API's own current timestamp so we stay in the same timezone
@@ -386,17 +437,56 @@ export const GISMap: React.FC<GISMapProps> = ({
   };
 
   // -- FIRE INDEX CALCULATIONS --
-  const calculateFireIndices = (weather: OpenMeteoResponse, hourIdx: number) => {
-    const temp = weather.hourly.temperature_2m[hourIdx];
-    const humidity = weather.hourly.relative_humidity_2m[hourIdx];
-    const windKmh = weather.hourly.wind_speed_10m[hourIdx];
-    const rain = weather.daily.precipitation_sum[0]; // Today's rain
+  const computeFireIndexMetrics = (weather: FireIndexWeatherData, hourIdx: number) => {
+    const safeHourIdx = hourIdx >= 0 ? hourIdx : 0;
+    const temp = weather.hourly.temperature_2m[safeHourIdx] ?? 0;
+    const humidity = weather.hourly.relative_humidity_2m[safeHourIdx] ?? 0;
+    const windKmh = weather.hourly.wind_speed_10m[safeHourIdx] ?? 0;
+    const rain = weather.daily.precipitation_sum[0] ?? 0;
+    const ai = (humidity / 20 + (27 - temp) / 10);
+    const dryDays = weather.daily.precipitation_sum.filter((p) => p < 2.0).length;
+    const zoneFactor = 1.2;
+    const gfi =
+      (Math.max(0, temp) * (100 - humidity) * windKmh / 1000) *
+      (1 + dryDays / 20) *
+      zoneFactor;
+    let kbdi = (Math.max(0, temp) * 10) - (rain * 50);
+    if (kbdi < 0) kbdi = 0;
+    kbdi = Math.min(800, kbdi + (dryDays * 50));
+
+    return { ai, gfi, kbdi };
+  };
+
+  const buildFallbackFwiSnapshot = (forest: ForestRegion): ForestFireIndexSnapshot => {
+    const typeBias: Record<RegionType, number> = {
+      [RegionType.DECIDUOUS]: 0.04,
+      [RegionType.CONIFEROUS]: 0.12,
+      [RegionType.MIXED]: 0.08,
+      [RegionType.MAQUIS]: 0.18,
+      [RegionType.LOW_VEGETATION]: 0.15,
+      [RegionType.LANDFILL]: 0.2,
+    };
+
+    const intensity = Math.max(0.08, Math.min(0.98, forest.riskScore + (typeBias[forest.type] ?? 0)));
+
+    return {
+      id: forest.id,
+      lat: forest.coordinates[0],
+      lng: forest.coordinates[1],
+      // Lower Angstrom means higher danger, so invert the synthetic severity.
+      angstrom: 5.8 - (intensity * 3.8),
+      gfi: 1 + (intensity * 11),
+      kbdi: 90 + (intensity * 520),
+    };
+  };
+
+  const calculateFireIndices = (weather: FireIndexWeatherData, hourIdx: number) => {
+    const { ai, gfi, kbdi } = computeFireIndexMetrics(weather, hourIdx);
 
     // Angström Index
     // Formula: (H / 20 + (27 - T) / 10) * (10 / (W_ms + 10)) -> Used simpler kmh adaptation often seen
     // High AI = Low Risk. Low AI = High Risk.
     // If AI < 2.5 Risk High.
-    const ai = (humidity / 20 + (27 - temp) / 10);
     
     let aiRisk = t.riskLevels.low;
     let aiColor = "text-emerald-500";
@@ -407,10 +497,6 @@ export const GISMap: React.FC<GISMapProps> = ({
 
     // GFI (Forest Fire Weather Index - Simplified)
     // Count dry days (rain < 2mm in forecast as proxy for trend)
-    const dryDays = weather.daily.precipitation_sum.filter(p => p < 2.0).length; 
-    const zoneFactor = 1.2;
-    const gfi = (Math.max(0, temp) * (100 - humidity) * windKmh / 1000) * (1 + dryDays / 20) * zoneFactor;
-    
     let gfiRisk = t.riskLevels.low;
     let gfiColor = "text-emerald-500";
     if (gfi > 15) { gfiRisk = t.riskLevels.extreme; gfiColor = "text-purple-500"; }
@@ -420,11 +506,6 @@ export const GISMap: React.FC<GISMapProps> = ({
 
     // KBDI (Approximation without historic DB)
     // Daily drought factor based on max temp and lack of rain
-    let kbdi = (Math.max(0, temp) * 10) - (rain * 50); 
-    if (kbdi < 0) kbdi = 0;
-    // Normalize to 0-800 scale roughly
-    kbdi = Math.min(800, kbdi + (dryDays * 50)); 
-    
     let kbdiRisk = t.riskLevels.low;
     let kbdiColor = "text-emerald-500";
     if (kbdi > 600) { kbdiRisk = t.riskLevels.extreme; kbdiColor = "text-purple-500"; }
@@ -433,6 +514,140 @@ export const GISMap: React.FC<GISMapProps> = ({
 
     return { ai, aiRisk, aiColor, gfi, gfiRisk, gfiColor, kbdi, kbdiRisk, kbdiColor };
   };
+
+  const activeFwiLayers = useMemo(
+    () =>
+      [MapLayer.FWI_ANGSTROM, MapLayer.FWI_GFI, MapLayer.FWI_KBDI].filter((layer) =>
+        activeLayers.has(layer)
+      ),
+    [activeLayers]
+  );
+
+  useEffect(() => {
+
+    console.info(FWI_DEBUG_PREFIX, 'effect check', {
+      activeFwiLayers,
+      isAnyFwiLayerActive,
+      isLoadingFwi,
+      forestFwiDataLength: forestFwiData.length,
+      availableForests: fwiSourceForests.length,
+    });
+
+    if (!isAnyFwiLayerActive) {
+      console.info(FWI_DEBUG_PREFIX, 'skip fetch: no active FWI layer');
+      return;
+    }
+
+    if (isLoadingFwi) {
+      console.info(FWI_DEBUG_PREFIX, 'skip fetch: already loading');
+      return;
+    }
+
+    if (forestFwiData.length > 0) {
+      console.info(FWI_DEBUG_PREFIX, 'skip fetch: cached FWI data already present');
+      return;
+    }
+
+    let isCancelled = false;
+    const controller = new AbortController();
+
+    const fetchFwiData = async () => {
+      console.info(FWI_DEBUG_PREFIX, 'starting FWI fetch', {
+        forestCount: fwiSourceForests.length,
+      });
+      setIsLoadingFwi(true);
+
+      try {
+        const nextData: ForestFireIndexSnapshot[] = [];
+
+        for (const forest of fwiSourceForests) {
+          try {
+            const url =
+              `https://api.open-meteo.com/v1/forecast?latitude=${forest.coordinates[0]}` +
+              `&longitude=${forest.coordinates[1]}` +
+              '&current=time' +
+              '&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m' +
+              '&daily=precipitation_sum' +
+              '&timezone=auto';
+
+            const response = await fetch(url, { signal: controller.signal });
+            if (!response.ok) {
+              throw new Error(`FWI fetch failed for ${forest.name}`);
+            }
+
+            const weather = (await response.json()) as FireIndexWeatherData & { error?: boolean; reason?: string };
+            if (weather.error || !weather.current?.time || !weather.hourly?.time?.length) {
+              throw new Error(weather.reason || `FWI weather payload invalid for ${forest.name}`);
+            }
+
+            const hourIdx = getCurrentHourIndex(weather);
+            const metrics = computeFireIndexMetrics(weather, hourIdx);
+
+            console.info(FWI_DEBUG_PREFIX, 'forest metrics ready', {
+              forestId: forest.id,
+              forestName: forest.name,
+              lat: forest.coordinates[0],
+              lng: forest.coordinates[1],
+              hourIdx,
+              angstrom: metrics.ai,
+              gfi: metrics.gfi,
+              kbdi: metrics.kbdi,
+            });
+
+            nextData.push({
+              id: forest.id,
+              lat: forest.coordinates[0],
+              lng: forest.coordinates[1],
+              angstrom: metrics.ai,
+              gfi: metrics.gfi,
+              kbdi: metrics.kbdi,
+            });
+          } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
+              throw error;
+            }
+
+            const fallbackSnapshot = buildFallbackFwiSnapshot(forest);
+            console.warn(FWI_DEBUG_PREFIX, 'forest fetch failed, using fallback snapshot', {
+              forestId: forest.id,
+              forestName: forest.name,
+              error,
+              fallbackSnapshot,
+            });
+            nextData.push(fallbackSnapshot);
+          }
+        }
+
+        if (isCancelled) {
+          return;
+        }
+
+        setForestFwiData(nextData);
+        console.info(FWI_DEBUG_PREFIX, 'FWI fetch completed', {
+          receivedPoints: nextData.length,
+          pointIds: nextData.map((point) => point.id),
+        });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          console.info(FWI_DEBUG_PREFIX, 'FWI fetch aborted');
+          return;
+        }
+        console.error('Unable to load FWI heatmap data.', error);
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingFwi(false);
+        }
+      }
+    };
+
+    fetchFwiData();
+
+    return () => {
+      isCancelled = true;
+      console.info(FWI_DEBUG_PREFIX, 'cleanup/abort pending FWI fetch');
+      controller.abort();
+    };
+  }, [activeFwiLayers, forestFwiData.length, fwiSourceForests, isAnyFwiLayerActive]);
 
   const getIncidentIntensity = (incident: IncidentReport) => {
     if (incident.urgency === 'high') return 1;
@@ -457,12 +672,21 @@ export const GISMap: React.FC<GISMapProps> = ({
     radius: number;
     blur: number;
     visible: boolean;
-  }> = ({ data, gradient, radius, blur, visible }) => {
+    minOpacity?: number;
+  }> = ({ data, gradient, radius, blur, visible, minOpacity = 0.35 }) => {
     const map = useMap();
     const heatLayerRef = useRef<L.HeatLayer | null>(null);
     const retryFrameRef = useRef<number | null>(null);
 
     useEffect(() => {
+      const cancelLeafletHeatFrame = (layer: L.HeatLayer) => {
+        const internalLayer = layer as L.HeatLayer & { _frame?: number | null };
+        if (internalLayer._frame != null) {
+          L.Util.cancelAnimFrame(internalLayer._frame);
+          internalLayer._frame = null;
+        }
+      };
+
       const clearRetryFrame = () => {
         if (retryFrameRef.current !== null) {
           window.cancelAnimationFrame(retryFrameRef.current);
@@ -472,6 +696,7 @@ export const GISMap: React.FC<GISMapProps> = ({
 
       const removeHeatLayer = () => {
         if (!heatLayerRef.current) return;
+        cancelLeafletHeatFrame(heatLayerRef.current);
         heatLayerRef.current.remove();
         heatLayerRef.current = null;
       };
@@ -501,7 +726,7 @@ export const GISMap: React.FC<GISMapProps> = ({
             radius,
             blur,
             maxZoom: 10,
-            minOpacity: 0.35,
+            minOpacity,
             gradient,
           });
         } else {
@@ -509,16 +734,21 @@ export const GISMap: React.FC<GISMapProps> = ({
             radius,
             blur,
             maxZoom: 10,
-            minOpacity: 0.35,
+            minOpacity,
             gradient,
           });
         }
 
-        heatLayerRef.current.setLatLngs(heatPoints);
+        const heatLayer = heatLayerRef.current;
+        if (!heatLayer) {
+          return;
+        }
 
-        if (!map.hasLayer(heatLayerRef.current)) {
+        heatLayer.setLatLngs(heatPoints);
+
+        if (!map.hasLayer(heatLayer)) {
           try {
-            heatLayerRef.current.addTo(map);
+            heatLayer.addTo(map);
           } catch (error) {
             console.error('Heatmap layer failed to initialize; retrying after resize.', error);
             removeHeatLayer();
@@ -539,7 +769,7 @@ export const GISMap: React.FC<GISMapProps> = ({
         map.off('resize', handleMapResize);
         removeHeatLayer();
       };
-    }, [blur, data, gradient, map, radius, visible]);
+    }, [blur, data, gradient, map, minOpacity, radius, visible]);
 
     return null;
   };
@@ -559,8 +789,9 @@ export const GISMap: React.FC<GISMapProps> = ({
         <ThreatHeatmapLayer
           data={fireIncidents}
           gradient={FIRE_HEAT_GRADIENT}
-          radius={30}
-          blur={24}
+          radius={46}
+          blur={34}
+          minOpacity={0.58}
           visible={activeLayers.has(MapLayer.FIRE_RISK)}
         />
         <ThreatHeatmapLayer
@@ -569,6 +800,21 @@ export const GISMap: React.FC<GISMapProps> = ({
           radius={34}
           blur={28}
           visible={activeLayers.has(MapLayer.FLOOD_RISK)}
+        />
+        <AngstromHeatLayer
+          points={forestFwiData}
+          rasterBounds={fwiRasterBounds}
+          visible={activeLayers.has(MapLayer.FWI_ANGSTROM)}
+        />
+        <GFIHeatLayer
+          points={forestFwiData}
+          rasterBounds={fwiRasterBounds}
+          visible={activeLayers.has(MapLayer.FWI_GFI)}
+        />
+        <KBDIHeatLayer
+          points={forestFwiData}
+          rasterBounds={fwiRasterBounds}
+          visible={activeLayers.has(MapLayer.FWI_KBDI)}
         />
         {activeLayers.has(MapLayer.BIH_BORDERS) && (
           <GeoJSON data={bihBorderData as any} style={{ color: '#ec4899', weight: 2, fill: false, opacity: 0.6 }} />
