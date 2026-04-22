@@ -1379,7 +1379,7 @@ export const GISMap: React.FC<GISMapProps> = ({
 
       {/* Stacked Legends Container (Left) */}
       {showLegend && (
-        <div ref={legendPanelRef} className="absolute bottom-24 left-4 right-4 md:bottom-8 md:left-[4.5rem] md:right-auto z-[2000] flex flex-row md:flex-col gap-2 animate-in slide-in-from-left-2 duration-300">
+        <div ref={legendPanelRef} className="absolute bottom-28 left-4 right-4 md:bottom-8 md:left-[4.5rem] md:right-auto z-[2000] flex flex-row md:flex-col gap-2 animate-in slide-in-from-left-2 duration-300">
           {/* Existing GIS Legend */}
           <div className="order-1 md:order-2 flex-1 md:flex-none min-w-0 md:min-w-[160px] bg-slate-950/90 backdrop-blur-md border border-slate-800 p-3 rounded-xl shadow-2xl">
             <div className="flex items-center justify-between gap-2 mb-3">
@@ -1432,7 +1432,7 @@ export const GISMap: React.FC<GISMapProps> = ({
       )}
 
       {/* GPS FAB */}
-      <div ref={gpsFabRef} className="absolute bottom-6 right-6 z-[2000]">
+      <div ref={gpsFabRef} className="absolute bottom-8 right-6 z-[2000]">
         <button 
           onClick={handleLocateMe}
           title="My Location"
