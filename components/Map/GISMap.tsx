@@ -433,11 +433,13 @@ export const GISMap: React.FC<GISMapProps> = ({
       map.fitBounds(bihBounds, {
         paddingTopLeft: [padding.left, padding.top],
         paddingBottomRight: [padding.right, padding.bottom],
-        maxZoom: isMobile ? 8 : 10,
+        maxZoom: isMobile ? 9 : 10,
         animate: false
       });
 
-      if (!isMobile) {
+      if (isMobile) {
+        map.setView(map.getCenter(), Math.min(map.getZoom() + 1, 9), { animate: false });
+      } else {
         map.setView(map.getCenter(), Math.min(map.getZoom() + 1, 10), { animate: false });
       }
 
