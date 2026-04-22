@@ -121,7 +121,7 @@ export const GISMap: React.FC<GISMapProps> = ({
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const hasAdjustedInitialView = useRef(false);
+  const initialViewportLayoutKeyRef = useRef<string | null>(null);
   const bihBounds = useMemo(() => GlobalLeaflet.geoJSON(bihBorderData as any).getBounds(), []);
   const statusPanelRef = useRef<HTMLDivElement | null>(null);
   const mapControlsRef = useRef<HTMLDivElement | null>(null);
@@ -365,12 +365,11 @@ export const GISMap: React.FC<GISMapProps> = ({
     };
 
     const applyInitialViewport = () => {
-      if (hasAdjustedInitialView.current) return;
       if (!mapContainerRef.current) return;
 
       const containerRect = mapContainerRef.current.getBoundingClientRect();
       const isMobile = window.innerWidth < 768;
-      const edgeGap = 16;
+      const edgeGap = isMobile ? 10 : 8;
       const padding = {
         top: edgeGap,
         right: edgeGap,
@@ -380,73 +379,116 @@ export const GISMap: React.FC<GISMapProps> = ({
 
       const applyOverlayPadding = (
         element: HTMLDivElement | null,
-        edges: Array<'top' | 'right' | 'bottom' | 'left'>
+        edges: Array<'top' | 'right' | 'bottom' | 'left'>,
+        multiplier = 1
       ) => {
         if (!element) return;
 
         const rect = element.getBoundingClientRect();
 
         if (edges.includes('top')) {
-          padding.top = Math.max(padding.top, Math.max(0, rect.bottom - containerRect.top) + edgeGap);
+          padding.top = Math.max(padding.top, (Math.max(0, rect.bottom - containerRect.top) * multiplier) + edgeGap);
         }
         if (edges.includes('right')) {
-          padding.right = Math.max(padding.right, Math.max(0, containerRect.right - rect.left) + edgeGap);
+          padding.right = Math.max(padding.right, (Math.max(0, containerRect.right - rect.left) * multiplier) + edgeGap);
         }
         if (edges.includes('bottom')) {
-          padding.bottom = Math.max(padding.bottom, Math.max(0, containerRect.bottom - rect.top) + edgeGap);
+          padding.bottom = Math.max(padding.bottom, (Math.max(0, containerRect.bottom - rect.top) * multiplier) + edgeGap);
         }
         if (edges.includes('left')) {
-          padding.left = Math.max(padding.left, Math.max(0, rect.right - containerRect.left) + edgeGap);
+          padding.left = Math.max(padding.left, (Math.max(0, rect.right - containerRect.left) * multiplier) + edgeGap);
         }
       };
 
-      applyOverlayPadding(statusPanelRef.current, isMobile ? ['top', 'left'] : ['top']);
-      applyOverlayPadding(mapControlsRef.current, isMobile ? ['top', 'right'] : ['top']);
-      applyOverlayPadding(legendPanelRef.current, isMobile ? ['bottom', 'left'] : ['left']);
-      applyOverlayPadding(gpsFabRef.current, isMobile ? ['bottom', 'right'] : ['bottom']);
+      if (isMobile) {
+        // On narrow screens, horizontal overlay padding over-constrains the fit and
+        // shifts BiH off screen. Keep mobile padding vertical-only.
+        applyOverlayPadding(statusPanelRef.current, ['top']);
+        applyOverlayPadding(mapControlsRef.current, ['top']);
+        applyOverlayPadding(legendPanelRef.current, ['bottom']);
+        applyOverlayPadding(gpsFabRef.current, ['bottom']);
+      } else {
+        applyOverlayPadding(statusPanelRef.current, ['top']);
+        applyOverlayPadding(mapControlsRef.current, ['top']);
+        applyOverlayPadding(legendPanelRef.current, ['left'], 0.4);
+        applyOverlayPadding(gpsFabRef.current, ['bottom']);
+      }
       applyOverlayPadding(reportingBannerRef.current, ['top']);
+
+      const layoutKey = [
+        Math.round(containerRect.width),
+        Math.round(containerRect.height),
+        isMobile ? 'mobile' : 'desktop',
+        showLegend ? 'legend' : 'no-legend',
+        isReporting ? 'reporting' : 'idle',
+        Math.round(mapControlsRef.current?.getBoundingClientRect().height ?? 0),
+        Math.round(legendPanelRef.current?.getBoundingClientRect().height ?? 0),
+        Math.round(statusPanelRef.current?.getBoundingClientRect().height ?? 0),
+      ].join(':');
+
+      if (initialViewportLayoutKeyRef.current === layoutKey) {
+        return;
+      }
 
       map.fitBounds(bihBounds, {
         paddingTopLeft: [padding.left, padding.top],
         paddingBottomRight: [padding.right, padding.bottom],
-        maxZoom: isMobile ? 7 : 8,
+        maxZoom: isMobile ? 8 : 10,
         animate: false
       });
-      hasAdjustedInitialView.current = true;
+
+      if (!isMobile) {
+        map.setView(map.getCenter(), Math.min(map.getZoom() + 1, 10), { animate: false });
+      }
+
+      initialViewportLayoutKeyRef.current = layoutKey;
+    };
+
+    let scheduledFrame = 0;
+    const scheduleInitialViewport = () => {
+      window.cancelAnimationFrame(scheduledFrame);
+      scheduledFrame = window.requestAnimationFrame(() => {
+        syncMapSize();
+        applyInitialViewport();
+      });
     };
 
     let firstFrame = 0;
     let secondFrame = 0;
     const timeoutId = window.setTimeout(() => {
-      syncMapSize();
-      applyInitialViewport();
+      scheduleInitialViewport();
     }, 250);
+    const settleTimeoutId = window.setTimeout(() => {
+      scheduleInitialViewport();
+    }, 700);
 
     firstFrame = window.requestAnimationFrame(() => {
-      syncMapSize();
-      applyInitialViewport();
+      scheduleInitialViewport();
       secondFrame = window.requestAnimationFrame(() => {
-        syncMapSize();
-        applyInitialViewport();
+        scheduleInitialViewport();
       });
     });
 
     const resizeObserver =
       typeof ResizeObserver !== 'undefined' && mapContainerRef.current
-        ? new ResizeObserver(syncMapSize)
+        ? new ResizeObserver(() => {
+            scheduleInitialViewport();
+          })
         : null;
 
     if (resizeObserver && mapContainerRef.current) {
       resizeObserver.observe(mapContainerRef.current);
     }
 
-    window.addEventListener('resize', syncMapSize);
+    window.addEventListener('resize', scheduleInitialViewport);
 
     return () => {
+      window.cancelAnimationFrame(scheduledFrame);
       window.cancelAnimationFrame(firstFrame);
       window.cancelAnimationFrame(secondFrame);
       window.clearTimeout(timeoutId);
-      window.removeEventListener('resize', syncMapSize);
+      window.clearTimeout(settleTimeoutId);
+      window.removeEventListener('resize', scheduleInitialViewport);
       resizeObserver?.disconnect();
     };
   }, [bihBounds, isReporting, map, showLegend]);
@@ -1330,30 +1372,9 @@ export const GISMap: React.FC<GISMapProps> = ({
 
       {/* Stacked Legends Container (Left) */}
       {showLegend && (
-        <div ref={legendPanelRef} className="absolute bottom-24 left-4 md:bottom-8 md:left-[4.5rem] z-[2000] flex flex-col gap-2 animate-in slide-in-from-left-2 duration-300">
-          
-          {/* New Classification Legend */}
-          <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 p-3 rounded-xl shadow-2xl min-w-[160px]">
-            <div className="flex items-center gap-2 mb-3">
-              <Trees size={14} className="text-emerald-500" />
-              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.classLegend}</span>
-            </div>
-            <div className="space-y-2">
-              {Object.values(RegionType).map((type) => {
-                 const style = REGION_STYLES[type];
-                 const path = ICON_PATHS[style.iconType] || ICON_PATHS.tree;
-                 return (
-                   <div key={type} className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={style.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: path }} />
-                     {t.regionTypes[type]}
-                   </div>
-                 )
-              })}
-            </div>
-          </div>
-
+        <div ref={legendPanelRef} className="absolute bottom-24 left-4 right-4 md:bottom-8 md:left-[4.5rem] md:right-auto z-[2000] flex flex-row md:flex-col gap-2 animate-in slide-in-from-left-2 duration-300">
           {/* Existing GIS Legend */}
-          <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 p-3 rounded-xl shadow-2xl min-w-[160px]">
+          <div className="order-1 md:order-2 flex-1 md:flex-none min-w-0 md:min-w-[160px] bg-slate-950/90 backdrop-blur-md border border-slate-800 p-3 rounded-xl shadow-2xl">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
                 <Info size={14} className="text-blue-500" />
@@ -1378,6 +1399,26 @@ export const GISMap: React.FC<GISMapProps> = ({
                   <div className="w-2 h-2 rounded-full bg-emerald-500" /> {t.legend.liveData}
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* New Classification Legend */}
+          <div className="order-2 md:order-1 flex-1 md:flex-none min-w-0 md:min-w-[160px] bg-slate-950/90 backdrop-blur-md border border-slate-800 p-3 rounded-xl shadow-2xl">
+            <div className="flex items-center gap-2 mb-3">
+              <Trees size={14} className="text-emerald-500" />
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.classLegend}</span>
+            </div>
+            <div className="space-y-2">
+              {Object.values(RegionType).map((type) => {
+                 const style = REGION_STYLES[type];
+                 const path = ICON_PATHS[style.iconType] || ICON_PATHS.tree;
+                 return (
+                   <div key={type} className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={style.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: path }} />
+                     {t.regionTypes[type]}
+                   </div>
+                 )
+              })}
             </div>
           </div>
         </div>
