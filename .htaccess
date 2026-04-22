@@ -1,0 +1,4 @@
+RewriteEngine On
+
+# When the project is deployed as-is in the web root, send the domain root to /dist/.
+RewriteRule ^$ dist/ [R=302,L]
