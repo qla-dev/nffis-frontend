@@ -54,99 +54,106 @@ export const MapControls: React.FC<MapControlsProps> = ({
   ].some((layer) => activeLayers.has(layer));
 
   return (
-    <div ref={containerRef} className="absolute top-4 right-4 z-[2000] flex flex-col items-end gap-2">
+    <div ref={containerRef} className="absolute top-0 left-0 right-0 md:top-4 md:right-4 md:left-auto z-[2000] flex flex-col items-end gap-2">
       {/* HORIZONTAL Control Cluster */}
-      <div className="bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-xl shadow-2xl p-1 flex items-center gap-1">
-        {/* Theme */}
-        <button onClick={onToggleTheme} className={`p-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-amber-400 bg-amber-400/5 hover:bg-amber-400/10' : 'text-slate-400 hover:bg-slate-800'}`} title={t.theme}>
-          {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
-        
-        <div className="w-px h-6 bg-slate-800 mx-1" />
-
-        {/* State Borders */}
-        <button 
-          onClick={() => onToggleLayer(MapLayer.BIH_BORDERS)} 
-          className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.BIH_BORDERS) ? 'text-pink-500 bg-pink-950/30 shadow-[0_0_10px_rgba(236,72,153,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
-          title="Toggle State Borders"
+      <div className="w-full md:w-auto">
+        <div
+          className="overflow-x-auto overflow-y-hidden px-3 py-2 md:px-0 md:py-0 bg-transparent border-none shadow-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain', overscrollBehaviorY: 'none' }}
         >
-          <LandPlot size={18} />
-        </button>
+          <div className="min-w-max bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-xl md:shadow-2xl p-1 flex items-center gap-1">
+            {/* Theme */}
+            <button onClick={onToggleTheme} className={`p-2.5 rounded-lg transition-colors ${isDarkMode ? 'text-amber-400 bg-amber-400/5 hover:bg-amber-400/10' : 'text-slate-400 hover:bg-slate-800'}`} title={t.theme}>
+              {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            
+            <div className="w-px h-6 bg-slate-800 mx-1" />
 
-        <div className="w-px h-6 bg-slate-800 mx-1" />
+            {/* State Borders */}
+            <button 
+              onClick={() => onToggleLayer(MapLayer.BIH_BORDERS)} 
+              className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.BIH_BORDERS) ? 'text-pink-500 bg-pink-950/30 shadow-[0_0_10px_rgba(236,72,153,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
+              title="Toggle State Borders"
+            >
+              <LandPlot size={18} />
+            </button>
 
-        {/* Wind */}
-        <button 
-          onClick={() => onToggleLayer(MapLayer.WINDY)} 
-          className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.WINDY) ? 'text-cyan-400 bg-cyan-950/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
-          title={t.liveWindVector}
-        >
-          <Wind size={18} className={activeLayers.has(MapLayer.WINDY) ? 'animate-pulse' : ''} />
-        </button>
+            <div className="w-px h-6 bg-slate-800 mx-1" />
 
-        {/* Meteoblue Temp Toggle */}
-        <button 
-          onClick={() => onToggleLayer(MapLayer.METEOBLUE)}
-          className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.METEOBLUE) ? 'text-blue-400 bg-blue-950/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
-          title="Meteoblue Temperature"
-        >
-          <ThermometerSun size={18} className={activeLayers.has(MapLayer.METEOBLUE) ? 'animate-pulse' : ''} />
-        </button>
+            {/* Wind */}
+            <button 
+              onClick={() => onToggleLayer(MapLayer.WINDY)} 
+              className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.WINDY) ? 'text-cyan-400 bg-cyan-950/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
+              title={t.liveWindVector}
+            >
+              <Wind size={18} className={activeLayers.has(MapLayer.WINDY) ? 'animate-pulse' : ''} />
+            </button>
 
-        {/* FWI */}
-        <button 
-          onClick={() => togglePanel('fwi')}
-          className={`inline-flex items-center justify-center px-3 py-2.5 rounded-lg leading-none transition-colors ${activePanel === 'fwi' || isAnyFwiActive ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-          title="FWI"
-        >
-          <span className="text-[11px] font-black leading-none tracking-[0.18em]">FWI</span>
-        </button>
+            {/* Meteoblue Temp Toggle */}
+            <button 
+              onClick={() => onToggleLayer(MapLayer.METEOBLUE)}
+              className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.METEOBLUE) ? 'text-blue-400 bg-blue-950/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
+              title="Meteoblue Temperature"
+            >
+              <ThermometerSun size={18} className={activeLayers.has(MapLayer.METEOBLUE) ? 'animate-pulse' : ''} />
+            </button>
 
-        <div className="w-px h-6 bg-slate-800 mx-1" />
+            {/* FWI */}
+            <button 
+              onClick={() => togglePanel('fwi')}
+              className={`inline-flex items-center justify-center px-3 py-2.5 rounded-lg leading-none transition-colors ${activePanel === 'fwi' || isAnyFwiActive ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+              title="FWI"
+            >
+              <span className="text-[11px] font-black leading-none tracking-[0.18em]">FWI</span>
+            </button>
 
-        {/* Assets & Regions */}
-        <button 
-          onClick={() => togglePanel('assets')} 
-          className={`p-2.5 rounded-lg transition-colors ${activePanel === 'assets' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-          title={t.assetsRegions}
-        >
-          <Trees size={18} />
-        </button>
+            <div className="w-px h-6 bg-slate-800 mx-1" />
 
-        {/* Data Overlays */}
-        <button 
-          onClick={() => togglePanel('layers')} 
-          className={`p-2.5 rounded-lg transition-colors ${activePanel === 'layers' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-          title={t.dataOverlays}
-        >
-          <Settings2 size={18} />
-        </button>
+            {/* Assets & Regions */}
+            <button 
+              onClick={() => togglePanel('assets')} 
+              className={`p-2.5 rounded-lg transition-colors ${activePanel === 'assets' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+              title={t.assetsRegions}
+            >
+              <Trees size={18} />
+            </button>
 
-        <div className="w-px h-6 bg-slate-800 mx-1" />
-        
-        {/* Legend */}
-        <button 
-          onClick={onToggleLegend} 
-          className={`p-2.5 rounded-lg transition-colors ${showLegend ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-          title={t.gisLegend}
-        >
-          <Info size={18} />
-        </button>
+            {/* Data Overlays */}
+            <button 
+              onClick={() => togglePanel('layers')} 
+              className={`p-2.5 rounded-lg transition-colors ${activePanel === 'layers' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+              title={t.dataOverlays}
+            >
+              <Settings2 size={18} />
+            </button>
 
-        <div className="w-px h-6 bg-slate-800 mx-1" />
+            <div className="w-px h-6 bg-slate-800 mx-1" />
+            
+            {/* Legend */}
+            <button 
+              onClick={onToggleLegend} 
+              className={`p-2.5 rounded-lg transition-colors ${showLegend ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+              title={t.gisLegend}
+            >
+              <Info size={18} />
+            </button>
 
-        {/* Imagery Source (Satellite Icon) */}
-        <button 
-          onClick={() => togglePanel('satellite')} 
-          className={`p-2.5 rounded-lg transition-colors ${activePanel === 'satellite' || isAnyBaseLayerActive ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-          title={t.imagerySource}
-        >
-          <Satellite size={18} />
-        </button>
+            <div className="w-px h-6 bg-slate-800 mx-1" />
+
+            {/* Imagery Source (Satellite Icon) */}
+            <button 
+              onClick={() => togglePanel('satellite')} 
+              className={`p-2.5 rounded-lg transition-colors ${activePanel === 'satellite' || isAnyBaseLayerActive ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+              title={t.imagerySource}
+            >
+              <Satellite size={18} />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Dropdown Panels Container */}
-      <div className="relative w-64">
+      <div className="relative w-64 mr-4 md:mr-0">
         
         {/* Satellite Panel */}
         {activePanel === 'satellite' && (

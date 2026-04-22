@@ -972,10 +972,10 @@ export const GISMap: React.FC<GISMapProps> = ({
 
       {/* --- FULL SCREEN WEATHER DASHBOARD OVERLAY --- */}
       {selectedForest && (
-        <div className="fixed inset-0 z-[3000] bg-slate-950/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-300 md:pl-[60px]">
+        <div className="fixed inset-0 z-[3000] h-[100dvh] min-h-[100dvh] bg-slate-950/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-300 md:pl-[60px]">
            {/* ... Dashboard Header & Content ... */}
            {/* Header - Centralized with Sidebar Padding */}
-           <div className="flex-none flex items-center justify-center p-6 border-b border-slate-800 bg-slate-900/50 relative min-h-[120px]">
+           <div className="flex-none flex items-center justify-center px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-6 border-b border-slate-800 bg-slate-900/50 relative min-h-[120px]">
               
               {/* Centered Title Group */}
               <div className="flex flex-col items-center gap-4 animate-in slide-in-from-bottom-4 duration-500 max-w-4xl text-center">
@@ -1015,7 +1015,7 @@ export const GISMap: React.FC<GISMapProps> = ({
            </div>
 
            {/* Content */}
-           <div className="flex-1 overflow-y-auto p-4 md:p-8 scrollbar-thin scrollbar-thumb-slate-700">
+           <div className="flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-8 scrollbar-thin scrollbar-thumb-slate-700">
               {loadingWeather || !forestWeather ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
                       <Loader2 size={48} className="animate-spin text-blue-500" />
@@ -1347,8 +1347,8 @@ export const GISMap: React.FC<GISMapProps> = ({
       )}
 
       {/* Floating Operations Header (Aesthetic) */}
-      <div ref={statusPanelRef} className="absolute top-4 left-4 md:left-20 z-[2000] pointer-events-none">
-        <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 px-4 py-2 rounded-lg shadow-2xl flex items-center gap-4">
+      <div ref={statusPanelRef} className="absolute top-[4.5rem] left-4 right-4 md:top-4 md:left-20 md:right-auto z-[2000] pointer-events-none">
+        <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 px-4 py-2 rounded-lg shadow-2xl flex items-center gap-4 md:w-auto">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <div className="flex flex-col">
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">{t.surveillanceNetwork}</span>
