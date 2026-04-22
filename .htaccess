@@ -1,4 +1,18 @@
 RewriteEngine On
 
-# Redirect the web root to the built app directory using an absolute URL-path.
-RewriteRule ^$ /dist/ [R=302,L]
+# Prevent rewrite loops once the request is already inside /dist.
+RewriteRule ^dist/ - [L]
+
+# Always serve the built entry file instead of the source root index.html.
+RewriteRule ^index\.html$ dist/index.html [L]
+
+# If the requested path exists inside /dist, serve that built file or directory.
+RewriteCond %{DOCUMENT_ROOT}/dist/$1 -f [OR]
+RewriteCond %{DOCUMENT_ROOT}/dist/$1 -d
+RewriteRule ^(.+)$ dist/$1 [L]
+
+# Root domain should open the built app without redirecting the browser to /dist/.
+RewriteRule ^$ dist/index.html [L]
+
+# SPA fallback for client-side routes.
+RewriteRule ^ dist/index.html [L]
