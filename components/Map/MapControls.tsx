@@ -54,7 +54,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
   ].some((layer) => activeLayers.has(layer));
 
   return (
-    <div ref={containerRef} className="absolute top-0 left-0 right-0 md:top-4 md:right-4 md:left-auto z-[2000] flex flex-col items-end gap-2">
+    <div ref={containerRef} className="fixed top-0 left-0 right-0 pt-[env(safe-area-inset-top)] md:absolute md:top-4 md:right-4 md:left-auto md:pt-0 z-[2000] flex flex-col items-end gap-2">
       {/* HORIZONTAL Control Cluster */}
       <div className="w-full md:w-auto">
         <div

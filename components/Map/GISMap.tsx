@@ -1346,8 +1346,13 @@ export const GISMap: React.FC<GISMapProps> = ({
         </div>
       )}
 
+      <div
+        className="fixed top-0 left-0 right-0 z-[1900] bg-slate-950 md:hidden pointer-events-none"
+        style={{ height: 'env(safe-area-inset-top)' }}
+      />
+
       {/* Floating Operations Header (Aesthetic) */}
-      <div ref={statusPanelRef} className="absolute top-[4.5rem] left-4 right-4 md:top-4 md:left-20 md:right-auto z-[2000] pointer-events-none">
+      <div ref={statusPanelRef} className="absolute top-[calc(env(safe-area-inset-top)+4.5rem)] left-4 right-4 md:top-4 md:left-20 md:right-auto z-[2000] pointer-events-none">
         <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 px-4 py-2 rounded-lg shadow-2xl flex items-center gap-4 md:w-auto">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <div className="flex flex-col">
