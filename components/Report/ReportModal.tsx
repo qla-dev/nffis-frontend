@@ -134,7 +134,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
   if (!location) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col overflow-y-auto lg:overflow-hidden animate-in fade-in duration-300">
       
       {/* 1. TOP BAR */}
       <header className="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shadow-md shrink-0">
@@ -162,10 +162,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
       </header>
 
       {/* 2. MAIN CONTENT GRID */}
-      <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+      <div className="flex-1 overflow-visible lg:overflow-hidden flex flex-col lg:flex-row">
         
         {/* LEFT PANE: Weather Dashboard */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-slate-950/50 scrollbar-thin scrollbar-thumb-slate-800">
+        <div className="flex-none lg:flex-1 overflow-visible lg:overflow-y-auto p-4 lg:p-6 bg-slate-950/50 scrollbar-thin scrollbar-thumb-slate-800">
             
             {loading ? (
                 <div className="h-full flex items-center justify-center flex-col gap-6">
@@ -334,7 +334,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
         </div>
 
         {/* RIGHT PANE: Reporting Form */}
-        <div className="w-full lg:w-96 bg-slate-900 border-l border-slate-800 flex flex-col shadow-2xl z-20">
+        <div className="w-full lg:w-96 bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col shadow-2xl z-20">
             <div className="p-6 border-b border-slate-800">
                 <h2 className="text-white font-bold text-lg flex items-center gap-2">
                     <AlertCircle className="text-red-500" />
@@ -345,7 +345,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
                 </p>
             </div>
             
-            <form onSubmit={handleSubmit} className="flex-1 p-6 flex flex-col gap-6 overflow-y-auto">
+            <form id="incident-report-form" onSubmit={handleSubmit} className="p-6 pb-32 lg:pb-6 flex flex-col gap-6 overflow-visible lg:flex-1 lg:overflow-y-auto">
                 
                 {/* Incident Type Selection */}
                 <div className="space-y-3">
@@ -405,7 +405,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
                 <button
                     type="submit"
                     disabled={isSubmitting || !weather}
-                    className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
+                    className="hidden lg:flex w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl items-center justify-center gap-3 transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
                 >
                     {isSubmitting ? (
                         <>
@@ -422,6 +422,27 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
 
             </form>
         </div>
+      </div>
+
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-800 bg-slate-900/95 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 backdrop-blur-md lg:hidden">
+        <button
+          type="submit"
+          form="incident-report-form"
+          disabled={isSubmitting || !weather}
+          className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl flex items-center justify-center gap-3 transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="animate-spin" />
+              <span>PROCESSING INTELLIGENCE...</span>
+            </>
+          ) : (
+            <>
+              <Send size={20} />
+              <span>TRANSMIT REPORT</span>
+            </>
+          )}
+        </button>
       </div>
     </div>
   );
