@@ -407,6 +407,8 @@ export const GISMap: React.FC<GISMapProps> = ({
         applyOverlayPadding(mapControlsRef.current, ['top']);
         applyOverlayPadding(legendPanelRef.current, ['bottom']);
         applyOverlayPadding(gpsFabRef.current, ['bottom']);
+        // Bias the mobile first frame downward so BiH sits lower under the top UI.
+        padding.top += 32;
       } else {
         applyOverlayPadding(statusPanelRef.current, ['top']);
         applyOverlayPadding(mapControlsRef.current, ['top']);
