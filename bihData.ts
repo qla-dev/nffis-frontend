@@ -149,3 +149,234 @@ export const bihBorderData = {
 }
 
 ;
+
+export type CantonCode =
+  | 'USK'
+  | 'PK'
+  | 'TK'
+  | 'ZDK'
+  | 'BPK'
+  | 'SBK'
+  | 'HNK'
+  | 'ZHK'
+  | 'KS'
+  | 'K10';
+
+export interface CantonDefinition {
+  code: CantonCode;
+  name: string;
+  seat: string;
+  color: string;
+}
+
+export type BorderRegionKey = 'federation' | 'republicSrpska' | 'brckoDistrict';
+
+interface BihShapeProperties {
+  shapeName: string;
+  shapeISO: string;
+  shapeID: string;
+  shapeGroup: string;
+  shapeType: string;
+  borderRegionKey?: BorderRegionKey | null;
+  borderRegionName?: string | null;
+  borderColor?: string | null;
+  cantonCode?: CantonCode | null;
+  cantonName?: string | null;
+  cantonSeat?: string | null;
+  cantonColor?: string | null;
+}
+
+interface BihShapeFeature {
+  type: 'Feature';
+  properties: BihShapeProperties;
+  geometry: unknown;
+}
+
+export const BIH_FLAG_BLUE = '#1d4ed8';
+export const REPUBLIC_OF_SRPSKA_COLOR = '#dc2626';
+export const BRCKO_DISTRICT_COLOR = '#14b8a6';
+
+export const BIH_CANTONS: readonly CantonDefinition[] = [
+  { code: 'USK', name: 'Unsko-sanski kanton', seat: 'Bihać', color: '#2563eb' },
+  { code: 'PK', name: 'Posavski kanton', seat: 'Orašje', color: '#0f766e' },
+  { code: 'TK', name: 'Tuzlanski kanton', seat: 'Tuzla', color: '#9333ea' },
+  { code: 'ZDK', name: 'Zeničko-dobojski kanton', seat: 'Zenica', color: '#b45309' },
+  { code: 'BPK', name: 'Bosansko-podrinjski kanton Goražde', seat: 'Goražde', color: '#dc2626' },
+  { code: 'SBK', name: 'Srednjobosanski kanton', seat: 'Travnik', color: '#059669' },
+  { code: 'HNK', name: 'Hercegovačko-neretvanski kanton', seat: 'Mostar', color: '#ea580c' },
+  { code: 'ZHK', name: 'Zapadnohercegovački kanton', seat: 'Široki Brijeg', color: '#be123c' },
+  { code: 'KS', name: 'Kanton Sarajevo', seat: 'Sarajevo', color: '#7c3aed' },
+  { code: 'K10', name: 'Kanton 10', seat: 'Kupres', color: '#0891b2' },
+] as const;
+
+export const ALL_CANTON_CODES = BIH_CANTONS.map((canton) => canton.code) as readonly CantonCode[];
+
+const CANTON_BY_CODE = new Map<CantonCode, CantonDefinition>(
+  BIH_CANTONS.map((canton) => [canton.code, canton])
+);
+
+const SARAJEVO_NOVI_GRAD_SHAPE_ID = '43093233B94913651340481';
+
+const CANTON_BY_SHAPE_KEY = new Map<string, CantonCode>([
+  ['bihac', 'USK'],
+  ['bosanskakrupa', 'USK'],
+  ['bosanskipetrovac', 'USK'],
+  ['buzim', 'USK'],
+  ['cazin', 'USK'],
+  ['kljuc', 'USK'],
+  ['sanskimost', 'USK'],
+  ['velikakladusa', 'USK'],
+
+  ['domaljevacsamac', 'PK'],
+  ['odzak', 'PK'],
+  ['orasje', 'PK'],
+
+  ['banovici', 'TK'],
+  ['celic', 'TK'],
+  ['dobojeast', 'TK'],
+  ['dobojistok', 'TK'],
+  ['gracanica', 'TK'],
+  ['gradacac', 'TK'],
+  ['kalesija', 'TK'],
+  ['kladanj', 'TK'],
+  ['lukavac', 'TK'],
+  ['sapna', 'TK'],
+  ['srebrenik', 'TK'],
+  ['teocak', 'TK'],
+  ['tuzla', 'TK'],
+  ['zivinice', 'TK'],
+
+  ['breza', 'ZDK'],
+  ['dobojjug', 'ZDK'],
+  ['kakanj', 'ZDK'],
+  ['maglaj', 'ZDK'],
+  ['olovo', 'ZDK'],
+  ['tesanj', 'ZDK'],
+  ['usora', 'ZDK'],
+  ['vares', 'ZDK'],
+  ['visoko', 'ZDK'],
+  ['zavidovici', 'ZDK'],
+  ['zenica', 'ZDK'],
+  ['zepce', 'ZDK'],
+
+  ['gorazde', 'BPK'],
+  ['focaustikolina', 'BPK'],
+  ['palepraca', 'BPK'],
+
+  ['bugojno', 'SBK'],
+  ['busovaca', 'SBK'],
+  ['dobretici', 'SBK'],
+  ['donjivakuf', 'SBK'],
+  ['fojnica', 'SBK'],
+  ['gornjivakufuskoplje', 'SBK'],
+  ['jajce', 'SBK'],
+  ['kiseljak', 'SBK'],
+  ['kresevo', 'SBK'],
+  ['novitravnik', 'SBK'],
+  ['travnik', 'SBK'],
+  ['vitez', 'SBK'],
+
+  ['capljina', 'HNK'],
+  ['citluk', 'HNK'],
+  ['jablanica', 'HNK'],
+  ['konjic', 'HNK'],
+  ['mostar', 'HNK'],
+  ['neum', 'HNK'],
+  ['prozorrama', 'HNK'],
+  ['ravno', 'HNK'],
+  ['stolac', 'HNK'],
+
+  ['grude', 'ZHK'],
+  ['ljubuski', 'ZHK'],
+  ['posusje', 'ZHK'],
+  ['sirokibrijeg', 'ZHK'],
+
+  ['centar', 'KS'],
+  ['hadzici', 'KS'],
+  ['ilidza', 'KS'],
+  ['ilijas', 'KS'],
+  ['novosarajevo', 'KS'],
+  ['starigrad', 'KS'],
+  ['trnovobih', 'KS'],
+  ['vogosca', 'KS'],
+
+  ['bosanskograhovo', 'K10'],
+  ['drvar', 'K10'],
+  ['glamoc', 'K10'],
+  ['kupresbih', 'K10'],
+  ['livno', 'K10'],
+  ['tomislavgrad', 'K10'],
+]);
+
+function decodeMojibake(value: string) {
+  if ([...value].some((char) => char.charCodeAt(0) > 255)) {
+    return value;
+  }
+
+  const decoded = new TextDecoder('utf-8').decode(
+    Uint8Array.from([...value].map((char) => char.charCodeAt(0)))
+  );
+
+  return decoded.includes('\uFFFD') ? value : decoded;
+}
+
+function normalizeShapeName(value: string) {
+  return decodeMojibake(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function resolveCantonCode(properties: BihShapeProperties): CantonCode | null {
+  if (properties.shapeID === SARAJEVO_NOVI_GRAD_SHAPE_ID) {
+    return 'KS';
+  }
+
+  return CANTON_BY_SHAPE_KEY.get(normalizeShapeName(properties.shapeName)) ?? null;
+}
+
+function resolveBorderRegion(
+  properties: BihShapeProperties,
+  cantonCode: CantonCode | null
+): { key: BorderRegionKey; name: string; color: string } {
+  if (cantonCode) {
+    return {
+      key: 'federation',
+      name: 'Federation of BiH',
+      color: CANTON_BY_CODE.get(cantonCode)?.color ?? BIH_FLAG_BLUE,
+    };
+  }
+
+  if (normalizeShapeName(properties.shapeName) === 'brckodistrict') {
+    return {
+      key: 'brckoDistrict',
+      name: 'Brčko distrikt',
+      color: BRCKO_DISTRICT_COLOR,
+    };
+  }
+
+  return {
+    key: 'republicSrpska',
+    name: 'Republic of Srpska',
+    color: REPUBLIC_OF_SRPSKA_COLOR,
+  };
+}
+
+(bihBorderData.features as BihShapeFeature[]).forEach((feature) => {
+  const decodedShapeName = decodeMojibake(feature.properties.shapeName);
+  const nextProperties = feature.properties;
+  nextProperties.shapeName = decodedShapeName;
+
+  const cantonCode = resolveCantonCode(nextProperties);
+  const canton = cantonCode ? CANTON_BY_CODE.get(cantonCode) ?? null : null;
+  const borderRegion = resolveBorderRegion(nextProperties, cantonCode);
+
+  nextProperties.borderRegionKey = borderRegion.key;
+  nextProperties.borderRegionName = borderRegion.name;
+  nextProperties.borderColor = borderRegion.color;
+  nextProperties.cantonCode = cantonCode;
+  nextProperties.cantonName = canton?.name ?? null;
+  nextProperties.cantonSeat = canton?.seat ?? null;
+  nextProperties.cantonColor = canton?.color ?? null;
+});

@@ -123,7 +123,10 @@ const App: React.FC = () => {
 
   // Filter out base layers for the main "Layers" list view
   const overlayLayers = Object.values(MapLayer).filter(
-    (layer) => !BASE_LAYER_IDS.includes(layer) && layer !== MapLayer.METEOBLUE
+    (layer) =>
+      !BASE_LAYER_IDS.includes(layer) &&
+      layer !== MapLayer.METEOBLUE &&
+      layer !== MapLayer.BIH_BORDERS
   );
 
   return (

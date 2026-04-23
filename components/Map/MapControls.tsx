@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
-import { Sun, Moon, LandPlot, Wind, Thermometer, Trees, Settings2, Info, Satellite, X, Map as MapIcon, Globe2, ShieldCheck, Trash2, Flame, Waves, Eye, Cloud, Radar, Mountain, ThermometerSun } from 'lucide-react';
+import { Sun, Moon, LandPlot, Wind, Thermometer, Trees, Settings2, Info, Satellite, X, Map as MapIcon, Globe2, ShieldCheck, Trash2, Flame, Waves, Eye, Cloud, Radar, Mountain, ThermometerSun, Check } from 'lucide-react';
 import { MapLayer, Language, RegionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
+import type { CantonCode, CantonDefinition } from '../../bihData';
 
 interface MapControlsProps {
   activeLayers: Set<MapLayer>;
@@ -13,6 +14,17 @@ interface MapControlsProps {
   showLegend: boolean;
   onToggleLegend: () => void;
   language: Language;
+  borderLayerVisible: boolean;
+  cantons: readonly CantonDefinition[];
+  selectedCantonCodes: Set<CantonCode>;
+  federationSelected: boolean;
+  republicSrpskaSelected: boolean;
+  brckoDistrictSelected: boolean;
+  onToggleBorderLayer: () => void;
+  onToggleFederation: () => void;
+  onToggleRepublicSrpska: () => void;
+  onToggleBrckoDistrict: () => void;
+  onToggleCanton: (code: CantonCode) => void;
   containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
@@ -25,13 +37,40 @@ export const MapControls: React.FC<MapControlsProps> = ({
   showLegend,
   onToggleLegend,
   language,
+  borderLayerVisible,
+  cantons,
+  selectedCantonCodes,
+  federationSelected,
+  republicSrpskaSelected,
+  brckoDistrictSelected,
+  onToggleBorderLayer,
+  onToggleFederation,
+  onToggleRepublicSrpska,
+  onToggleBrckoDistrict,
+  onToggleCanton,
   containerRef
 }) => {
-  const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | 'fwi' | null>(null);
+  const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | 'fwi' | 'borders' | null>(null);
   const t = TRANSLATIONS[language];
 
-  const togglePanel = (panel: 'assets' | 'layers' | 'satellite' | 'fwi') => {
+  const togglePanel = (panel: 'assets' | 'layers' | 'satellite' | 'fwi' | 'borders') => {
     setActivePanel(activePanel === panel ? null : panel);
+  };
+
+  const handleBordersButtonClick = () => {
+    if (!borderLayerVisible) {
+      onToggleBorderLayer();
+      setActivePanel('borders');
+      return;
+    }
+
+    if (activePanel === 'borders') {
+      onToggleBorderLayer();
+      setActivePanel(null);
+      return;
+    }
+
+    setActivePanel('borders');
   };
 
   const isBaseLayerActive = (layer: MapLayer) => activeLayers.has(layer);
@@ -69,11 +108,11 @@ export const MapControls: React.FC<MapControlsProps> = ({
             
             <div className="w-px h-6 bg-slate-800 mx-1" />
 
-            {/* State Borders */}
+            {/* BiH Cantons */}
             <button 
-              onClick={() => onToggleLayer(MapLayer.BIH_BORDERS)} 
-              className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.BIH_BORDERS) ? 'text-pink-500 bg-pink-950/30 shadow-[0_0_10px_rgba(236,72,153,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
-              title="Toggle State Borders"
+              onClick={handleBordersButtonClick} 
+              className={`p-2.5 rounded-lg transition-colors ${borderLayerVisible ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+              title="BiH Cantons"
             >
               <LandPlot size={18} />
             </button>
@@ -154,6 +193,92 @@ export const MapControls: React.FC<MapControlsProps> = ({
 
       {/* Dropdown Panels Container */}
       <div className="relative w-64 mr-4 md:mr-0">
+        {activePanel === 'borders' && (
+          <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-72 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
+            <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">
+              BiH Cantons
+              <button onClick={() => setActivePanel(null)} className="hover:text-white transition-colors">
+                <X size={14} />
+              </button>
+            </h4>
+
+            <div className="space-y-2 mb-4">
+              <button
+                onClick={onToggleFederation}
+                className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-all ${
+                  federationSelected
+                    ? 'border-blue-600/40 bg-blue-600/10'
+                    : 'border-slate-800 bg-slate-900/50 hover:border-slate-700'
+                }`}
+              >
+                <div>
+                  <div className={`text-[11px] font-bold ${federationSelected ? 'text-white' : 'text-slate-300'}`}>Federation of BiH</div>
+                  <div className="text-[10px] text-blue-200/80">{selectedCantonCodes.size}/{cantons.length} cantons selected</div>
+                </div>
+                {federationSelected && <Check size={12} className="text-blue-500 shrink-0" />}
+              </button>
+              <button
+                onClick={onToggleRepublicSrpska}
+                className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-all ${
+                  republicSrpskaSelected
+                    ? 'border-blue-600/40 bg-blue-600/10'
+                    : 'border-slate-800 bg-slate-900/50 hover:border-slate-700'
+                }`}
+              >
+                <div className={`text-[11px] font-bold ${republicSrpskaSelected ? 'text-white' : 'text-slate-300'}`}>Republic of Srpska</div>
+                {republicSrpskaSelected && <Check size={12} className="text-blue-500 shrink-0" />}
+              </button>
+              <button
+                onClick={onToggleBrckoDistrict}
+                className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-all ${
+                  brckoDistrictSelected
+                    ? 'border-blue-600/40 bg-blue-600/10'
+                    : 'border-slate-800 bg-slate-900/50 hover:border-slate-700'
+                }`}
+              >
+                <div className={`text-[11px] font-bold ${brckoDistrictSelected ? 'text-white' : 'text-slate-300'}`}>Brčko distrikt</div>
+                {brckoDistrictSelected && <Check size={12} className="text-blue-500 shrink-0" />}
+              </button>
+            </div>
+
+            <div className="pt-3 border-t border-slate-800 space-y-1">
+              {cantons.map((canton) => {
+                const isSelected = selectedCantonCodes.has(canton.code);
+
+                return (
+                  <button
+                    key={canton.code}
+                    onClick={() => onToggleCanton(canton.code)}
+                    className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
+                      isSelected
+                        ? 'bg-blue-600/10 border-blue-600/50'
+                        : 'bg-slate-900/50 border-transparent hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shadow-[0_0_0_1px_rgba(15,23,42,0.8)]"
+                        style={{ backgroundColor: canton.color }}
+                      />
+                      <span className={`text-[10px] font-black tracking-[0.16em] ${isSelected ? 'text-white' : 'text-slate-500'}`}>
+                        {canton.code}
+                      </span>
+                      <div className="min-w-0 text-left">
+                        <div className={`text-[11px] font-bold truncate ${isSelected ? 'text-white' : 'text-slate-500'}`}>
+                          {canton.name}
+                        </div>
+                        <div className="text-[10px] text-slate-500 truncate">
+                          {canton.seat}
+                        </div>
+                      </div>
+                    </div>
+                    {isSelected && <Check size={12} className="text-blue-500 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         
         {/* Satellite Panel */}
         {activePanel === 'satellite' && (

@@ -6,7 +6,14 @@ import 'leaflet.heat';
 import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteoResponse, ForestRegion } from '../../types';
-import { bihBorderData } from '../../bihData';
+import {
+  ALL_CANTON_CODES,
+  BIH_CANTONS,
+  BIH_FLAG_BLUE,
+  bihBorderData,
+  type BorderRegionKey,
+  type CantonCode,
+} from '../../bihData';
 import { MapControls } from './MapControls';
 import { ForestHoverCard } from './ForestHoverCard';
 import { AngstromHeatLayer } from '../Layers/FWI/AngstromHeatLayer';
@@ -131,6 +138,11 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [showLegend, setShowLegend] = useState(true);
+  const [selectedCantonCodes, setSelectedCantonCodes] = useState<Set<CantonCode>>(
+    () => new Set(ALL_CANTON_CODES)
+  );
+  const [republicSrpskaSelected, setRepublicSrpskaSelected] = useState(true);
+  const [brckoDistrictSelected, setBrckoDistrictSelected] = useState(true);
 
   // -- NEW DASHBOARD STATE --
   const [selectedForest, setSelectedForest] = useState<ForestRegion | null>(null);
@@ -145,6 +157,172 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
 
   const t = TRANSLATIONS[language];
+  const federationSelected = selectedCantonCodes.size > 0;
+  const allCantonsSelected = selectedCantonCodes.size === ALL_CANTON_CODES.length;
+  const borderLayerVisible = activeLayers.has(MapLayer.BIH_BORDERS);
+  const allBorderRegionsSelected =
+    allCantonsSelected && republicSrpskaSelected && brckoDistrictSelected;
+  const hasAnyBorderSelection =
+    federationSelected || republicSrpskaSelected || brckoDistrictSelected;
+
+  const bihCantonFeatures = useMemo(() => bihBorderData.features as Array<any>, []);
+  const visibleBihCantonData = useMemo(
+    () => ({
+      ...bihBorderData,
+      features: bihCantonFeatures.filter((feature) => {
+        const borderRegionKey = feature.properties?.borderRegionKey as BorderRegionKey | undefined;
+
+        if (borderRegionKey === 'federation') {
+          return selectedCantonCodes.has(feature.properties.cantonCode as CantonCode);
+        }
+
+        if (borderRegionKey === 'republicSrpska') {
+          return republicSrpskaSelected;
+        }
+
+        if (borderRegionKey === 'brckoDistrict') {
+          return brckoDistrictSelected;
+        }
+
+        return false;
+      }),
+    }),
+    [bihCantonFeatures, brckoDistrictSelected, republicSrpskaSelected, selectedCantonCodes]
+  );
+  const borderLayerDataKey = useMemo(
+    () =>
+      [
+        republicSrpskaSelected ? 'rs-on' : 'rs-off',
+        brckoDistrictSelected ? 'brcko-on' : 'brcko-off',
+        ...Array.from(selectedCantonCodes).sort(),
+      ].join('|'),
+    [brckoDistrictSelected, republicSrpskaSelected, selectedCantonCodes]
+  );
+  const cantonBorderStyle = useCallback(
+    (feature?: any): L.PathOptions => {
+      const featureColor =
+        allBorderRegionsSelected
+          ? BIH_FLAG_BLUE
+          : feature?.properties?.borderColor ?? BIH_FLAG_BLUE;
+
+      return {
+        color: featureColor,
+        fillColor: featureColor,
+        fillOpacity: allBorderRegionsSelected ? 0.04 : 0.12,
+        opacity: allBorderRegionsSelected ? 0.82 : 0.94,
+        weight: allBorderRegionsSelected ? 2 : 2.2,
+      };
+    },
+    [allBorderRegionsSelected]
+  );
+
+  const handleToggleBorderLayer = useCallback(() => {
+    if (!borderLayerVisible && !hasAnyBorderSelection) {
+      setSelectedCantonCodes(new Set(ALL_CANTON_CODES));
+      setRepublicSrpskaSelected(true);
+      setBrckoDistrictSelected(true);
+    }
+
+    onToggleLayer(MapLayer.BIH_BORDERS);
+  }, [borderLayerVisible, hasAnyBorderSelection, onToggleLayer]);
+
+  const handleToggleFederation = useCallback(() => {
+    const nextSelection = federationSelected ? new Set<CantonCode>() : new Set(ALL_CANTON_CODES);
+    setSelectedCantonCodes(nextSelection);
+
+    const hasNextSelection =
+      nextSelection.size > 0 || republicSrpskaSelected || brckoDistrictSelected;
+
+    if (!hasNextSelection && borderLayerVisible) {
+      onToggleLayer(MapLayer.BIH_BORDERS);
+    }
+
+    if (hasNextSelection && !borderLayerVisible) {
+      onToggleLayer(MapLayer.BIH_BORDERS);
+    }
+  }, [
+    borderLayerVisible,
+    brckoDistrictSelected,
+    federationSelected,
+    onToggleLayer,
+    republicSrpskaSelected,
+  ]);
+
+  const handleToggleRepublicSrpska = useCallback(() => {
+    const nextValue = !republicSrpskaSelected;
+    setRepublicSrpskaSelected(nextValue);
+
+    const hasNextSelection =
+      selectedCantonCodes.size > 0 || nextValue || brckoDistrictSelected;
+
+    if (!hasNextSelection && borderLayerVisible) {
+      onToggleLayer(MapLayer.BIH_BORDERS);
+    }
+
+    if (hasNextSelection && !borderLayerVisible) {
+      onToggleLayer(MapLayer.BIH_BORDERS);
+    }
+  }, [
+    borderLayerVisible,
+    brckoDistrictSelected,
+    onToggleLayer,
+    republicSrpskaSelected,
+    selectedCantonCodes,
+  ]);
+
+  const handleToggleBrckoDistrict = useCallback(() => {
+    const nextValue = !brckoDistrictSelected;
+    setBrckoDistrictSelected(nextValue);
+
+    const hasNextSelection =
+      selectedCantonCodes.size > 0 || republicSrpskaSelected || nextValue;
+
+    if (!hasNextSelection && borderLayerVisible) {
+      onToggleLayer(MapLayer.BIH_BORDERS);
+    }
+
+    if (hasNextSelection && !borderLayerVisible) {
+      onToggleLayer(MapLayer.BIH_BORDERS);
+    }
+  }, [
+    borderLayerVisible,
+    brckoDistrictSelected,
+    onToggleLayer,
+    republicSrpskaSelected,
+    selectedCantonCodes,
+  ]);
+
+  const handleToggleCanton = useCallback(
+    (code: CantonCode) => {
+      const nextSelection = new Set(selectedCantonCodes);
+
+      if (nextSelection.has(code)) {
+        nextSelection.delete(code);
+      } else {
+        nextSelection.add(code);
+      }
+
+      setSelectedCantonCodes(nextSelection);
+
+      const hasNextSelection =
+        nextSelection.size > 0 || republicSrpskaSelected || brckoDistrictSelected;
+
+      if (!hasNextSelection && borderLayerVisible) {
+        onToggleLayer(MapLayer.BIH_BORDERS);
+      }
+
+      if (hasNextSelection && !borderLayerVisible) {
+        onToggleLayer(MapLayer.BIH_BORDERS);
+      }
+    },
+    [
+      borderLayerVisible,
+      brckoDistrictSelected,
+      onToggleLayer,
+      republicSrpskaSelected,
+      selectedCantonCodes,
+    ]
+  );
 
   // Helper to get translated weather info
   const getWeatherInfo = (code: number) => {
@@ -939,8 +1117,12 @@ export const GISMap: React.FC<GISMapProps> = ({
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_KBDI)}
         />
-        {activeLayers.has(MapLayer.BIH_BORDERS) && (
-          <GeoJSON data={bihBorderData as any} style={{ color: '#ec4899', weight: 2, fill: false, opacity: 0.6 }} />
+        {borderLayerVisible && visibleBihCantonData.features.length > 0 && (
+          <GeoJSON
+            key={borderLayerDataKey}
+            data={visibleBihCantonData as any}
+            style={cantonBorderStyle}
+          />
         )}
         
         {/* FOREST MARKERS - Hover triggers Tooltip card, Button in Tooltip triggers Full Screen */}
@@ -1377,6 +1559,17 @@ export const GISMap: React.FC<GISMapProps> = ({
         showLegend={showLegend}
         onToggleLegend={() => setShowLegend(!showLegend)}
         language={language}
+        borderLayerVisible={borderLayerVisible}
+        cantons={BIH_CANTONS}
+        selectedCantonCodes={selectedCantonCodes}
+        federationSelected={federationSelected}
+        republicSrpskaSelected={republicSrpskaSelected}
+        brckoDistrictSelected={brckoDistrictSelected}
+        onToggleBorderLayer={handleToggleBorderLayer}
+        onToggleFederation={handleToggleFederation}
+        onToggleRepublicSrpska={handleToggleRepublicSrpska}
+        onToggleBrckoDistrict={handleToggleBrckoDistrict}
+        onToggleCanton={handleToggleCanton}
       />
 
       {/* Stacked Legends Container (Left) */}
