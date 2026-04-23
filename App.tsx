@@ -3,6 +3,7 @@ import React, { useState, useCallback } from 'react';
 import { Navigation } from './components/Navigation';
 import { GISMap } from './components/Map/GISMap';
 import { ReportModal } from './components/Report/ReportModal';
+import { SessionLoginGate } from './components/Auth/SessionLoginGate';
 import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './types';
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
 import { Activity, Shield, Waves, Flame, Search, Layers, Database, ChevronRight } from 'lucide-react';
@@ -295,6 +296,8 @@ const App: React.FC = () => {
           />
         )}
       </main>
+
+      <SessionLoginGate />
     </div>
   );
 };
