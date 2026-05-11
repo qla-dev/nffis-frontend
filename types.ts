@@ -29,7 +29,7 @@ export enum MapLayer {
   LANDFILLS = 'Active Landfills',
   PROTECTED_AREAS = 'Protected Areas (Heatmap)',
   FIREFIGHTER_STATIONS = 'Firefighter Stations',
-  RS_FIREFIGHTER_DENSITY = 'Firefighter Density (RS)',
+  RS_FIREFIGHTER_DENSITY = 'Firefighters / Population',
   BIH_BORDERS = 'BiH State Borders'
 }
 

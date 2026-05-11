@@ -54,6 +54,16 @@ const FIREFIGHTER_STATION_STYLE: Record<
   industrial: { label: 'I', color: '#22d3ee', glow: 'rgba(34,211,238,0.28)' },
 };
 
+const toRasterBounds = (bounds: L.LatLngBounds) => {
+  const paddedBounds = bounds.pad(0.12);
+  return {
+    west: paddedBounds.getWest(),
+    east: paddedBounds.getEast(),
+    south: paddedBounds.getSouth(),
+    north: paddedBounds.getNorth(),
+  };
+};
+
 // --- ICONS & STYLES ---
 const ICON_PATHS: Record<string, string> = {
   tree: `<path d="M12 19v3"/><path d="M12 19h-3a9 9 0 0 1 0-18h6a9 9 0 0 1 0 18h-3"/>`,
@@ -185,6 +195,12 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [forestFwiData, setForestFwiData] = useState<ForestFireIndexSnapshot[]>([]);
   const [isLoadingFwi, setIsLoadingFwi] = useState(false);
   const [isMeteoblueUnavailable, setIsMeteoblueUnavailable] = useState(false);
+  const [heatViewportBounds, setHeatViewportBounds] = useState<{
+    west: number;
+    east: number;
+    south: number;
+    north: number;
+  } | null>(null);
 
   // -- METEOBLUE DYNAMIC STATE --
   const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
@@ -455,23 +471,6 @@ export const GISMap: React.FC<GISMapProps> = ({
     () => MOCK_FORESTS.filter((forest) => forest.type !== RegionType.LANDFILL),
     []
   );
-  const fwiRasterBounds = useMemo(
-    () => ({
-      west: bihBounds.getWest() - 0.45,
-      east: bihBounds.getEast() + 0.45,
-      south: bihBounds.getSouth() - 0.35,
-      north: bihBounds.getNorth() + 0.35,
-    }),
-    [bihBounds]
-  );
-  const meteoblueBounds = useMemo(
-    () =>
-      [
-        [bihBounds.getSouth() - 0.15, bihBounds.getWest() - 0.15],
-        [bihBounds.getNorth() + 0.15, bihBounds.getEast() + 0.15],
-      ] as L.LatLngBoundsExpression,
-    [bihBounds]
-  );
   const handleMeteoblueTileError = useCallback(() => {
     setIsMeteoblueUnavailable(true);
   }, []);
@@ -555,6 +554,27 @@ export const GISMap: React.FC<GISMapProps> = ({
 
     ensurePane(FWI_OVERLAY_PANE, 360);
     ensurePane(METEOBLUE_OVERLAY_PANE, 380);
+  }, [map]);
+
+  useEffect(() => {
+    if (!map) {
+      return;
+    }
+
+    const syncHeatViewportBounds = () => {
+      setHeatViewportBounds(toRasterBounds(map.getBounds()));
+    };
+
+    syncHeatViewportBounds();
+    map.on('moveend', syncHeatViewportBounds);
+    map.on('zoomend', syncHeatViewportBounds);
+    map.on('resize', syncHeatViewportBounds);
+
+    return () => {
+      map.off('moveend', syncHeatViewportBounds);
+      map.off('zoomend', syncHeatViewportBounds);
+      map.off('resize', syncHeatViewportBounds);
+    };
   }, [map]);
 
   // Fetch Weather from Open-Meteo with Advanced Params
@@ -1153,7 +1173,6 @@ export const GISMap: React.FC<GISMapProps> = ({
             opacity={0.78}
             pane={METEOBLUE_OVERLAY_PANE}
             zIndex={380}
-            bounds={meteoblueBounds}
             keepBuffer={0}
             updateWhenIdle={true}
             updateWhenZooming={false}
@@ -1177,19 +1196,19 @@ export const GISMap: React.FC<GISMapProps> = ({
         />
         <AngstromHeatLayer
           points={forestFwiData}
-          rasterBounds={fwiRasterBounds}
+          rasterBounds={heatViewportBounds ?? undefined}
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_ANGSTROM)}
         />
         <GFIHeatLayer
           points={forestFwiData}
-          rasterBounds={fwiRasterBounds}
+          rasterBounds={heatViewportBounds ?? undefined}
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_GFI)}
         />
         <KBDIHeatLayer
           points={forestFwiData}
-          rasterBounds={fwiRasterBounds}
+          rasterBounds={heatViewportBounds ?? undefined}
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_KBDI)}
         />

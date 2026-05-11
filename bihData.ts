@@ -226,7 +226,7 @@ const CANTON_BY_CODE = new Map<CantonCode, CantonDefinition>(
 );
 
 const SARAJEVO_NOVI_GRAD_SHAPE_ID = '43093233B94913651340481';
-const FIREFIGHTER_DENSITY_SOURCE = 'User-supplied RS density map (digitized best-effort)';
+const FIREFIGHTER_DENSITY_SOURCE = 'Density map';
 const FIREFIGHTER_DENSITY_LABELS: Record<FirefighterDensityBucket, string> = {
   'no-data': 'No data',
   '1-500': '1 - 500',
