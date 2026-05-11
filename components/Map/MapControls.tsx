@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Sun, Moon, LandPlot, Wind, Thermometer, Trees, Settings2, Info, Satellite, X, Map as MapIcon, Globe2, ShieldCheck, Trash2, Flame, Waves, Eye, Cloud, Radar, Mountain, ThermometerSun, Check } from 'lucide-react';
+import { Sun, Moon, LandPlot, Wind, Thermometer, Trees, Settings2, Info, Satellite, X, Map as MapIcon, Globe2, ShieldCheck, Trash2, Flame, Waves, Eye, Cloud, Radar, Mountain, ThermometerSun, Check, MapPin, Users } from 'lucide-react';
 import { MapLayer, Language, RegionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import type { CantonCode, CantonDefinition } from '../../bihData';
@@ -115,6 +115,30 @@ export const MapControls: React.FC<MapControlsProps> = ({
               title="BiH Cantons"
             >
               <LandPlot size={18} />
+            </button>
+
+            <button
+              onClick={() => onToggleLayer(MapLayer.FIREFIGHTER_STATIONS)}
+              className={`p-2.5 rounded-lg transition-colors ${
+                activeLayers.has(MapLayer.FIREFIGHTER_STATIONS)
+                  ? 'text-orange-300 bg-orange-950/40 shadow-[0_0_10px_rgba(251,146,60,0.25)]'
+                  : 'text-slate-400 hover:bg-slate-800'
+              }`}
+              title={t.firefighterStations}
+            >
+              <MapPin size={18} />
+            </button>
+
+            <button
+              onClick={() => onToggleLayer(MapLayer.RS_FIREFIGHTER_DENSITY)}
+              className={`p-2.5 rounded-lg transition-colors ${
+                activeLayers.has(MapLayer.RS_FIREFIGHTER_DENSITY)
+                  ? 'text-emerald-300 bg-emerald-950/40 shadow-[0_0_10px_rgba(16,185,129,0.25)]'
+                  : 'text-slate-400 hover:bg-slate-800'
+              }`}
+              title={t.firefighterDensity}
+            >
+              <Users size={18} />
             </button>
 
             <div className="w-px h-6 bg-slate-800 mx-1" />
@@ -464,6 +488,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 { id: MapLayer.FORESTS, label: t.forestInventory, icon: Trees, color: 'text-emerald-500' },
                 { id: MapLayer.LANDFILLS, label: t.activeLandfills, icon: Trash2, color: 'text-red-500' },
                 { id: MapLayer.PROTECTED_AREAS, label: t.protectedAreas, icon: ShieldCheck, color: 'text-yellow-400' },
+                { id: MapLayer.FIREFIGHTER_STATIONS, label: t.firefighterStations, icon: MapPin, color: 'text-orange-400' },
               ].map(layer => (
                 <button 
                   key={layer.id}
@@ -501,6 +526,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
                   {[
                       { id: MapLayer.FIRE_RISK, label: t.fireThreats, icon: Flame, color: 'text-red-500' },
                       { id: MapLayer.FLOOD_RISK, label: t.hydrological, icon: Waves, color: 'text-blue-500' },
+                      { id: MapLayer.RS_FIREFIGHTER_DENSITY, label: t.firefighterDensity, icon: Users, color: 'text-emerald-400' },
                   ].map(layer => (
                     <button 
                       key={layer.id}

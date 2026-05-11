@@ -28,6 +28,8 @@ export enum MapLayer {
   FORESTS = 'Forest Inventory',
   LANDFILLS = 'Active Landfills',
   PROTECTED_AREAS = 'Protected Areas (Heatmap)',
+  FIREFIGHTER_STATIONS = 'Firefighter Stations',
+  RS_FIREFIGHTER_DENSITY = 'Firefighter Density (RS)',
   BIH_BORDERS = 'BiH State Borders'
 }
 

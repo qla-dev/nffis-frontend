@@ -13,7 +13,9 @@ import {
   bihBorderData,
   type BorderRegionKey,
   type CantonCode,
+  type FirefighterDensityBucket,
 } from '../../bihData';
+import { FIREFIGHTER_STATIONS, type FirefighterStationType } from '../../firefighterData';
 import { MapControls } from './MapControls';
 import { ForestHoverCard } from './ForestHoverCard';
 import { AngstromHeatLayer } from '../Layers/FWI/AngstromHeatLayer';
@@ -35,6 +37,22 @@ const FLOOD_HEAT_GRADIENT = {
 };
 const FWI_OVERLAY_PANE = 'fwi-overlay-pane';
 const METEOBLUE_OVERLAY_PANE = 'meteoblue-overlay-pane';
+const FIREFIGHTER_DENSITY_FILLS: Record<FirefighterDensityBucket, string> = {
+  'no-data': '#cbd5e1',
+  '1-500': '#34d399',
+  '501-1000': '#22c55e',
+  '1001-1500': '#f59e0b',
+  '1501-2000': '#f97316',
+  '2000-plus': '#dc2626',
+};
+const FIREFIGHTER_STATION_STYLE: Record<
+  FirefighterStationType,
+  { label: string; color: string; glow: string }
+> = {
+  territorial: { label: 'T', color: '#f97316', glow: 'rgba(249,115,22,0.28)' },
+  volunteer: { label: 'V', color: '#eab308', glow: 'rgba(234,179,8,0.28)' },
+  industrial: { label: 'I', color: '#22d3ee', glow: 'rgba(34,211,238,0.28)' },
+};
 
 // --- ICONS & STYLES ---
 const ICON_PATHS: Record<string, string> = {
@@ -66,6 +84,21 @@ const UserIcon = GlobalLeaflet.divIcon({
   iconSize: [32, 32],
   iconAnchor: [16, 16]
 });
+
+const FIREFIGHTER_STATION_ICONS = Object.fromEntries(
+  (Object.keys(FIREFIGHTER_STATION_STYLE) as FirefighterStationType[]).map((type) => {
+    const style = FIREFIGHTER_STATION_STYLE[type];
+    return [
+      type,
+      GlobalLeaflet.divIcon({
+        html: `<div class="flex items-center justify-center w-8 h-8 rounded-full border-2 font-black text-[11px] text-white shadow-xl" style="background: rgba(15,23,42,0.96); border-color: ${style.color}; box-shadow: 0 0 0 4px ${style.glow};">${style.label}</div>`,
+        className: '',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      }),
+    ];
+  })
+) as Record<FirefighterStationType, L.DivIcon>;
 
 // --- BASE LAYER CONFIGURATION ---
 const BASE_LAYER_CONFIG: Record<string, { url: string; attribution: string }> = {
@@ -189,6 +222,15 @@ export const GISMap: React.FC<GISMapProps> = ({
     }),
     [bihCantonFeatures, brckoDistrictSelected, republicSrpskaSelected, selectedCantonCodes]
   );
+  const firefighterDensityData = useMemo(
+    () => ({
+      ...bihBorderData,
+      features: bihCantonFeatures.filter(
+        (feature) => feature.properties?.borderRegionKey === 'republicSrpska'
+      ),
+    }),
+    [bihCantonFeatures]
+  );
   const borderLayerDataKey = useMemo(
     () =>
       [
@@ -197,6 +239,16 @@ export const GISMap: React.FC<GISMapProps> = ({
         ...Array.from(selectedCantonCodes).sort(),
       ].join('|'),
     [brckoDistrictSelected, republicSrpskaSelected, selectedCantonCodes]
+  );
+  const firefighterDensityLayerKey = useMemo(
+    () =>
+      firefighterDensityData.features
+        .map(
+          (feature) =>
+            `${feature.properties?.shapeID}:${feature.properties?.firefighterDensityBucket ?? 'none'}`
+        )
+        .join('|'),
+    [firefighterDensityData]
   );
   const cantonBorderStyle = useCallback(
     (feature?: any): L.PathOptions => {
@@ -215,6 +267,30 @@ export const GISMap: React.FC<GISMapProps> = ({
     },
     [allBorderRegionsSelected]
   );
+  const firefighterDensityStyle = useCallback((feature?: any): L.PathOptions => {
+    const bucket = (feature?.properties?.firefighterDensityBucket ?? 'no-data') as FirefighterDensityBucket;
+    const fillColor = FIREFIGHTER_DENSITY_FILLS[bucket] ?? FIREFIGHTER_DENSITY_FILLS['no-data'];
+
+    return {
+      color: '#0f172a',
+      fillColor,
+      fillOpacity: bucket === 'no-data' ? 0.2 : 0.42,
+      opacity: 0.72,
+      weight: 1,
+      dashArray: bucket === 'no-data' ? '4 3' : undefined,
+    };
+  }, []);
+  const handleFirefighterDensityFeature = useCallback((feature: any, layer: L.Layer) => {
+    const shapeName = feature?.properties?.shapeName ?? 'RS municipality';
+    const bucketLabel = feature?.properties?.firefighterDensityLabel ?? 'No data';
+    const sourceLabel = feature?.properties?.firefighterDensitySource ?? 'User map';
+    const leafletLayer = layer as L.Path;
+
+    leafletLayer.bindTooltip(
+      `<div style="min-width: 180px"><div style="font-weight: 700; margin-bottom: 4px;">${shapeName}</div><div style="font-size: 12px; opacity: 0.9;">${bucketLabel}</div><div style="font-size: 11px; opacity: 0.7; margin-top: 4px;">${sourceLabel}</div></div>`,
+      { sticky: true, direction: 'top', opacity: 0.95 }
+    );
+  }, []);
 
   const handleToggleBorderLayer = useCallback(() => {
     if (!borderLayerVisible && !hasAnyBorderSelection) {
@@ -1117,12 +1193,57 @@ export const GISMap: React.FC<GISMapProps> = ({
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_KBDI)}
         />
+        {activeLayers.has(MapLayer.RS_FIREFIGHTER_DENSITY) &&
+          firefighterDensityData.features.length > 0 && (
+            <GeoJSON
+              key={firefighterDensityLayerKey}
+              data={firefighterDensityData as any}
+              style={firefighterDensityStyle}
+              onEachFeature={handleFirefighterDensityFeature}
+            />
+          )}
         {borderLayerVisible && visibleBihCantonData.features.length > 0 && (
           <GeoJSON
             key={borderLayerDataKey}
             data={visibleBihCantonData as any}
             style={cantonBorderStyle}
           />
+        )}
+
+        {activeLayers.has(MapLayer.FIREFIGHTER_STATIONS) && (
+          <LayerGroup>
+            {FIREFIGHTER_STATIONS.map((station) => (
+              <Marker
+                key={station.id}
+                position={station.coordinates}
+                icon={FIREFIGHTER_STATION_ICONS[station.stationType]}
+              >
+                <Tooltip direction="top" offset={[0, -18]} opacity={1} interactive>
+                  <div className="min-w-[220px] rounded-xl border border-slate-800 bg-slate-950/95 p-3 text-left text-white shadow-2xl">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[13px] font-black tracking-wide">{station.name}</div>
+                        <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">
+                          {station.stationType} • {station.municipality}
+                        </div>
+                      </div>
+                      <div className="rounded-full border border-slate-700 px-2 py-1 text-[10px] font-bold text-slate-300">
+                        {station.capacity}
+                      </div>
+                    </div>
+                    <div className="mt-3 space-y-1 text-[11px] text-slate-300">
+                      <div><span className="text-slate-500">Address:</span> {station.address}</div>
+                      <div><span className="text-slate-500">Phone:</span> {station.phone}</div>
+                      <div>
+                        <span className="text-slate-500">Location:</span> {station.locationPrecision}
+                      </div>
+                      {station.note && <div className="pt-1 text-slate-400">{station.note}</div>}
+                    </div>
+                  </div>
+                </Tooltip>
+              </Marker>
+            ))}
+          </LayerGroup>
         )}
         
         {/* FOREST MARKERS - Hover triggers Tooltip card, Button in Tooltip triggers Full Screen */}

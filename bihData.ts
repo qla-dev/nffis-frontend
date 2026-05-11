@@ -170,6 +170,13 @@ export interface CantonDefinition {
 }
 
 export type BorderRegionKey = 'federation' | 'republicSrpska' | 'brckoDistrict';
+export type FirefighterDensityBucket =
+  | 'no-data'
+  | '1-500'
+  | '501-1000'
+  | '1001-1500'
+  | '1501-2000'
+  | '2000-plus';
 
 interface BihShapeProperties {
   shapeName: string;
@@ -184,6 +191,9 @@ interface BihShapeProperties {
   cantonName?: string | null;
   cantonSeat?: string | null;
   cantonColor?: string | null;
+  firefighterDensityBucket?: FirefighterDensityBucket | null;
+  firefighterDensityLabel?: string | null;
+  firefighterDensitySource?: string | null;
 }
 
 interface BihShapeFeature {
@@ -216,6 +226,15 @@ const CANTON_BY_CODE = new Map<CantonCode, CantonDefinition>(
 );
 
 const SARAJEVO_NOVI_GRAD_SHAPE_ID = '43093233B94913651340481';
+const FIREFIGHTER_DENSITY_SOURCE = 'User-supplied RS density map (digitized best-effort)';
+const FIREFIGHTER_DENSITY_LABELS: Record<FirefighterDensityBucket, string> = {
+  'no-data': 'No data',
+  '1-500': '1 - 500',
+  '501-1000': '501 - 1000',
+  '1001-1500': '1001 - 1500',
+  '1501-2000': '1501 - 2000',
+  '2000-plus': 'Over 2000',
+};
 
 const CANTON_BY_SHAPE_KEY = new Map<string, CantonCode>([
   ['bihac', 'USK'],
@@ -308,6 +327,59 @@ const CANTON_BY_SHAPE_KEY = new Map<string, CantonCode>([
   ['tomislavgrad', 'K10'],
 ]);
 
+const RS_FIREFIGHTER_DENSITY_BY_SHAPE_KEY = new Map<string, FirefighterDensityBucket>([
+  ['banjaluka', '2000-plus'],
+  ['berkovici', '1-500'],
+  ['bijeljina', '2000-plus'],
+  ['bileca', '501-1000'],
+  ['bratunac', '1501-2000'],
+  ['brod', '1001-1500'],
+  ['cajnice', '1-500'],
+  ['celinac', '1001-1500'],
+  ['derventa', '1501-2000'],
+  ['doboj', '2000-plus'],
+  ['foca', '1001-1500'],
+  ['gacko', '501-1000'],
+  ['gradiska', '2000-plus'],
+  ['hanpijesak', '1-500'],
+  ['istocnosarajevo', '2000-plus'],
+  ['jezero', '1-500'],
+  ['kalinovik', '1-500'],
+  ['knezevo', '501-1000'],
+  ['kotorvaros', '1501-2000'],
+  ['kostajnica', '1-500'],
+  ['kozarskadubica', '1501-2000'],
+  ['krupanauni', '1-500'],
+  ['laktasi', '2000-plus'],
+  ['ljubinje', '1-500'],
+  ['lopare', '501-1000'],
+  ['milici', '501-1000'],
+  ['modrica', '1501-2000'],
+  ['mrkonjicgrad', '1001-1500'],
+  ['nevesinje', '1001-1500'],
+  ['novigrad', '1001-1500'],
+  ['novogorazde', '1-500'],
+  ['ostraluka', '1-500'],
+  ['pelagicevo', '501-1000'],
+  ['petrovac', '1-500'],
+  ['petrovo', '501-1000'],
+  ['prijedor', '2000-plus'],
+  ['prnjavor', '2000-plus'],
+  ['ribnik', '1-500'],
+  ['rogatica', '501-1000'],
+  ['rudo', '501-1000'],
+  ['samac', '1501-2000'],
+  ['sipovo', '501-1000'],
+  ['srbac', '1001-1500'],
+  ['srebrenica', '1001-1500'],
+  ['stanari', '501-1000'],
+  ['teslic', '2000-plus'],
+  ['trebinje', '1001-1500'],
+  ['ugljevik', '501-1000'],
+  ['visegrad', '501-1000'],
+  ['zvornik', '2000-plus'],
+]);
+
 function decodeMojibake(value: string) {
   if ([...value].some((char) => char.charCodeAt(0) > 255)) {
     return value;
@@ -379,4 +451,17 @@ function resolveBorderRegion(
   nextProperties.cantonName = canton?.name ?? null;
   nextProperties.cantonSeat = canton?.seat ?? null;
   nextProperties.cantonColor = canton?.color ?? null;
+
+  const firefighterDensityBucket =
+    borderRegion.key === 'republicSrpska'
+      ? RS_FIREFIGHTER_DENSITY_BY_SHAPE_KEY.get(normalizeShapeName(decodedShapeName)) ?? 'no-data'
+      : null;
+
+  nextProperties.firefighterDensityBucket = firefighterDensityBucket;
+  nextProperties.firefighterDensityLabel = firefighterDensityBucket
+    ? FIREFIGHTER_DENSITY_LABELS[firefighterDensityBucket]
+    : null;
+  nextProperties.firefighterDensitySource = firefighterDensityBucket
+    ? FIREFIGHTER_DENSITY_SOURCE
+    : null;
 });
