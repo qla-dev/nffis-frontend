@@ -37,9 +37,9 @@ export const BosnianFWIHeatLayer: React.FC<BosnianFWIHeatLayerProps> = ({
       displayMin={0}
       displayMax={80}
       rasterBounds={rasterBounds}
-      colorScaleName="jet"
+      colorScaleName="plasma"
       debugLabel="BosnianFWI"
-      opacity={0.78}
+      opacity={0.55}
       influenceRadius={0.65}
       pane={pane}
     />
