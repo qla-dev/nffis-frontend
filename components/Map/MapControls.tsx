@@ -90,13 +90,11 @@ export const MapControls: React.FC<MapControlsProps> = ({
   const activeFwiLayer = [
     MapLayer.FWI_ANGSTROM,
     MapLayer.FWI_GFI,
-    MapLayer.FWI_KBDI
-  ].find((layer) => activeLayers.has(layer)) ?? null;
+    MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN].find((layer) => activeLayers.has(layer)) ?? null;
   const isAnyFwiActive = [
     MapLayer.FWI_ANGSTROM,
     MapLayer.FWI_GFI,
-    MapLayer.FWI_KBDI
-  ].some((layer) => activeLayers.has(layer));
+    MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN].some((layer) => activeLayers.has(layer));
 
   return (
     <div ref={containerRef} className="fixed top-0 left-0 right-0 pt-[env(safe-area-inset-top)] md:absolute md:top-4 md:right-4 md:left-auto md:pt-0 z-[2000] flex flex-col items-end gap-2">
@@ -450,6 +448,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 { id: MapLayer.FWI_ANGSTROM, label: t.dashboard.angstrom, icon: Flame, color: 'text-red-500' },
                 { id: MapLayer.FWI_GFI, label: t.dashboard.gfi, icon: Trees, color: 'text-emerald-500' },
                 { id: MapLayer.FWI_KBDI, label: t.dashboard.kbdi, icon: Thermometer, color: 'text-amber-400' },
+                { id: MapLayer.FWI_BOSNIAN, label: t.dashboard.fwiBosnian, icon: Flame, color: 'text-purple-500' },
               ].map((layer) => (
                 <button
                   key={layer.id ?? 'fwi-off'}

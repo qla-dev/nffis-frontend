@@ -24,6 +24,7 @@ import { FIREFIGHTER_STATION_STYLE } from './firefighterStationUi';
 import { AngstromHeatLayer } from '../Layers/FWI/AngstromHeatLayer';
 import { GFIHeatLayer } from '../Layers/FWI/GFIHeatLayer';
 import { KBDIHeatLayer } from '../Layers/FWI/KBDIHeatLayer';
+import { BosnianFWIHeatLayer } from '../Layers/FWI/BosnianFWIHeatLayer';
 import { AWSFBiHLayer } from './layers/AWS/AWSFBiHLayer';
 import { AWSRsLayer } from './layers/AWS/AWSRsLayer';
 
@@ -161,6 +162,9 @@ interface ForestFireIndexSnapshot {
   angstrom: number;
   gfi: number;
   kbdi: number;
+  fwiBosnian: number;
+  isi?: number;
+  bui?: number;
 }
 
 const FWI_DEBUG_PREFIX = '[FWI DEBUG][GISMap]';
@@ -462,7 +466,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   );
   const isAnyFwiLayerActive = useMemo(
     () =>
-      [MapLayer.FWI_ANGSTROM, MapLayer.FWI_GFI, MapLayer.FWI_KBDI].some((layer) =>
+      [MapLayer.FWI_ANGSTROM, MapLayer.FWI_GFI, MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN].some((layer) =>
         activeLayers.has(layer)
       ),
     [activeLayers]
@@ -831,8 +835,27 @@ export const GISMap: React.FC<GISMapProps> = ({
     let kbdi = (Math.max(0, temp) * 10) - (rain * 50);
     if (kbdi < 0) kbdi = 0;
     kbdi = Math.min(800, kbdi + (dryDays * 50));
+    
+    // -- Bosnian FWI Calculation (Scientific Methodology) --
+    // Proxies for ISI and BUI from current weather data
+    const isi = (windKmh * 0.12) * (1 + (30 - humidity) / 60) * (temp / 15);
+    const bui = (dryDays * 6) + (temp / 8);
+    
+    // fD - dependent on BUI
+    const fD = bui <= 80 
+      ? (0.626 * Math.pow(bui, 0.809) + 2.0)
+      : (1000.0 / (25.0 + 108.64 * Math.exp(-0.023 * bui)));
+    
+    // B - intermediate product
+    const B = 0.1 * isi * fD;
+    const B_safe = Math.max(B, 1e-6);
+    
+    // FWI calculation
+    const fwiBosnian = B > 1
+      ? Math.exp(2.72 * Math.pow(0.434 * Math.log(B_safe), 0.647))
+      : B;
 
-    return { ai, gfi, kbdi };
+    return { ai, gfi, kbdi, fwiBosnian, isi, bui };
   };
 
   const buildFallbackFwiSnapshot = (forest: ForestRegion): ForestFireIndexSnapshot => {
@@ -855,17 +878,14 @@ export const GISMap: React.FC<GISMapProps> = ({
       angstrom: 5.8 - (intensity * 3.8),
       gfi: 1 + (intensity * 11),
       kbdi: 90 + (intensity * 520),
+      fwiBosnian: intensity * 80,
     };
   };
 
   const calculateFireIndices = (weather: FireIndexWeatherData, hourIdx: number) => {
-    const { ai, gfi, kbdi } = computeFireIndexMetrics(weather, hourIdx);
+    const { ai, gfi, kbdi, fwiBosnian } = computeFireIndexMetrics(weather, hourIdx);
 
     // Angström Index
-    // Formula: (H / 20 + (27 - T) / 10) * (10 / (W_ms + 10)) -> Used simpler kmh adaptation often seen
-    // High AI = Low Risk. Low AI = High Risk.
-    // If AI < 2.5 Risk High.
-    
     let aiRisk = t.riskLevels.low;
     let aiColor = "text-emerald-500";
     if (ai < 2.0) { aiRisk = t.riskLevels.extreme; aiColor = "text-purple-500"; }
@@ -873,8 +893,7 @@ export const GISMap: React.FC<GISMapProps> = ({
     else if (ai < 3.0) { aiRisk = t.riskLevels.high; aiColor = "text-orange-500"; }
     else if (ai < 4.0) { aiRisk = t.riskLevels.moderate; aiColor = "text-yellow-500"; }
 
-    // GFI (Forest Fire Weather Index - Simplified)
-    // Count dry days (rain < 2mm in forecast as proxy for trend)
+    // GFI
     let gfiRisk = t.riskLevels.low;
     let gfiColor = "text-emerald-500";
     if (gfi > 15) { gfiRisk = t.riskLevels.extreme; gfiColor = "text-purple-500"; }
@@ -882,20 +901,28 @@ export const GISMap: React.FC<GISMapProps> = ({
     else if (gfi > 5) { gfiRisk = t.riskLevels.high; gfiColor = "text-orange-500"; }
     else if (gfi > 2) { gfiRisk = t.riskLevels.moderate; gfiColor = "text-yellow-500"; }
 
-    // KBDI (Approximation without historic DB)
-    // Daily drought factor based on max temp and lack of rain
+    // KBDI
     let kbdiRisk = t.riskLevels.low;
     let kbdiColor = "text-emerald-500";
     if (kbdi > 600) { kbdiRisk = t.riskLevels.extreme; kbdiColor = "text-purple-500"; }
     else if (kbdi > 400) { kbdiRisk = t.riskLevels.high; kbdiColor = "text-red-600"; }
     else if (kbdi > 200) { kbdiRisk = t.riskLevels.moderate; kbdiColor = "text-orange-500"; }
 
-    return { ai, aiRisk, aiColor, gfi, gfiRisk, gfiColor, kbdi, kbdiRisk, kbdiColor };
+    // Bosnian FWI (Scientific)
+    let fwiRisk = t.riskLevels.low;
+    let fwiColor = "text-emerald-500";
+    if (fwiBosnian >= 70.0) { fwiRisk = t.riskLevels.extreme; fwiColor = "text-purple-600"; }
+    else if (fwiBosnian >= 50.0) { fwiRisk = t.riskLevels.extreme; fwiColor = "text-purple-500"; }
+    else if (fwiBosnian >= 38.0) { fwiRisk = t.riskLevels.veryHigh; fwiColor = "text-red-600"; }
+    else if (fwiBosnian >= 21.3) { fwiRisk = t.riskLevels.high; fwiColor = "text-orange-500"; }
+    else if (fwiBosnian >= 11.2) { fwiRisk = t.riskLevels.moderate; fwiColor = "text-yellow-500"; }
+
+    return { ai, aiRisk, aiColor, gfi, gfiRisk, gfiColor, kbdi, kbdiRisk, kbdiColor, fwiBosnian, fwiRisk, fwiColor };
   };
 
   const activeFwiLayers = useMemo(
     () =>
-      [MapLayer.FWI_ANGSTROM, MapLayer.FWI_GFI, MapLayer.FWI_KBDI].filter((layer) =>
+      [MapLayer.FWI_ANGSTROM, MapLayer.FWI_GFI, MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN].filter((layer) =>
         activeLayers.has(layer)
       ),
     [activeLayers]
@@ -979,6 +1006,9 @@ export const GISMap: React.FC<GISMapProps> = ({
               angstrom: metrics.ai,
               gfi: metrics.gfi,
               kbdi: metrics.kbdi,
+              fwiBosnian: metrics.fwiBosnian,
+              isi: metrics.isi,
+              bui: metrics.bui,
             });
           } catch (error) {
             if (error instanceof DOMException && error.name === 'AbortError') {
@@ -1211,6 +1241,12 @@ export const GISMap: React.FC<GISMapProps> = ({
           rasterBounds={heatViewportBounds ?? undefined}
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_KBDI)}
+        />
+        <BosnianFWIHeatLayer
+          points={forestFwiData}
+          rasterBounds={heatViewportBounds ?? undefined}
+          pane={FWI_OVERLAY_PANE}
+          visible={activeLayers.has(MapLayer.FWI_BOSNIAN)}
         />
         {/* AWS — FBiH and RS layers, filtered by the three typed sub-layers */}
         {(activeLayers.has('AWS Precipitation' as MapLayer) || 
@@ -1587,6 +1623,21 @@ export const GISMap: React.FC<GISMapProps> = ({
                                                     <div className="h-full bg-gradient-to-r from-blue-500 via-yellow-500 to-red-800" style={{ width: `${Math.min(100, (risk.kbdi / 800) * 100)}%` }}></div>
                                                 </div>
                                                 <div className="mt-1 text-[10px] text-slate-500 font-mono text-right">{Math.round(risk.kbdi)}</div>
+                                            </div>
+
+                                            {/* Bosnian FWI */}
+                                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"></div>
+                                                        <span className="text-xs font-bold text-slate-300">{t.dashboard.fwiBosnian}</span>
+                                                    </div>
+                                                    <span className={`text-xs font-black uppercase ${risk.fwiColor}`}>{risk.fwiRisk}</span>
+                                                </div>
+                                                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-gradient-to-r from-green-500 via-yellow-500 via-red-500 to-purple-600" style={{ width: `${Math.min(100, (risk.fwiBosnian / 80) * 100)}%` }}></div>
+                                                </div>
+                                                <div className="mt-1 text-[10px] text-slate-500 font-mono text-right">{risk.fwiBosnian.toFixed(2)}</div>
                                             </div>
                                         </div>
                                     </div>

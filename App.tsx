@@ -23,7 +23,8 @@ const BASE_LAYER_IDS = [
 const FWI_LAYER_IDS = [
   MapLayer.FWI_ANGSTROM,
   MapLayer.FWI_GFI,
-  MapLayer.FWI_KBDI
+  MapLayer.FWI_KBDI,
+  MapLayer.FWI_BOSNIAN
 ];
 
 const FWI_DEBUG_PREFIX = '[FWI DEBUG]';

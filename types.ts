@@ -1,4 +1,3 @@
-
 export enum Language {
   EN = 'en',
   BS = 'bs',
@@ -22,6 +21,7 @@ export enum MapLayer {
   FWI_ANGSTROM = 'FWI Angström Index',
   FWI_GFI = 'FWI GFI',
   FWI_KBDI = 'FWI KBDI',
+  FWI_BOSNIAN = 'FWI Bosnian',
   FIRE_RISK = 'Fire Risk',
   FLOOD_RISK = 'Flood Risk',
   VEGETATION = 'Vegetation',
