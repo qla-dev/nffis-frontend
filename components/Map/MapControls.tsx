@@ -176,11 +176,13 @@ export const MapControls: React.FC<MapControlsProps> = ({
               <span className="text-[11px] font-black leading-none tracking-[0.18em]">FWI</span>
             </button>
 
-            {/* AWS */}
             <button 
               onClick={() => togglePanel('aws')}
               className={`inline-flex items-center justify-center px-3 py-2.5 rounded-lg leading-none transition-colors ${
-                activePanel === 'aws' || activeLayers.has(MapLayer.AWS_PRECIPITATION) || activeLayers.has(MapLayer.AWS_AGRO) || activeLayers.has(MapLayer.AWS_METEO)
+                activePanel === 'aws' || 
+                activeLayers.has('AWS Precipitation' as MapLayer) || 
+                activeLayers.has('AWS Agro' as MapLayer) || 
+                activeLayers.has('AWS Meteo' as MapLayer)
                   ? 'bg-blue-600 text-white shadow-lg'
                   : 'text-slate-400 hover:bg-slate-800'
               }`}
@@ -484,23 +486,20 @@ export const MapControls: React.FC<MapControlsProps> = ({
         {activePanel === 'aws' && (
           <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200">
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
-              Automatske Stanice
+              {(t as any).aws?.title || 'Automatske Stanice'}
               <button onClick={() => setActivePanel(null)} className="hover:text-white transition-colors">
                 <X size={14} />
               </button>
             </h4>
             <div className="space-y-1">
               {[
-                { id: 'AWS Precipitation' as MapLayer, label: 'Padavinska', dotColor: '#06b6d4' },
-                { id: 'AWS Agro' as MapLayer, label: 'Agrometeo', dotColor: '#eab308' },
-                { id: 'AWS Meteo' as MapLayer, label: 'Meteorološka', dotColor: '#10b981' },
+                { id: 'AWS Precipitation' as MapLayer, label: (t as any).aws?.precipitation || 'Padavinska', dotColor: '#06b6d4' },
+                { id: 'AWS Agro' as MapLayer, label: (t as any).aws?.agro || 'Agrometeo', dotColor: '#eab308' },
+                { id: 'AWS Meteo' as MapLayer, label: (t as any).aws?.meteo || 'Meteorološka', dotColor: '#10b981' },
               ].map(layer => (
                 <button
                   key={layer.id}
-                  onClick={() => {
-                    console.log('[DEBUG] AWS Button Clicked:', layer.id);
-                    onToggleLayer(layer.id);
-                  }}
+                  onClick={() => onToggleLayer(layer.id)}
                   className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
                     activeLayers.has(layer.id)
                       ? 'bg-blue-600/10 border-blue-600/50'

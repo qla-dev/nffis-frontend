@@ -173,6 +173,12 @@ export const TRANSLATIONS = {
       80: 'Slight Rain Showers', 81: 'Moderate Rain Showers', 82: 'Violent Rain Showers',
       85: 'Slight Snow Showers', 86: 'Heavy Snow Showers',
       95: 'Thunderstorm', 96: 'Thunderstorm with Hail', 99: 'Heavy Thunderstorm with Hail'
+    },
+    aws: {
+      title: 'Automatic Stations',
+      precipitation: 'Precipitation',
+      agro: 'Agrometeo',
+      meteo: 'Meteorological'
     }
   },
   [Language.BS]: {
@@ -344,6 +350,12 @@ export const TRANSLATIONS = {
       80: 'Slabi Pljuskovi Kiše', 81: 'Umjereni Pljuskovi Kiše', 82: 'Jaki Pljuskovi Kiše',
       85: 'Slabi Pljuskovi Snijega', 86: 'Jaki Pljuskovi Snijega',
       95: 'Grmljavina', 96: 'Grmljavina sa Gradom', 99: 'Jaka Grmljavina sa Gradom'
+    },
+    aws: {
+      title: 'Automatske Stanice',
+      precipitation: 'Padavinska',
+      agro: 'Agrometeo',
+      meteo: 'Meteorološka'
     }
   },
   [Language.JA]: {

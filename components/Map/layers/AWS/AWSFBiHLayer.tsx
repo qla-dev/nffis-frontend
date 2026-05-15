@@ -67,12 +67,6 @@ export const AWSFBiHLayer: React.FC<AWSFBiHLayerProps> = ({ activeTypes }) => {
     return active;
   });
 
-  console.log('[DEBUG] AWSFBiHLayer filtering:', {
-    total: (data ? data.all : allFhmzStations).length,
-    filtered: stations.length,
-    activeTypes: Array.from(activeTypes).filter(l => l.toString().startsWith('AWS'))
-  });
-
   return (
     <>
       {stations.map((station, i) => {

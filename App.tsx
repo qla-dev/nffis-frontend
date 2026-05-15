@@ -31,7 +31,16 @@ const FWI_DEBUG_PREFIX = '[FWI DEBUG]';
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     language: Language.EN,
-    activeLayers: new Set([MapLayer.FIRE_RISK, MapLayer.BIH_BORDERS, MapLayer.FORESTS, MapLayer.LANDFILLS]),
+    // Enable AWS layers by default along with core GIS layers
+    activeLayers: new Set([
+      MapLayer.FIRE_RISK, 
+      MapLayer.BIH_BORDERS, 
+      MapLayer.FORESTS, 
+      MapLayer.LANDFILLS,
+      'AWS Precipitation' as MapLayer,
+      'AWS Agro' as MapLayer,
+      'AWS Meteo' as MapLayer
+    ]),
     incidents: INITIAL_INCIDENTS as any,
     view: 'map',
     isReporting: false,
@@ -59,17 +68,11 @@ const App: React.FC = () => {
   };
 
   const toggleLayer = useCallback((layer: MapLayer) => {
-    if (!layer) {
-      console.warn('[DEBUG] toggleLayer called with undefined/null layer!');
-      return;
-    }
-    console.log('[DEBUG] toggleLayer called with:', layer);
+    if (!layer) return;
     setState(prev => {
       const newLayers = new Set(prev.activeLayers);
-      console.log('[DEBUG] current activeLayers:', Array.from(newLayers));
 
       if (FWI_LAYER_IDS.includes(layer)) {
-        console.log('[DEBUG] Layer is an FWI layer, applying exclusive logic');
         const isAlreadyActive = newLayers.has(layer);
         FWI_LAYER_IDS.forEach(id => newLayers.delete(id));
         if (!isAlreadyActive) {
@@ -79,15 +82,11 @@ const App: React.FC = () => {
       }
 
       if (newLayers.has(layer)) {
-        console.log('[DEBUG] Removing layer:', layer);
         newLayers.delete(layer);
       } else {
-        console.log('[DEBUG] Adding layer:', layer);
         newLayers.add(layer);
       }
-      const updatedLayers = new Set(newLayers);
-      console.log('[DEBUG] new activeLayers:', Array.from(updatedLayers));
-      return { ...prev, activeLayers: updatedLayers };
+      return { ...prev, activeLayers: new Set(newLayers) };
     });
   }, []);
 
