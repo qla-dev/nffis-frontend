@@ -471,6 +471,13 @@ export const GISMap: React.FC<GISMapProps> = ({
       ),
     [activeLayers]
   );
+  const activeFwiLayerInfo = useMemo(() => {
+    if (activeLayers.has(MapLayer.FWI_ANGSTROM)) return { title: t.dashboard.angstrom, min: '5.0', max: '0.0', gradient: 'bg-gradient-to-r from-slate-950 via-purple-700 to-yellow-400', iconColor: 'bg-red-500' };
+    if (activeLayers.has(MapLayer.FWI_GFI)) return { title: t.dashboard.gfi, min: '0', max: '10+', gradient: 'bg-gradient-to-r from-blue-600 via-green-400 to-red-600', iconColor: 'bg-emerald-500' };
+    if (activeLayers.has(MapLayer.FWI_KBDI)) return { title: t.dashboard.kbdi, min: '0', max: '600+', gradient: 'bg-gradient-to-r from-blue-600 via-green-400 to-red-600', iconColor: 'bg-amber-400' };
+    if (activeLayers.has(MapLayer.FWI_BOSNIAN)) return { title: t.dashboard.fwiBosnian, min: '0', max: '80+', gradient: 'bg-gradient-to-r from-indigo-900 via-fuchsia-600 to-yellow-400', iconColor: 'bg-purple-500' };
+    return null;
+  }, [activeLayers, t]);
   const fwiSourceForests = useMemo(
     () => MOCK_FORESTS.filter((forest) => forest.type !== RegionType.LANDFILL),
     []
@@ -1827,6 +1834,24 @@ export const GISMap: React.FC<GISMapProps> = ({
                  )
               })}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* FWI Legend Scale */}
+      {activeFwiLayerInfo && (
+        <div className="absolute bottom-8 right-24 z-[2000] hidden md:flex flex-col bg-slate-950/90 backdrop-blur-md border border-slate-800 p-3 rounded-xl shadow-2xl w-64 animate-in slide-in-from-right-2 duration-300">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${activeFwiLayerInfo.iconColor}`} />
+              <span className="text-[11px] font-black text-white">{activeFwiLayerInfo.title}</span>
+            </div>
+            <span className="text-[10px] font-bold text-slate-500 tracking-wider">INDEX SCALE</span>
+          </div>
+          <div className={`h-2 w-full rounded-full ${activeFwiLayerInfo.gradient} mb-1 opacity-90`} />
+          <div className="flex items-center justify-between text-[9px] font-bold text-slate-400">
+            <span>{activeFwiLayerInfo.min}</span>
+            <span>{activeFwiLayerInfo.max}</span>
           </div>
         </div>
       )}
