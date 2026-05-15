@@ -48,21 +48,26 @@ const App: React.FC = () => {
   const handleSetView = (view: AppState['view']) => setState(prev => ({ ...prev, view }));
   const handleSetLang = (language: Language) => setState(prev => ({ ...prev, language }));
   const handleToggleTheme = () => setState(prev => ({ ...prev, isDarkMode: !prev.isDarkMode }));
+  
   const startReporting = () => {
     setShowModal(false);
     setReportLocation(null);
     setState(prev => ({ ...prev, view: 'map', isReporting: true }));
   };
+  
   const cancelReporting = () => {
     setReportLocation(null);
     setState(prev => ({ ...prev, isReporting: false }));
   };
 
   const toggleLayer = useCallback((layer: MapLayer) => {
+    console.log('[DEBUG] toggleLayer called with:', layer);
     setState(prev => {
       const newLayers = new Set(prev.activeLayers);
+      console.log('[DEBUG] current activeLayers:', Array.from(newLayers));
 
       if (FWI_LAYER_IDS.includes(layer)) {
+        console.log('[DEBUG] Layer is an FWI layer, applying exclusive logic');
         const isAlreadyActive = newLayers.has(layer);
         const activeBefore = FWI_LAYER_IDS.filter(id => newLayers.has(id));
         FWI_LAYER_IDS.forEach(id => newLayers.delete(id));
@@ -82,11 +87,15 @@ const App: React.FC = () => {
       }
 
       if (newLayers.has(layer)) {
+        console.log('[DEBUG] Removing layer:', layer);
         newLayers.delete(layer);
       } else {
+        console.log('[DEBUG] Adding layer:', layer);
         newLayers.add(layer);
       }
-      return { ...prev, activeLayers: newLayers };
+      const updatedLayers = new Set(newLayers);
+      console.log('[DEBUG] new activeLayers:', Array.from(updatedLayers));
+      return { ...prev, activeLayers: updatedLayers };
     });
   }, []);
 

@@ -30,7 +30,10 @@ export enum MapLayer {
   PROTECTED_AREAS = 'Protected Areas (Heatmap)',
   FIREFIGHTER_STATIONS = 'Firefighter Stations',
   RS_FIREFIGHTER_DENSITY = 'Firefighters / Population',
-  BIH_BORDERS = 'BiH State Borders'
+  BIH_BORDERS = 'BiH State Borders',
+  AWS_PRECIPITATION = 'AWS Precipitation',
+  AWS_AGRO = 'AWS Agro',
+  AWS_METEO = 'AWS Meteo'
 }
 
 export enum IncidentType {

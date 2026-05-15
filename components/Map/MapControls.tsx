@@ -56,10 +56,10 @@ export const MapControls: React.FC<MapControlsProps> = ({
   onToggleCanton,
   containerRef
 }) => {
-  const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | 'fwi' | 'borders' | null>(null);
+  const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | 'fwi' | 'borders' | 'aws' | null>(null);
   const t = TRANSLATIONS[language];
 
-  const togglePanel = (panel: 'assets' | 'layers' | 'satellite' | 'fwi' | 'borders') => {
+  const togglePanel = (panel: 'assets' | 'layers' | 'satellite' | 'fwi' | 'borders' | 'aws') => {
     setActivePanel(activePanel === panel ? null : panel);
   };
 
@@ -174,6 +174,19 @@ export const MapControls: React.FC<MapControlsProps> = ({
               title="FWI"
             >
               <span className="text-[11px] font-black leading-none tracking-[0.18em]">FWI</span>
+            </button>
+
+            {/* AWS */}
+            <button 
+              onClick={() => togglePanel('aws')}
+              className={`inline-flex items-center justify-center px-3 py-2.5 rounded-lg leading-none transition-colors ${
+                activePanel === 'aws' || activeLayers.has(MapLayer.AWS_PRECIPITATION) || activeLayers.has(MapLayer.AWS_AGRO) || activeLayers.has(MapLayer.AWS_METEO)
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'text-slate-400 hover:bg-slate-800'
+              }`}
+              title="Automatic Weather Stations"
+            >
+              <span className="text-[11px] font-black leading-none tracking-[0.18em]">AWS</span>
             </button>
 
             <div className="w-px h-6 bg-slate-800 mx-1" />
@@ -318,8 +331,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
               <button onClick={() => setActivePanel(null)} className="hover:text-white"><X size={14} /></button>
             </h4>
             <div className="grid grid-cols-2 gap-2">
-                {/* Vector (None) */}
-                <button 
+              <button 
                 onClick={() => { onSetBaseLayer(null); setActivePanel(null); }}
                 className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
                   !isAnyBaseLayerActive ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
@@ -329,8 +341,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Vector</span>
               </button>
 
-                {/* Standard Sat */}
-                <button 
+              <button 
                 onClick={() => { onSetBaseLayer(MapLayer.SATELLITE); setActivePanel(null); }}
                 className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
                   isBaseLayerActive(MapLayer.SATELLITE) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
@@ -340,7 +351,6 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Standard</span>
               </button>
 
-              {/* Clarity */}
               <button 
                 onClick={() => { onSetBaseLayer(MapLayer.SATELLITE_CLARITY); setActivePanel(null); }}
                 className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
@@ -351,7 +361,6 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Clarity</span>
               </button>
 
-              {/* Google */}
               <button 
                 onClick={() => { onSetBaseLayer(MapLayer.SATELLITE_GOOGLE); setActivePanel(null); }}
                 className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
@@ -362,8 +371,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Google</span>
               </button>
 
-                {/* Sentinel */}
-                <button 
+              <button 
                 onClick={() => { onSetBaseLayer(MapLayer.SENTINEL); setActivePanel(null); }}
                 className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
                   isBaseLayerActive(MapLayer.SENTINEL) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
@@ -373,8 +381,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Sentinel</span>
               </button>
               
-                {/* Terrain */}
-                <button 
+              <button 
                 onClick={() => { onSetBaseLayer(MapLayer.TERRAIN); setActivePanel(null); }}
                 className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
                   isBaseLayerActive(MapLayer.TERRAIN) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
@@ -384,8 +391,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Terrain</span>
               </button>
 
-                {/* Infrared */}
-                <button 
+              <button 
                 onClick={() => { onSetBaseLayer(MapLayer.INFRARED); setActivePanel(null); }}
                 className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
                   isBaseLayerActive(MapLayer.INFRARED) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
@@ -395,8 +401,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Infrared</span>
               </button>
 
-              {/* NASA FIRMS */}
-                <button 
+              <button 
                 onClick={() => { onSetBaseLayer(MapLayer.NASA_FIRMS); setActivePanel(null); }}
                 className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
                   isBaseLayerActive(MapLayer.NASA_FIRMS) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
@@ -406,8 +411,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">NASA FIRMS</span>
               </button>
 
-                {/* Thermal */}
-                <button 
+              <button 
                 onClick={() => { onSetBaseLayer(MapLayer.THERMAL); setActivePanel(null); }}
                 className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
                   isBaseLayerActive(MapLayer.THERMAL) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
@@ -417,8 +421,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 <span className="text-[9px] font-bold text-white uppercase text-center leading-tight">Thermal</span>
               </button>
 
-                {/* Windy */}
-                <button 
+              <button 
                 onClick={() => { onSetBaseLayer(MapLayer.WINDY); setActivePanel(null); }}
                 className={`p-2 rounded-lg border flex flex-col items-center gap-2 transition-all ${
                   isBaseLayerActive(MapLayer.WINDY) ? 'bg-blue-600/20 border-blue-500' : 'bg-slate-900 border-transparent hover:border-slate-700'
@@ -451,15 +454,12 @@ export const MapControls: React.FC<MapControlsProps> = ({
                   onClick={() => {
                     if (layer.id) {
                       onToggleLayer(layer.id);
-                      return;
-                    }
-
-                    if (activeFwiLayer) {
+                    } else if (activeFwiLayer) {
                       onToggleLayer(activeFwiLayer);
                     }
                   }}
                   className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
-                    layer.id ? activeLayers.has(layer.id) : !activeFwiLayer
+                    (layer.id ? activeLayers.has(layer.id) : !activeFwiLayer)
                       ? 'bg-blue-600/10 border-blue-600/50'
                       : 'bg-slate-900/50 border-transparent hover:border-slate-700'
                   }`}
@@ -474,6 +474,49 @@ export const MapControls: React.FC<MapControlsProps> = ({
                     </span>
                   </div>
                   {(layer.id ? activeLayers.has(layer.id) : !activeFwiLayer) && <ShieldCheck size={12} className="text-blue-500" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* AWS Panel */}
+        {activePanel === 'aws' && (
+          <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200">
+            {console.log('[DEBUG] Rendering AWS Panel. activeLayers has:', 
+              Array.from(activeLayers).filter(l => l.toString().startsWith('AWS')))}
+            <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
+              Automatske Stanice
+              <button onClick={() => setActivePanel(null)} className="hover:text-white transition-colors">
+                <X size={14} />
+              </button>
+            </h4>
+            <div className="space-y-1">
+              {[
+                { id: MapLayer.AWS_PRECIPITATION, label: 'Padavinska', dotColor: '#06b6d4' },
+                { id: MapLayer.AWS_AGRO, label: 'Agrometeo', dotColor: '#eab308' },
+                { id: MapLayer.AWS_METEO, label: 'Meteorološka', dotColor: '#10b981' },
+              ].map(layer => (
+                <button
+                  key={layer.id}
+                  onClick={() => {
+                    console.log('[DEBUG] AWS Button Clicked:', layer.id);
+                    onToggleLayer(layer.id);
+                  }}
+                  className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
+                    activeLayers.has(layer.id)
+                      ? 'bg-blue-600/10 border-blue-600/50'
+                      : 'bg-slate-900/50 border-transparent hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full shrink-0"
+                         style={{ background: activeLayers.has(layer.id) ? layer.dotColor : '#334155' }} />
+                    <span className={`text-[11px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>
+                      {layer.label}
+                    </span>
+                  </div>
+                  {activeLayers.has(layer.id) && <ShieldCheck size={12} className="text-blue-500" />}
                 </button>
               ))}
             </div>
@@ -496,12 +539,12 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 { id: MapLayer.PROTECTED_AREAS, label: t.protectedAreas, icon: ShieldCheck, color: 'text-yellow-400' },
                 { id: MapLayer.FIREFIGHTER_STATIONS, label: t.firefighterStations, icon: FirefighterIcon, color: 'text-orange-400' },
               ].map(layer => (
-                <button 
+                <button
                   key={layer.id}
                   onClick={() => onToggleLayer(layer.id)}
                   className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
-                    activeLayers.has(layer.id) 
-                      ? 'bg-blue-600/10 border-blue-600/50' 
+                    activeLayers.has(layer.id)
+                      ? 'bg-blue-600/10 border-blue-600/50'
                       : 'bg-slate-900/50 border-transparent hover:border-slate-700'
                   }`}
                 >
@@ -527,30 +570,28 @@ export const MapControls: React.FC<MapControlsProps> = ({
             </h4>
             
             <div className="space-y-4">
-              <div>
-                <div className="space-y-1">
-                  {[
-                      { id: MapLayer.FIRE_RISK, label: t.fireThreats, icon: Flame, color: 'text-red-500' },
-                      { id: MapLayer.FLOOD_RISK, label: t.hydrological, icon: Waves, color: 'text-blue-500' },
-                      { id: MapLayer.RS_FIREFIGHTER_DENSITY, label: t.firefighterDensity, icon: Users, color: 'text-emerald-400' },
-                  ].map(layer => (
-                    <button 
-                      key={layer.id}
-                      onClick={() => onToggleLayer(layer.id)}
-                      className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
-                        activeLayers.has(layer.id) 
-                          ? 'bg-blue-600/10 border-blue-600/50' 
-                          : 'bg-slate-900/50 border-transparent hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <layer.icon size={16} className={activeLayers.has(layer.id) ? layer.color : 'text-slate-600'} />
-                        <span className={`text-[11px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>{layer.label}</span>
-                      </div>
-                      {activeLayers.has(layer.id) && <ShieldCheck size={12} className="text-blue-500" />}
-                    </button>
-                  ))}
-                </div>
+              <div className="space-y-1">
+                {[
+                  { id: MapLayer.FIRE_RISK, label: t.fireThreats, icon: Flame, color: 'text-red-500' },
+                  { id: MapLayer.FLOOD_RISK, label: t.hydrological, icon: Waves, color: 'text-blue-500' },
+                  { id: MapLayer.RS_FIREFIGHTER_DENSITY, label: t.firefighterDensity, icon: Users, color: 'text-emerald-400' },
+                ].map(layer => (
+                  <button 
+                    key={layer.id}
+                    onClick={() => onToggleLayer(layer.id)}
+                    className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
+                      activeLayers.has(layer.id) 
+                        ? 'bg-blue-600/10 border-blue-600/50' 
+                        : 'bg-slate-900/50 border-transparent hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <layer.icon size={16} className={activeLayers.has(layer.id) ? layer.color : 'text-slate-600'} />
+                      <span className={`text-[11px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>{layer.label}</span>
+                    </div>
+                    {activeLayers.has(layer.id) && <ShieldCheck size={12} className="text-blue-500" />}
+                  </button>
+                ))}
               </div>
             </div>
           </div>

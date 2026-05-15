@@ -24,6 +24,8 @@ import { FIREFIGHTER_STATION_STYLE } from './firefighterStationUi';
 import { AngstromHeatLayer } from '../Layers/FWI/AngstromHeatLayer';
 import { GFIHeatLayer } from '../Layers/FWI/GFIHeatLayer';
 import { KBDIHeatLayer } from '../Layers/FWI/KBDIHeatLayer';
+import { AWSFBiHLayer } from './layers/AWS/AWSFBiHLayer';
+import { AWSRsLayer } from './layers/AWS/AWSRsLayer';
 
 const GlobalLeaflet = (L as any).default || L;
 const FIRE_HEAT_GRADIENT = {
@@ -1210,6 +1212,13 @@ export const GISMap: React.FC<GISMapProps> = ({
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_KBDI)}
         />
+        {/* AWS — FBiH and RS layers, filtered by the three typed sub-layers */}
+        {(activeLayers.has(MapLayer.AWS_PRECIPITATION) || activeLayers.has(MapLayer.AWS_AGRO) || activeLayers.has(MapLayer.AWS_METEO)) && (
+          <>
+            <AWSFBiHLayer activeTypes={activeLayers} />
+            <AWSRsLayer activeTypes={activeLayers} />
+          </>
+        )}
         {activeLayers.has(MapLayer.RS_FIREFIGHTER_DENSITY) &&
           firefighterDensityData.features.length > 0 && (
             <GeoJSON
