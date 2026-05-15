@@ -20,7 +20,7 @@ export const AWSRsLayer: React.FC<AWSRsLayerProps> = ({ activeTypes }) => {
   const [data, setData] = useState<RsScrapedData | null>(null);
 
   // RS stations are all "meteo" type — only show when AWS_METEO is active
-  const visible = activeTypes.has(MapLayer.AWS_METEO);
+  const visible = activeTypes.has('AWS Meteo' as MapLayer);
 
   useEffect(() => {
     if (!visible) return;

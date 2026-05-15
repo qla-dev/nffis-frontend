@@ -1213,7 +1213,9 @@ export const GISMap: React.FC<GISMapProps> = ({
           visible={activeLayers.has(MapLayer.FWI_KBDI)}
         />
         {/* AWS — FBiH and RS layers, filtered by the three typed sub-layers */}
-        {(activeLayers.has(MapLayer.AWS_PRECIPITATION) || activeLayers.has(MapLayer.AWS_AGRO) || activeLayers.has(MapLayer.AWS_METEO)) && (
+        {(activeLayers.has('AWS Precipitation' as MapLayer) || 
+          activeLayers.has('AWS Agro' as MapLayer) || 
+          activeLayers.has('AWS Meteo' as MapLayer)) && (
           <>
             <AWSFBiHLayer activeTypes={activeLayers} />
             <AWSRsLayer activeTypes={activeLayers} />

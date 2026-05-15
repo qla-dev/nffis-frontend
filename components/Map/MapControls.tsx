@@ -483,8 +483,6 @@ export const MapControls: React.FC<MapControlsProps> = ({
         {/* AWS Panel */}
         {activePanel === 'aws' && (
           <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200">
-            {console.log('[DEBUG] Rendering AWS Panel. activeLayers has:', 
-              Array.from(activeLayers).filter(l => l.toString().startsWith('AWS')))}
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
               Automatske Stanice
               <button onClick={() => setActivePanel(null)} className="hover:text-white transition-colors">
@@ -493,9 +491,9 @@ export const MapControls: React.FC<MapControlsProps> = ({
             </h4>
             <div className="space-y-1">
               {[
-                { id: MapLayer.AWS_PRECIPITATION, label: 'Padavinska', dotColor: '#06b6d4' },
-                { id: MapLayer.AWS_AGRO, label: 'Agrometeo', dotColor: '#eab308' },
-                { id: MapLayer.AWS_METEO, label: 'Meteorološka', dotColor: '#10b981' },
+                { id: 'AWS Precipitation' as MapLayer, label: 'Padavinska', dotColor: '#06b6d4' },
+                { id: 'AWS Agro' as MapLayer, label: 'Agrometeo', dotColor: '#eab308' },
+                { id: 'AWS Meteo' as MapLayer, label: 'Meteorološka', dotColor: '#10b981' },
               ].map(layer => (
                 <button
                   key={layer.id}

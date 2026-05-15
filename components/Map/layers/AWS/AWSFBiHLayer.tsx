@@ -15,9 +15,9 @@ interface AWSFBiHLayerProps {
 }
 
 function typeToKey(s: AnyStation): MapLayer | null {
-  if (s.type === 'precipitation') return MapLayer.AWS_PRECIPITATION;
-  if (s.type === 'agro') return MapLayer.AWS_AGRO;
-  if (s.type === 'meteo') return MapLayer.AWS_METEO;
+  if (s.type === 'precipitation') return 'AWS Precipitation' as MapLayer;
+  if (s.type === 'agro') return 'AWS Agro' as MapLayer;
+  if (s.type === 'meteo') return 'AWS Meteo' as MapLayer;
   return null;
 }
 
@@ -63,7 +63,14 @@ export const AWSFBiHLayer: React.FC<AWSFBiHLayerProps> = ({ activeTypes }) => {
 
   const stations = (data ? data.all : allFhmzStations).filter(s => {
     const key = typeToKey(s);
-    return key !== null && activeTypes.has(key);
+    const active = key !== null && activeTypes.has(key);
+    return active;
+  });
+
+  console.log('[DEBUG] AWSFBiHLayer filtering:', {
+    total: (data ? data.all : allFhmzStations).length,
+    filtered: stations.length,
+    activeTypes: Array.from(activeTypes).filter(l => l.toString().startsWith('AWS'))
   });
 
   return (
