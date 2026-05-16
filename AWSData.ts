@@ -292,7 +292,13 @@ export async function scrape(): Promise<ScrapedData> {
       };
     });
 
-    console.log(`✓ Successfully scraped live data: ${precipitation.length + agro.length + meteo.length + airQuality.length} stations`);
+    const total = precipitation.length + agro.length + meteo.length + airQuality.length;
+    console.log(`✓ Successfully scraped live data: ${total} stations`);
+    console.log(`  - Precipitation: ${precipitation.length}`);
+    console.log(`  - Agro: ${agro.length}`);
+    console.log(`  - Meteo: ${meteo.length}`);
+    console.log(`  - Air Quality: ${airQuality.length}`);
+    console.log("Meteo stations:", meteo.map(m => `${m.station} (${m.tempC}°C)`));
     return {
       scrapedAt: new Date().toISOString(),
       reportDate,
