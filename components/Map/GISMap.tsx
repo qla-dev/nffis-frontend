@@ -1660,41 +1660,98 @@ export const GISMap: React.FC<GISMapProps> = ({
                                                     <span className="opacity-40">/ 80</span>
                                                 </div>
 
-                                                <div className="mt-4 pt-4 border-t border-white/5">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <div className="w-1 h-3 bg-blue-500 rounded-full"></div>
-                                                        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                                                            {language === Language.BS ? 'METODOLOGIJA PRORAČUNA' : 'CALCULATION METHODOLOGY'}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
-                                                        {language === Language.BS 
-                                                            ? "BH FWI (Fire Weather Index) predstavlja numerički rejting potencijala intenziteta požara, izračunat na osnovu kumulativnih efekata četiri faktora:"
-                                                            : "BH FWI (Fire Weather Index) is a numeric rating of fire intensity potential, calculated based on the cumulative effects of four factors:"}
-                                                    </p>
-                                                    <div className="grid grid-cols-4 gap-2">
-                                                        <div className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/5 transition-colors hover:bg-white/[0.06]">
-                                                            <Thermometer size={14} className="text-orange-400" />
-                                                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Temp</span>
+                                                <div className="mt-4 pt-4 border-t border-white/5 space-y-5">
+                                                    {/* Factors Grid */}
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <div className="w-1 h-3 bg-blue-500 rounded-full"></div>
+                                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                                                                {language === Language.BS ? 'INPUT PARAMETRI' : 'INPUT PARAMETERS'}
+                                                            </span>
                                                         </div>
-                                                        <div className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/5 transition-colors hover:bg-white/[0.06]">
-                                                            <Droplets size={14} className="text-blue-400" />
-                                                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Vlaga</span>
-                                                        </div>
-                                                        <div className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/5 transition-colors hover:bg-white/[0.06]">
-                                                            <Wind size={14} className="text-emerald-400" />
-                                                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Vjetar</span>
-                                                        </div>
-                                                        <div className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/5 transition-colors hover:bg-white/[0.06]">
-                                                            <CloudRain size={14} className="text-indigo-400" />
-                                                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Kiša</span>
+                                                        <div className="grid grid-cols-4 gap-2">
+                                                            {[
+                                                                { i: Thermometer, l: 'Temp', c: 'text-orange-400' },
+                                                                { i: Droplets, l: language === Language.BS ? 'Vlaga' : 'Humi', c: 'text-blue-400' },
+                                                                { i: Wind, l: language === Language.BS ? 'Vjetar' : 'Wind', c: 'text-emerald-400' },
+                                                                { i: CloudRain, l: language === Language.BS ? 'Kiša' : 'Rain', c: 'text-indigo-400' }
+                                                            ].map((item, idx) => (
+                                                                <div key={idx} className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/5 transition-all hover:bg-white/[0.08]">
+                                                                    <item.i size={14} className={item.c} />
+                                                                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">{item.l}</span>
+                                                                </div>
+                                                            ))}
                                                         </div>
                                                     </div>
-                                                    <p className="mt-3 text-[9px] text-slate-500 leading-snug italic border-l-2 border-slate-800 pl-2">
-                                                        {language === Language.BS
-                                                            ? "Sistem koristi modifikovanu Canadian FWI formulu optimizovanu za orografiju i tipove vegetacije u Bosni i Hercegovini."
-                                                            : "System utilizes a modified Canadian FWI formula optimized for the orography and vegetation types of Bosnia and Herzegovina."}
-                                                    </p>
+
+                                                    {/* Formula Deep Dive */}
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <div className="w-1 h-3 bg-purple-500 rounded-full shadow-[0_0_8px_rgba(168,85,247,0.5)]"></div>
+                                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                                                                {language === Language.BS ? 'STRUKTURA FORMULE' : 'FORMULA STRUCTURE'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="space-y-3">
+                                                            {[
+                                                                { label: 'FFMC', name: language === Language.BS ? 'Površinska vlažnost' : 'Fine Fuel Moisture', p: 45, color: 'bg-blue-500', desc: language === Language.BS ? 'Odziv na promjene < 1h' : 'Responds in < 1h' },
+                                                                { label: 'DMC', name: language === Language.BS ? 'Srednji sloj' : 'Duff Moisture', p: 30, color: 'bg-emerald-500', desc: language === Language.BS ? 'Odziv 12-15 dana' : '12-15 day response' },
+                                                                { label: 'DC', name: language === Language.BS ? 'Duboka suša' : 'Drought Code', p: 25, color: 'bg-orange-500', desc: language === Language.BS ? 'Dugoročni deficit' : 'Long-term deficit' }
+                                                            ].map((code, idx) => (
+                                                                <div key={idx} className="space-y-1.5 group">
+                                                                    <div className="flex justify-between items-end">
+                                                                        <div className="flex flex-col">
+                                                                            <span className="text-[10px] font-black text-white leading-none mb-0.5">{code.label} <span className="text-slate-500 font-bold ml-1">| {code.name}</span></span>
+                                                                            <span className="text-[8px] text-slate-500 font-bold italic">{code.desc}</span>
+                                                                        </div>
+                                                                        <span className="text-[10px] font-black text-white opacity-40 group-hover:opacity-100 transition-opacity">{code.p}%</span>
+                                                                    </div>
+                                                                    <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden border border-white/5">
+                                                                        <div className={`h-full ${code.color} rounded-full transition-all duration-1000 delay-300 shadow-[0_0_8px] shadow-current`} style={{ width: `${code.p}%` }}></div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Vegetation Factor */}
+                                                    <div>
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <div className="w-1 h-3 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                                                                {language === Language.BS ? 'VEGETACIJSKI FAKTOR' : 'VEGETATION FACTOR'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <div className="p-2 rounded-xl bg-white/[0.02] border border-white/5">
+                                                                <div className="flex justify-between items-center mb-1">
+                                                                    <span className="text-[8px] font-black text-slate-500 uppercase">{language === Language.BS ? 'Četinari' : 'Coniferous'}</span>
+                                                                    <span className="text-[8px] font-black text-red-500">+15%</span>
+                                                                </div>
+                                                                <p className="text-[8px] text-slate-500 leading-tight">
+                                                                    {language === Language.BS ? 'Visoka zapaljivost zbog smola i niske vlažnosti iglica.' : 'High flammability due to resins and low needle moisture.'}
+                                                                </p>
+                                                            </div>
+                                                            <div className="p-2 rounded-xl bg-white/[0.02] border border-white/5">
+                                                                <div className="flex justify-between items-center mb-1">
+                                                                    <span className="text-[8px] font-black text-slate-500 uppercase">{language === Language.BS ? 'Bjelogorica' : 'Deciduous'}</span>
+                                                                    <span className="text-[8px] font-black text-emerald-500">-10%</span>
+                                                                </div>
+                                                                <p className="text-[8px] text-slate-500 leading-tight">
+                                                                    {language === Language.BS ? 'Veća vlažnost lista pruža prirodnu otpornost na vatru.' : 'Higher leaf moisture provides natural fire resistance.'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/10">
+                                                        <p className="text-[9px] text-slate-400 leading-relaxed italic">
+                                                            <span className="text-blue-400 font-black not-italic mr-1">INFO:</span>
+                                                            {language === Language.BS
+                                                                ? "Proračun automatski prilagođava ISI (Indeks širenja) na osnovu gustine goriva i nagiba terena."
+                                                                : "The calculation automatically adjusts the ISI (Spread Index) based on fuel density and terrain slope."}
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
