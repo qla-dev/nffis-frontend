@@ -120,6 +120,7 @@ export const TRANSLATIONS = {
       verticalWind: 'Vertical Wind',
       soilProfile: 'Soil Profile',
       loading: 'Acquiring Telemetry...',
+      calculatingFwi: 'Calculating FWI...',
       today: 'Today',
       now: 'Now'
     },
@@ -298,6 +299,7 @@ export const TRANSLATIONS = {
       verticalWind: 'Vertikalni Vjetar',
       soilProfile: 'Profil Tla',
       loading: 'Učitavanje Telemetrije...',
+      calculatingFwi: 'Kalkulišemo FWI...',
       today: 'Danas',
       now: 'Sada'
     },
@@ -475,6 +477,7 @@ export const TRANSLATIONS = {
       verticalWind: '垂直風',
       soilProfile: '土壌プロファイル',
       loading: 'テレメトリ取得中...',
+      calculatingFwi: 'FWIを計算中...',
       today: '今日',
       now: '現在'
     },

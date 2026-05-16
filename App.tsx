@@ -21,9 +21,6 @@ const BASE_LAYER_IDS = [
 ];
 
 const FWI_LAYER_IDS = [
-  MapLayer.FWI_ANGSTROM,
-  MapLayer.FWI_GFI,
-  MapLayer.FWI_KBDI,
   MapLayer.FWI_BOSNIAN
 ];
 
@@ -123,7 +120,10 @@ const App: React.FC = () => {
     (layer) =>
       !BASE_LAYER_IDS.includes(layer) &&
       layer !== MapLayer.METEOBLUE &&
-      layer !== MapLayer.BIH_BORDERS
+      layer !== MapLayer.BIH_BORDERS &&
+      layer !== MapLayer.FWI_ANGSTROM &&
+      layer !== MapLayer.FWI_GFI &&
+      layer !== MapLayer.FWI_KBDI
   );
 
   return (

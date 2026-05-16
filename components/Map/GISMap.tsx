@@ -465,17 +465,11 @@ export const GISMap: React.FC<GISMapProps> = ({
     [incidents]
   );
   const isAnyFwiLayerActive = useMemo(
-    () =>
-      [MapLayer.FWI_ANGSTROM, MapLayer.FWI_GFI, MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN].some((layer) =>
-        activeLayers.has(layer)
-      ),
+    () => activeLayers.has(MapLayer.FWI_BOSNIAN),
     [activeLayers]
   );
   const activeFwiLayerInfo = useMemo(() => {
-    if (activeLayers.has(MapLayer.FWI_ANGSTROM)) return { title: t.dashboard.angstrom, min: '5.0', max: '0.0', gradient: 'bg-gradient-to-r from-slate-950 via-purple-700 to-yellow-400', iconColor: 'bg-red-500' };
-    if (activeLayers.has(MapLayer.FWI_GFI)) return { title: t.dashboard.gfi, min: '0', max: '10+', gradient: 'bg-gradient-to-r from-blue-600 via-green-400 to-red-600', iconColor: 'bg-emerald-500' };
-    if (activeLayers.has(MapLayer.FWI_KBDI)) return { title: t.dashboard.kbdi, min: '0', max: '600+', gradient: 'bg-gradient-to-r from-blue-600 via-green-400 to-red-600', iconColor: 'bg-amber-400' };
-    if (activeLayers.has(MapLayer.FWI_BOSNIAN)) return { title: t.dashboard.fwiBosnian, min: '0', max: '80+', gradient: 'bg-gradient-to-r from-indigo-900 via-fuchsia-600 to-yellow-400', iconColor: 'bg-purple-500' };
+    if (activeLayers.has(MapLayer.FWI_BOSNIAN)) return { title: t.dashboard.fwiBosnian, min: '0', max: '80+', gradient: 'bg-gradient-to-r from-green-500 via-orange-500 to-red-500', iconColor: 'bg-red-500' };
     return null;
   }, [activeLayers, t]);
   const fwiSourceForests = useMemo(
@@ -928,10 +922,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   };
 
   const activeFwiLayers = useMemo(
-    () =>
-      [MapLayer.FWI_ANGSTROM, MapLayer.FWI_GFI, MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN].filter((layer) =>
-        activeLayers.has(layer)
-      ),
+    () => [MapLayer.FWI_BOSNIAN].filter((layer) => activeLayers.has(layer)),
     [activeLayers]
   );
 
@@ -1595,43 +1586,6 @@ export const GISMap: React.FC<GISMapProps> = ({
                                             <Flame size={14} className="text-red-500" /> {t.dashboard.fireRisk}
                                         </h3>
                                         <div className="space-y-4">
-                                            {/* Angstrom */}
-                                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <span className="text-xs font-bold text-slate-300">{t.dashboard.angstrom}</span>
-                                                    <span className={`text-xs font-black uppercase ${risk.aiColor}`}>{risk.aiRisk}</span>
-                                                </div>
-                                                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                                     {/* Reverse scale logic visualization */}
-                                                    <div className="h-full bg-gradient-to-r from-red-500 via-orange-500 to-green-500" style={{ width: `${Math.min(100, Math.max(0, (risk.ai / 5) * 100))}%` }}></div> 
-                                                </div>
-                                                <div className="mt-1 text-[10px] text-slate-500 font-mono text-right">{risk.ai.toFixed(2)}</div>
-                                            </div>
-
-                                            {/* GFI */}
-                                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <span className="text-xs font-bold text-slate-300">{t.dashboard.gfi}</span>
-                                                    <span className={`text-xs font-black uppercase ${risk.gfiColor}`}>{risk.gfiRisk}</span>
-                                                </div>
-                                                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-gradient-to-r from-green-500 via-orange-500 to-red-600" style={{ width: `${Math.min(100, (risk.gfi / 20) * 100)}%` }}></div>
-                                                </div>
-                                                <div className="mt-1 text-[10px] text-slate-500 font-mono text-right">{risk.gfi.toFixed(2)}</div>
-                                            </div>
-
-                                             {/* KBDI */}
-                                             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <span className="text-xs font-bold text-slate-300">{t.dashboard.kbdi}</span>
-                                                    <span className={`text-xs font-black uppercase ${risk.kbdiColor}`}>{risk.kbdiRisk}</span>
-                                                </div>
-                                                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-gradient-to-r from-blue-500 via-yellow-500 to-red-800" style={{ width: `${Math.min(100, (risk.kbdi / 800) * 100)}%` }}></div>
-                                                </div>
-                                                <div className="mt-1 text-[10px] text-slate-500 font-mono text-right">{Math.round(risk.kbdi)}</div>
-                                            </div>
-
                                             {/* Bosnian FWI */}
                                             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
                                                 <div className="flex justify-between items-center mb-2">
@@ -1642,7 +1596,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                                                     <span className={`text-xs font-black uppercase ${risk.fwiColor}`}>{risk.fwiRisk}</span>
                                                 </div>
                                                 <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-gradient-to-r from-green-500 via-yellow-500 via-red-500 to-purple-600" style={{ width: `${Math.min(100, (risk.fwiBosnian / 80) * 100)}%` }}></div>
+                                                    <div className="h-full bg-gradient-to-r from-green-500 via-orange-500 to-red-500" style={{ width: `${Math.min(100, (risk.fwiBosnian / 80) * 100)}%` }}></div>
                                                 </div>
                                                 <div className="mt-1 text-[10px] text-slate-500 font-mono text-right">{risk.fwiBosnian.toFixed(2)}</div>
                                             </div>
@@ -1874,6 +1828,26 @@ export const GISMap: React.FC<GISMapProps> = ({
           <span className="text-xs font-black uppercase tracking-widest">TAP MAP TO SELECT INCIDENT COORDINATES</span>
           <div className="h-4 w-px bg-white/20 mx-2" />
           <button onClick={onCancelReport} className="text-[10px] font-black hover:text-white/80">CANCEL</button>
+        </div>
+      )}
+
+      {/* FWI Loading Overlay */}
+      {isLoadingFwi && (
+        <div className="fixed inset-0 z-[10000] bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500">
+          <div className="relative flex items-center justify-center">
+             <div className="absolute w-32 h-32 bg-blue-600/20 rounded-full blur-3xl animate-pulse" />
+             <Loader2 size={64} className="text-blue-500 animate-spin relative z-10" strokeWidth={2.5} />
+          </div>
+          <div className="flex flex-col items-center gap-4 relative z-10">
+            <h2 className="text-3xl font-black text-white tracking-[0.2em] uppercase drop-shadow-2xl">
+              {t.dashboard.calculatingFwi}
+            </h2>
+            <div className="flex gap-1.5">
+               <div className="w-2 h-2 rounded-full bg-blue-600 animate-bounce [animation-delay:-0.3s]" />
+               <div className="w-2 h-2 rounded-full bg-blue-600 animate-bounce [animation-delay:-0.15s]" />
+               <div className="w-2 h-2 rounded-full bg-blue-600 animate-bounce" />
+            </div>
+          </div>
         </div>
       )}
     </div>

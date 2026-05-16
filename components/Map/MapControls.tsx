@@ -445,9 +445,6 @@ export const MapControls: React.FC<MapControlsProps> = ({
             <div className="space-y-1">
               {[
                 { id: null, label: 'Off', icon: X, color: 'text-slate-400' },
-                { id: MapLayer.FWI_ANGSTROM, label: t.dashboard.angstrom, icon: Flame, color: 'text-red-500' },
-                { id: MapLayer.FWI_GFI, label: t.dashboard.gfi, icon: Trees, color: 'text-emerald-500' },
-                { id: MapLayer.FWI_KBDI, label: t.dashboard.kbdi, icon: Thermometer, color: 'text-amber-400' },
                 { id: MapLayer.FWI_BOSNIAN, label: t.dashboard.fwiBosnian, icon: Flame, color: 'text-purple-500' },
               ].map((layer) => (
                 <button

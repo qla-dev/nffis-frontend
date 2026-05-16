@@ -17,7 +17,8 @@ interface FWIGeoTiffLayerProps<TPoint extends FwiRasterPoint> {
   valueAccessor: (point: TPoint) => number;
   displayMin: number;
   displayMax: number;
-  colorScaleName: string;
+  colorScaleName?: string;
+  colorScaleImage?: HTMLCanvasElement | HTMLImageElement;
   rasterBounds?: {
     west: number;
     east: number;
@@ -89,8 +90,9 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
   displayMin,
   displayMax,
   colorScaleName,
+  colorScaleImage,
   rasterBounds,
-  debugLabel = colorScaleName,
+  debugLabel = colorScaleName || 'CustomScale',
   opacity = 0.72,
   influenceRadius = 0.42,
   pane,
@@ -212,6 +214,7 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
           clampLow: true,
           clampHigh: true,
           colorScale: colorScaleName,
+          colorScaleImage: colorScaleImage,
           displayMin,
           displayMax,
         }),
@@ -236,6 +239,7 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
     };
   }, [
     colorScaleName,
+    colorScaleImage,
     displayMax,
     displayMin,
     influenceRadius,

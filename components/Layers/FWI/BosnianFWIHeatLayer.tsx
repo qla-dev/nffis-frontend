@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { FWIGeoTiffLayer } from './FWIGeoTiffLayer';
 
 interface BosnianFWIHeatLayerProps {
@@ -29,6 +29,22 @@ export const BosnianFWIHeatLayer: React.FC<BosnianFWIHeatLayerProps> = ({
     []
   );
 
+  const fwiColorScale = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const gradient = ctx.createLinearGradient(0, 0, 256, 0);
+      gradient.addColorStop(0, '#22c55e');   // Green
+      gradient.addColorStop(0.5, '#f97316'); // Orange
+      gradient.addColorStop(1, '#ef4444');   // Red
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 256, 1);
+    }
+    return canvas;
+  }, []);
+
   return (
     <FWIGeoTiffLayer
       points={points}
@@ -36,8 +52,8 @@ export const BosnianFWIHeatLayer: React.FC<BosnianFWIHeatLayerProps> = ({
       valueAccessor={getFwiValue}
       displayMin={0}
       displayMax={80}
+      colorScaleImage={fwiColorScale}
       rasterBounds={rasterBounds}
-      colorScaleName="plasma"
       debugLabel="BosnianFWI"
       opacity={0.55}
       influenceRadius={0.65}
