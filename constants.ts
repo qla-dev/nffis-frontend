@@ -122,7 +122,9 @@ export const TRANSLATIONS = {
       loading: 'Acquiring Telemetry',
       calculatingFwi: 'Calculating BH FWI',
       today: 'Today',
-      now: 'Now'
+      now: 'Now',
+      selectIncidentTitle: 'REPORT INCIDENT',
+      selectIncidentSubtitle: 'Tap map to select incident coordinates'
     },
     firefighterStation: {
       municipality: 'Municipality',
@@ -301,7 +303,9 @@ export const TRANSLATIONS = {
       loading: 'Učitavanje Telemetrije',
       calculatingFwi: 'Kalkulišemo BH FWI',
       today: 'Danas',
-      now: 'Sada'
+      now: 'Sada',
+      selectIncidentTitle: 'PRIJAVA INCIDENTA',
+      selectIncidentSubtitle: 'Pritisnite na mapu za odabir koordinata'
     },
     firefighterStation: {
       municipality: 'Opcina',
@@ -479,7 +483,9 @@ export const TRANSLATIONS = {
       loading: 'テレメトリ取得中',
       calculatingFwi: 'BH FWIを計算中',
       today: '今日',
-      now: '現在'
+      now: '現在',
+      selectIncidentTitle: 'インシデントを報告',
+      selectIncidentSubtitle: 'マップをタップしてインシデントの座標を選択してください'
     },
     firefighterStation: {
       municipality: '自治体',

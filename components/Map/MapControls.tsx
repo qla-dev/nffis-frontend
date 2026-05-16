@@ -32,6 +32,7 @@ interface MapControlsProps {
   onToggleBrckoDistrict: () => void;
   onToggleCanton: (code: CantonCode) => void;
   containerRef?: React.RefObject<HTMLDivElement | null>;
+  onStartPickingLocation?: () => void;
 }
 
 export const MapControls: React.FC<MapControlsProps> = ({
@@ -54,7 +55,8 @@ export const MapControls: React.FC<MapControlsProps> = ({
   onToggleRepublicSrpska,
   onToggleBrckoDistrict,
   onToggleCanton,
-  containerRef
+  containerRef,
+  onStartPickingLocation
 }) => {
   const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | 'fwi' | 'borders' | 'aws' | null>(null);
   const localRef = useRef<HTMLDivElement>(null);
@@ -492,6 +494,24 @@ export const MapControls: React.FC<MapControlsProps> = ({
                   {(layer.id ? activeLayers.has(layer.id) : !activeFwiLayer) && <ShieldCheck size={12} className="text-blue-500" />}
                 </button>
               ))}
+            </div>
+
+            <div className="pt-3 mt-3 border-t border-slate-800">
+              <button
+                onClick={() => {
+                  onStartPickingLocation?.();
+                  setActivePanel(null);
+                }}
+                className="w-full flex items-center gap-3 p-2 rounded-lg border border-transparent bg-slate-900/50 hover:bg-slate-900 hover:border-slate-700 transition-all text-slate-400 hover:text-white group"
+              >
+                <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0 group-hover:bg-blue-500 transition-colors">
+                  <MapPin size={16} className="text-blue-400 group-hover:text-white transition-colors" />
+                </div>
+                <div className="flex flex-col items-start leading-tight">
+                  <span className="text-[11px] font-bold">Uzmi lokaciju</span>
+                  <span className="text-[9px] text-slate-500 italic">Analiza tačke na mapi</span>
+                </div>
+              </button>
             </div>
           </div>
         )}

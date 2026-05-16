@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
-import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar } from 'lucide-react';
+import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar, MapPin } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteoResponse, ForestRegion } from '../../types';
 import {
@@ -332,6 +332,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [forestFwiData, setForestFwiData] = useState<ForestFireIndexSnapshot[]>([]);
   const [isLoadingFwi, setIsLoadingFwi] = useState(false);
   const [isMeteoblueUnavailable, setIsMeteoblueUnavailable] = useState(false);
+  const [isPickingLocation, setIsPickingLocation] = useState(false);
   const [heatViewportBounds, setHeatViewportBounds] = useState<{
     west: number;
     east: number;
@@ -1075,6 +1076,30 @@ export const GISMap: React.FC<GISMapProps> = ({
     return null;
   };
 
+  const CustomLocationPicker = () => {
+    useMapEvents({
+      click(e) {
+        if (!isPickingLocation) return;
+        
+        const { lat, lng } = e.latlng;
+        
+        // Create a custom forest region object
+        const customForest: ForestRegion = {
+          id: `custom-${Date.now()}`,
+          name: language === Language.BS ? 'Odabrana lokacija' : 'Selected Location',
+          type: RegionType.MIXED, // Default to mixed for custom points
+          coordinates: [lat, lng],
+          area: 0,
+          riskScore: 0.5, // Neutral starting risk
+        };
+
+        setSelectedForest(customForest);
+        setIsPickingLocation(false);
+      },
+    });
+    return null;
+  };
+
   const ThreatHeatmapLayer: React.FC<{
     data: IncidentReport[];
     gradient: Record<number, string>;
@@ -1189,6 +1214,7 @@ export const GISMap: React.FC<GISMapProps> = ({
       {/* MAP CONTAINER */}
       <MapContainer center={BIH_CENTER} zoom={8} className="w-full h-full" ref={setMap} zoomControl={false}>
         <ReportLocationPicker />
+        <CustomLocationPicker />
         {!shouldRenderStandaloneMeteoblue && (
           <TileLayer
               key={activeBaseLayerKey}
@@ -1591,47 +1617,84 @@ export const GISMap: React.FC<GISMapProps> = ({
                                         <div className="space-y-4">
                                             {/* Bosnian FWI */}
                                             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/50">
-                                                <div className="flex justify-between items-center mb-2">
+                                                <div className="flex justify-between items-center mb-3">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.5)]"></div>
-                                                        <span className="text-xs font-bold text-slate-300">{t.dashboard.fwiBosnian}</span>
+                                                        <div className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.6)]"></div>
+                                                        <span className="text-sm font-black text-white tracking-wide">{t.dashboard.fwiBosnian}</span>
                                                     </div>
-                                                    <span className={`text-xs font-black uppercase ${risk.fwiColor}`}>{risk.fwiRisk}</span>
+                                                    <span className={`text-[11px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-slate-950/50 border border-white/5 ${risk.fwiColor}`}>{risk.fwiRisk}</span>
                                                 </div>
-                                                <div className="relative pt-4 pb-2">
+                                                <div className="relative pt-6 pb-2">
                                                     {/* Value Indicator Arrow */}
                                                     <div 
-                                                        className="absolute top-1.5 transition-all duration-700 ease-out z-20"
+                                                        className="absolute top-2 transition-all duration-1000 ease-out z-20"
                                                         style={{ 
                                                             left: `${Math.min(100, (risk.fwiBosnian / 80) * 100)}%`, 
                                                             transform: 'translateX(-50%)' 
                                                         }}
                                                     >
-                                                        <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[7px] border-t-white drop-shadow-[0_0_3px_rgba(0,0,0,0.5)]" />
+                                                        <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-white drop-shadow-[0_0_5px_rgba(0,0,0,0.8)]" />
                                                     </div>
                                                     
                                                     {/* Full Gradient Scale Bar */}
-                                                    <div className="w-full h-2.5 rounded-full bg-gradient-to-r from-green-500 via-orange-500 to-red-500 shadow-inner relative overflow-hidden">
+                                                    <div className="w-full h-4 rounded-full bg-gradient-to-r from-green-500 via-orange-500 to-red-500 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] relative overflow-hidden border border-white/10">
                                                         {/* Scale Ticks */}
                                                         <div className="absolute inset-0 flex justify-between px-[1px]">
                                                             {[...Array(9)].map((_, i) => (
-                                                                <div key={i} className="w-px h-full bg-slate-950/20" />
+                                                                <div key={i} className="w-px h-full bg-slate-950/30" />
                                                             ))}
                                                         </div>
                                                     </div>
 
                                                     {/* Scale Labels */}
-                                                    <div className="flex justify-between px-0.5 mt-1">
+                                                    <div className="flex justify-between px-0.5 mt-1.5">
                                                         {[0, 10, 20, 30, 40, 50, 60, 70, 80].map(v => (
-                                                            <span key={v} className="text-[7px] font-bold text-slate-500 font-mono">
+                                                            <span key={v} className="text-[10px] font-black text-slate-400 font-mono">
                                                                 {v}
                                                             </span>
                                                         ))}
                                                     </div>
                                                 </div>
-                                                <div className="mt-1 text-[10px] text-slate-500 font-mono text-right flex justify-end items-center gap-1">
-                                                    <span className="text-white font-black">{risk.fwiBosnian.toFixed(2)}</span>
-                                                    <span className="opacity-50">/ 80</span>
+                                                <div className="mt-2 text-[11px] text-slate-400 font-mono text-right flex justify-end items-center gap-1.5">
+                                                    <span className="text-white font-black text-sm">{risk.fwiBosnian.toFixed(2)}</span>
+                                                    <span className="opacity-40">/ 80</span>
+                                                </div>
+
+                                                <div className="mt-4 pt-4 border-t border-white/5">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <div className="w-1 h-3 bg-blue-500 rounded-full"></div>
+                                                        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                                                            {language === Language.BS ? 'METODOLOGIJA PRORAČUNA' : 'CALCULATION METHODOLOGY'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
+                                                        {language === Language.BS 
+                                                            ? "BH FWI (Fire Weather Index) predstavlja numerički rejting potencijala intenziteta požara, izračunat na osnovu kumulativnih efekata četiri faktora:"
+                                                            : "BH FWI (Fire Weather Index) is a numeric rating of fire intensity potential, calculated based on the cumulative effects of four factors:"}
+                                                    </p>
+                                                    <div className="grid grid-cols-4 gap-2">
+                                                        <div className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/5 transition-colors hover:bg-white/[0.06]">
+                                                            <Thermometer size={14} className="text-orange-400" />
+                                                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Temp</span>
+                                                        </div>
+                                                        <div className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/5 transition-colors hover:bg-white/[0.06]">
+                                                            <Droplets size={14} className="text-blue-400" />
+                                                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Vlaga</span>
+                                                        </div>
+                                                        <div className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/5 transition-colors hover:bg-white/[0.06]">
+                                                            <Wind size={14} className="text-emerald-400" />
+                                                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Vjetar</span>
+                                                        </div>
+                                                        <div className="flex flex-col items-center gap-1.5 p-2 rounded-xl bg-white/[0.03] border border-white/5 transition-colors hover:bg-white/[0.06]">
+                                                            <CloudRain size={14} className="text-indigo-400" />
+                                                            <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Kiša</span>
+                                                        </div>
+                                                    </div>
+                                                    <p className="mt-3 text-[9px] text-slate-500 leading-snug italic border-l-2 border-slate-800 pl-2">
+                                                        {language === Language.BS
+                                                            ? "Sistem koristi modifikovanu Canadian FWI formulu optimizovanu za orografiju i tipove vegetacije u Bosni i Hercegovini."
+                                                            : "System utilizes a modified Canadian FWI formula optimized for the orography and vegetation types of Bosnia and Herzegovina."}
+                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
@@ -1737,16 +1800,18 @@ export const GISMap: React.FC<GISMapProps> = ({
         style={{ height: 'env(safe-area-inset-top)' }}
       />
 
-      {/* Floating Operations Header (Aesthetic) */}
-      <div ref={statusPanelRef} className="absolute top-[calc(env(safe-area-inset-top)+4.5rem)] left-4 right-4 md:top-4 md:left-20 md:right-auto z-[2000] pointer-events-none">
-        <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 px-4 py-2 rounded-lg shadow-2xl flex items-center gap-4 md:w-auto">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">{t.surveillanceNetwork}</span>
-            <span className="text-xs font-bold text-white leading-none">{t.status}: {t.nominal} / {t.tracking} {incidents.length} {t.alerts}</span>
+      {/* Floating Operations Header (Aesthetic) - Hides when interaction banners are active */}
+      {!isPickingLocation && !isReporting && (
+        <div ref={statusPanelRef} className="absolute top-[calc(env(safe-area-inset-top)+4.5rem)] left-4 right-4 md:top-4 md:left-20 md:right-auto z-[2000] pointer-events-none animate-in fade-in zoom-in-95 duration-300">
+          <div className="bg-slate-950/90 backdrop-blur-md border border-slate-800 px-4 py-2 rounded-lg shadow-2xl flex items-center gap-4 md:w-auto">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">{t.surveillanceNetwork}</span>
+              <span className="text-xs font-bold text-white leading-none">{t.status}: {t.nominal} / {t.tracking} {incidents.length} {t.alerts}</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Map Controls */}
       <MapControls 
@@ -1770,7 +1835,33 @@ export const GISMap: React.FC<GISMapProps> = ({
         onToggleRepublicSrpska={handleToggleRepublicSrpska}
         onToggleBrckoDistrict={handleToggleBrckoDistrict}
         onToggleCanton={handleToggleCanton}
+        onStartPickingLocation={() => setIsPickingLocation(true)}
       />
+
+      {/* PICK LOCATION BANNER - Relocated to top instead of status panel */}
+      {isPickingLocation && (
+        <div className="absolute top-[calc(env(safe-area-inset-top)+4.5rem)] left-4 right-4 md:top-4 md:left-20 md:right-auto z-[2500] pointer-events-none animate-in slide-in-from-top-4 duration-500">
+          <div className="bg-blue-600 border border-blue-400 pl-6 pr-3 py-2.5 rounded-xl shadow-[0_20px_50px_rgba(37,99,235,0.4)] flex items-center gap-4 pointer-events-auto backdrop-blur-md md:w-[420px]">
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center animate-pulse shrink-0">
+              <MapPin size={20} className="text-white" />
+            </div>
+            <div className="flex flex-col flex-1">
+              <span className="text-white font-black uppercase tracking-widest text-[9px] leading-none mb-1">
+                {language === Language.BS ? 'ODABIR LOKACIJE ZA FWI PRORAČUN' : 'SELECT LOCATION FOR FWI CALCULATION'}
+              </span>
+              <span className="text-blue-100 text-[11px] font-bold leading-tight">
+                {language === Language.BS ? 'Pritisnite na mapu za analizu' : 'Tap on map for analysis'}
+              </span>
+            </div>
+            <button 
+              onClick={() => setIsPickingLocation(false)}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/70 hover:text-white shrink-0 -mr-1"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Stacked Legends Container (Left) */}
       {showLegend && (
@@ -1828,43 +1919,43 @@ export const GISMap: React.FC<GISMapProps> = ({
 
       {/* FWI Legend Scale */}
       {activeFwiLayerInfo && (
-        <div className="absolute bottom-8 right-24 z-[2000] hidden md:flex flex-col bg-slate-950/90 backdrop-blur-md border border-slate-800 p-3 rounded-xl shadow-2xl w-64 animate-in slide-in-from-right-2 duration-300">
-          <div className="flex items-center justify-between mb-2">
+        <div className="absolute bottom-8 right-24 z-[2000] hidden md:flex flex-col bg-slate-950/90 backdrop-blur-md border border-slate-800 p-4 rounded-xl shadow-2xl w-80 animate-in slide-in-from-right-2 duration-300">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${activeFwiLayerInfo.iconColor}`} />
-              <span className="text-[11px] font-black text-white">{activeFwiLayerInfo.title}</span>
+              <div className={`w-2.5 h-2.5 rounded-full ${activeFwiLayerInfo.iconColor} shadow-[0_0_8px_rgba(239,68,68,0.5)]`} />
+              <span className="text-[12px] font-black text-white tracking-wide">{activeFwiLayerInfo.title}</span>
             </div>
-            <span className="text-[10px] font-bold text-slate-500 tracking-wider">INDEX SCALE</span>
+            <span className="text-[10px] font-black text-slate-500 tracking-widest uppercase opacity-80">Index Scale</span>
           </div>
-          <div className="relative mt-2 mb-1">
+          <div className="relative mt-4 mb-2">
             {/* Value Indicator Arrow */}
             {activeFwiLayerInfo.currentValue !== null && (
               <div 
-                className="absolute -top-2.5 transition-all duration-700 ease-out z-20"
+                className="absolute -top-3.5 transition-all duration-1000 ease-out z-20"
                 style={{ 
                   left: `${Math.min(100, (activeFwiLayerInfo.currentValue / 80) * 100)}%`, 
                   transform: 'translateX(-50%)' 
                 }}
               >
-                <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[7px] border-t-white drop-shadow-[0_0_3px_rgba(0,0,0,0.5)]" />
+                <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-white drop-shadow-[0_0_5px_rgba(0,0,0,0.8)]" />
               </div>
             )}
             
             {/* Gradient Scale Bar */}
-            <div className={`h-2.5 w-full rounded-full ${activeFwiLayerInfo.gradient} shadow-inner relative overflow-hidden`}>
+            <div className={`h-4 w-full rounded-full ${activeFwiLayerInfo.gradient} shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] relative overflow-hidden border border-white/10`}>
               {/* Scale Ticks */}
               <div className="absolute inset-0 flex justify-between px-[1px]">
                 {[...Array(9)].map((_, i) => (
-                  <div key={i} className="w-px h-full bg-slate-950/20" />
+                  <div key={i} className="w-px h-full bg-slate-950/30" />
                 ))}
               </div>
             </div>
           </div>
 
           {/* Scale Labels */}
-          <div className="flex justify-between px-0.5">
+          <div className="flex justify-between px-0.5 mt-1">
             {[0, 10, 20, 30, 40, 50, 60, 70, 80].map(v => (
-              <span key={v} className="text-[8px] font-bold text-slate-500 font-mono">
+              <span key={v} className="text-[10px] font-black text-slate-400 font-mono">
                 {v}
               </span>
             ))}
@@ -1883,13 +1974,28 @@ export const GISMap: React.FC<GISMapProps> = ({
         </button>
       </div>
 
-      {/* Incident Reporting Banner */}
+      {/* Incident Reporting Banner - Relocated to top instead of status panel */}
       {isReporting && (
-        <div ref={reportingBannerRef} className="absolute top-20 left-1/2 -translate-x-1/2 z-[3000] bg-blue-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
-          <NavIcon size={16} className="animate-pulse" />
-          <span className="text-xs font-black uppercase tracking-widest">TAP MAP TO SELECT INCIDENT COORDINATES</span>
-          <div className="h-4 w-px bg-white/20 mx-2" />
-          <button onClick={onCancelReport} className="text-[10px] font-black hover:text-white/80">CANCEL</button>
+        <div className="absolute top-[calc(env(safe-area-inset-top)+4.5rem)] left-4 right-4 md:top-4 md:left-20 md:right-auto z-[3000] pointer-events-none animate-in slide-in-from-top-4 duration-500">
+          <div className="bg-blue-600 border border-blue-400 pl-6 pr-3 py-2.5 rounded-xl shadow-[0_20px_50px_rgba(37,99,235,0.4)] flex items-center gap-4 pointer-events-auto backdrop-blur-md md:w-[420px]">
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center animate-pulse shrink-0">
+              <NavIcon size={24} className="text-white" />
+            </div>
+            <div className="flex flex-col flex-1">
+              <span className="text-white font-black uppercase tracking-widest text-[9px] leading-none mb-1">
+                {t.dashboard.selectIncidentTitle}
+              </span>
+              <span className="text-blue-100 text-[11px] font-bold leading-tight">
+                {t.dashboard.selectIncidentSubtitle}
+              </span>
+            </div>
+            <button 
+              onClick={onCancelReport}
+              className="p-3 hover:bg-white/10 rounded-full transition-colors text-white/70 hover:text-white shrink-0 -mr-1"
+            >
+              <X size={24} />
+            </button>
+          </div>
         </div>
       )}
 
