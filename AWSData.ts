@@ -179,7 +179,7 @@ export interface ScrapedData {
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
 const FHMZ_URL = "https://www.fhmzbih.gov.ba/latinica/AKTUELNO/Automatske.php";
-const CORS_PROXY = "https://api.allorigins.win/raw?url=";
+const CORS_PROXY = "https://cors.eu.org/?";
 
 /** Parse a cell string to float, returning null for empty / error codes. */
 function parseNum(raw: string): number | null {
