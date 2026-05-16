@@ -173,6 +173,139 @@ export const GISMap: React.FC<GISMapProps> = ({
   incidents, activeLayers, onReportClick, onCancelReport, isReporting, onToggleLayer, onSetBaseLayer, isDarkMode, onToggleTheme, language, onSetLanguage
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
+  const t = TRANSLATIONS[language];
+
+  // Helpers
+  const fmtTime = (isoString: string) => new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const fmtDay = (isoString: string) => new Date(isoString).toLocaleDateString([], { weekday: 'short', day: 'numeric' });
+
+  // Get current hour index
+  const getCurrentHourIndex = (weather: FireIndexWeatherData) => {
+    if (!weather?.hourly?.time?.length) return -1;
+    const currentHourStr = weather.current?.time?.slice(0, 13);
+    if (!currentHourStr) return 0;
+    const exactHourIndex = weather.hourly.time.findIndex(t => t.startsWith(currentHourStr));
+    if (exactHourIndex !== -1) return exactHourIndex;
+    const nextAvailableIndex = weather.hourly.time.findIndex(t => t >= weather.current.time);
+    return nextAvailableIndex !== -1 ? nextAvailableIndex : 0;
+  };
+
+  // -- FIRE INDEX CALCULATIONS --
+  const computeFireIndexMetrics = (weather: FireIndexWeatherData, hourIdx: number) => {
+    const safeHourIdx = hourIdx >= 0 ? hourIdx : 0;
+    const hourly = weather.hourly || {};
+    const daily = weather.daily || {};
+    
+    const temp = hourly.temperature_2m?.[safeHourIdx] ?? 0;
+    const humidity = hourly.relative_humidity_2m?.[safeHourIdx] ?? 0;
+    const windKmh = hourly.wind_speed_10m?.[safeHourIdx] ?? 0;
+    const rain = daily.precipitation_sum?.[0] ?? 0;
+    
+    const ai = (humidity / 20 + (27 - temp) / 10);
+    const dryDays = daily.precipitation_sum?.filter((p) => p < 2.0).length ?? 0;
+    const zoneFactor = 1.2;
+    const gfi =
+      (Math.max(0, temp) * (100 - Math.min(100, humidity)) * windKmh / 1000) *
+      (1 + dryDays / 20) *
+      zoneFactor;
+    let kbdi = (Math.max(0, temp) * 10) - (rain * 50);
+    if (kbdi < 0) kbdi = 0;
+    kbdi = Math.min(800, kbdi + (dryDays * 50));
+    
+    const isi = (windKmh * 0.12) * (1 + (Math.max(0, 30 - humidity)) / 60) * (Math.max(0, temp) / 15);
+    const bui = (dryDays * 6) + (Math.max(0, temp) / 8);
+    
+    const fD = bui <= 80 
+      ? (0.626 * Math.pow(Math.max(0, bui), 0.809) + 2.0)
+      : (1000.0 / (25.0 + 108.64 * Math.exp(-0.023 * Math.max(0, bui))));
+    
+    const B = 0.1 * isi * fD;
+    const B_safe = Math.max(B, 1e-6);
+    
+    const fwiBosnian = B > 1
+      ? Math.exp(2.72 * Math.pow(Math.max(0, 0.434 * Math.log(B_safe)), 0.647))
+      : Math.max(0, B);
+
+    return { ai, gfi, kbdi, fwiBosnian, isi, bui };
+  };
+
+  const calculateFireIndices = (weather: FireIndexWeatherData, hourIdx: number) => {
+    const { ai, gfi, kbdi, fwiBosnian } = computeFireIndexMetrics(weather, hourIdx);
+
+    let aiRisk = t.riskLevels.low;
+    let aiColor = "text-emerald-500";
+    if (ai < 2.0) { aiRisk = t.riskLevels.extreme; aiColor = "text-purple-500"; }
+    else if (ai < 2.5) { aiRisk = t.riskLevels.veryHigh; aiColor = "text-red-600"; }
+    else if (ai < 3.0) { aiRisk = t.riskLevels.high; aiColor = "text-orange-500"; }
+    else if (ai < 4.0) { aiRisk = t.riskLevels.moderate; aiColor = "text-yellow-500"; }
+
+    let gfiRisk = t.riskLevels.low;
+    let gfiColor = "text-emerald-500";
+    if (gfi > 15) { gfiRisk = t.riskLevels.extreme; gfiColor = "text-purple-500"; }
+    else if (gfi > 9) { gfiRisk = t.riskLevels.veryHigh; gfiColor = "text-red-600"; }
+    else if (gfi > 5) { gfiRisk = t.riskLevels.high; gfiColor = "text-orange-500"; }
+    else if (gfi > 2) { gfiRisk = t.riskLevels.moderate; gfiColor = "text-yellow-500"; }
+
+    let kbdiRisk = t.riskLevels.low;
+    let kbdiColor = "text-emerald-500";
+    if (kbdi > 600) { kbdiRisk = t.riskLevels.extreme; kbdiColor = "text-purple-500"; }
+    else if (kbdi > 400) { kbdiRisk = t.riskLevels.high; kbdiColor = "text-red-600"; }
+    else if (kbdi > 200) { kbdiRisk = t.riskLevels.moderate; kbdiColor = "text-orange-500"; }
+
+    let fwiRisk = t.riskLevels.low;
+    let fwiColor = "text-emerald-500";
+    if (fwiBosnian >= 70.0) { fwiRisk = t.riskLevels.extreme; fwiColor = "text-purple-600"; }
+    else if (fwiBosnian >= 50.0) { fwiRisk = t.riskLevels.extreme; fwiColor = "text-purple-500"; }
+    else if (fwiBosnian >= 38.0) { fwiRisk = t.riskLevels.veryHigh; fwiColor = "text-red-600"; }
+    else if (fwiBosnian >= 21.3) { fwiRisk = t.riskLevels.high; fwiColor = "text-orange-500"; }
+    else if (fwiBosnian >= 11.2) { fwiRisk = t.riskLevels.moderate; fwiColor = "text-yellow-500"; }
+
+    return { ai, aiRisk, aiColor, gfi, gfiRisk, gfiColor, kbdi, kbdiRisk, kbdiColor, fwiBosnian, fwiRisk, fwiColor };
+  };
+
+  const buildFallbackFwiSnapshot = (forest: ForestRegion): ForestFireIndexSnapshot => {
+    const typeBias: Record<RegionType, number> = {
+      [RegionType.DECIDUOUS]: 0.04,
+      [RegionType.CONIFEROUS]: 0.12,
+      [RegionType.MIXED]: 0.08,
+      [RegionType.MAQUIS]: 0.18,
+      [RegionType.LOW_VEGETATION]: 0.15,
+      [RegionType.LANDFILL]: 0.2,
+    };
+    const intensity = Math.max(0.08, Math.min(0.98, forest.riskScore + (typeBias[forest.type] ?? 0)));
+    return {
+      id: forest.id,
+      lat: forest.coordinates[0],
+      lng: forest.coordinates[1],
+      angstrom: 5.8 - (intensity * 3.8),
+      gfi: 1 + (intensity * 11),
+      kbdi: 90 + (intensity * 520),
+      fwiBosnian: intensity * 80,
+    };
+  };
+
+  // Helper for dynamic header icon
+  const getForestIconElement = (type: RegionType) => {
+    const style = REGION_STYLES[type];
+    const path = ICON_PATHS[style.iconType] || ICON_PATHS.tree;
+    return (
+       <div className={`p-3 rounded-2xl bg-slate-950 border shadow-[0_0_30px_-5px_rgba(0,0,0,0.3)]`} style={{ borderColor: style.color, boxShadow: `0 0 20px ${style.color}20` }}>
+         <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            width="32" 
+            height="32" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke={style.color} 
+            strokeWidth="2.5" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+            dangerouslySetInnerHTML={{ __html: path }}
+         />
+       </div>
+    );
+  };
+
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const initialViewportLayoutKeyRef = useRef<string | null>(null);
   const bihBounds = useMemo(() => GlobalLeaflet.geoJSON(bihBorderData as any).getBounds(), []);
@@ -209,7 +342,6 @@ export const GISMap: React.FC<GISMapProps> = ({
   // -- METEOBLUE DYNAMIC STATE --
   const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
 
-  const t = TRANSLATIONS[language];
   const federationSelected = selectedCantonCodes.size > 0;
   const allCantonsSelected = selectedCantonCodes.size === ALL_CANTON_CODES.length;
   const borderLayerVisible = activeLayers.has(MapLayer.BIH_BORDERS);
@@ -468,10 +600,26 @@ export const GISMap: React.FC<GISMapProps> = ({
     () => activeLayers.has(MapLayer.FWI_BOSNIAN),
     [activeLayers]
   );
+  const activeFwiValue = useMemo(() => {
+    if (!selectedForest || !forestWeather) return null;
+    const hIdx = getCurrentHourIndex(forestWeather);
+    const risk = calculateFireIndices(forestWeather, hIdx);
+    return risk.fwiBosnian;
+  }, [selectedForest, forestWeather]);
+
   const activeFwiLayerInfo = useMemo(() => {
-    if (activeLayers.has(MapLayer.FWI_BOSNIAN)) return { title: t.dashboard.fwiBosnian, min: '0', max: '80+', gradient: 'bg-gradient-to-r from-green-500 via-orange-500 to-red-500', iconColor: 'bg-red-500' };
+    if (activeLayers.has(MapLayer.FWI_BOSNIAN)) {
+      return { 
+        title: t.dashboard.fwiBosnian, 
+        min: 0, 
+        max: 80, 
+        gradient: 'bg-gradient-to-r from-green-500 via-orange-500 to-red-500', 
+        iconColor: 'bg-red-500',
+        currentValue: activeFwiValue
+      };
+    }
     return null;
-  }, [activeLayers, t]);
+  }, [activeLayers, t, activeFwiValue]);
   const fwiSourceForests = useMemo(
     () => MOCK_FORESTS.filter((forest) => forest.type !== RegionType.LANDFILL),
     []
@@ -775,151 +923,6 @@ export const GISMap: React.FC<GISMapProps> = ({
       resizeObserver?.disconnect();
     };
   }, [bihBounds, isReporting, map, showLegend]);
-
-  // Helpers
-  const fmtTime = (isoString: string) => new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const fmtDay = (isoString: string) => new Date(isoString).toLocaleDateString([], { weekday: 'short', day: 'numeric' });
-
-  // Get current hour index
-  const getCurrentHourIndex = (weather: FireIndexWeatherData) => {
-    if (!weather.hourly.time.length) return -1;
-
-    // Use the API's own current timestamp so we stay in the same timezone
-    // as the hourly arrays returned by Open-Meteo.
-    const currentHourStr = weather.current.time.slice(0, 13); // YYYY-MM-DDTHH
-    const exactHourIndex = weather.hourly.time.findIndex(t => t.startsWith(currentHourStr));
-
-    if (exactHourIndex !== -1) {
-      return exactHourIndex;
-    }
-
-    const nextAvailableIndex = weather.hourly.time.findIndex(t => t >= weather.current.time);
-    return nextAvailableIndex !== -1 ? nextAvailableIndex : 0;
-  };
-
-  // Helper for dynamic header icon
-  const getForestIconElement = (type: RegionType) => {
-    const style = REGION_STYLES[type];
-    const path = ICON_PATHS[style.iconType] || ICON_PATHS.tree;
-    return (
-       <div className={`p-3 rounded-2xl bg-slate-950 border shadow-[0_0_30px_-5px_rgba(0,0,0,0.3)]`} style={{ borderColor: style.color, boxShadow: `0 0 20px ${style.color}20` }}>
-         <svg 
-            xmlns="http://www.w3.org/2000/svg" 
-            width="32" 
-            height="32" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke={style.color} 
-            strokeWidth="2.5" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-            dangerouslySetInnerHTML={{ __html: path }}
-         />
-       </div>
-    );
-  };
-
-  // -- FIRE INDEX CALCULATIONS --
-  const computeFireIndexMetrics = (weather: FireIndexWeatherData, hourIdx: number) => {
-    const safeHourIdx = hourIdx >= 0 ? hourIdx : 0;
-    const temp = weather.hourly.temperature_2m[safeHourIdx] ?? 0;
-    const humidity = weather.hourly.relative_humidity_2m[safeHourIdx] ?? 0;
-    const windKmh = weather.hourly.wind_speed_10m[safeHourIdx] ?? 0;
-    const rain = weather.daily.precipitation_sum[0] ?? 0;
-    const ai = (humidity / 20 + (27 - temp) / 10);
-    const dryDays = weather.daily.precipitation_sum.filter((p) => p < 2.0).length;
-    const zoneFactor = 1.2;
-    const gfi =
-      (Math.max(0, temp) * (100 - humidity) * windKmh / 1000) *
-      (1 + dryDays / 20) *
-      zoneFactor;
-    let kbdi = (Math.max(0, temp) * 10) - (rain * 50);
-    if (kbdi < 0) kbdi = 0;
-    kbdi = Math.min(800, kbdi + (dryDays * 50));
-    
-    // -- Bosnian FWI Calculation (Scientific Methodology) --
-    // Proxies for ISI and BUI from current weather data
-    const isi = (windKmh * 0.12) * (1 + (30 - humidity) / 60) * (temp / 15);
-    const bui = (dryDays * 6) + (temp / 8);
-    
-    // fD - dependent on BUI
-    const fD = bui <= 80 
-      ? (0.626 * Math.pow(bui, 0.809) + 2.0)
-      : (1000.0 / (25.0 + 108.64 * Math.exp(-0.023 * bui)));
-    
-    // B - intermediate product
-    const B = 0.1 * isi * fD;
-    const B_safe = Math.max(B, 1e-6);
-    
-    // FWI calculation
-    const fwiBosnian = B > 1
-      ? Math.exp(2.72 * Math.pow(0.434 * Math.log(B_safe), 0.647))
-      : B;
-
-    return { ai, gfi, kbdi, fwiBosnian, isi, bui };
-  };
-
-  const buildFallbackFwiSnapshot = (forest: ForestRegion): ForestFireIndexSnapshot => {
-    const typeBias: Record<RegionType, number> = {
-      [RegionType.DECIDUOUS]: 0.04,
-      [RegionType.CONIFEROUS]: 0.12,
-      [RegionType.MIXED]: 0.08,
-      [RegionType.MAQUIS]: 0.18,
-      [RegionType.LOW_VEGETATION]: 0.15,
-      [RegionType.LANDFILL]: 0.2,
-    };
-
-    const intensity = Math.max(0.08, Math.min(0.98, forest.riskScore + (typeBias[forest.type] ?? 0)));
-
-    return {
-      id: forest.id,
-      lat: forest.coordinates[0],
-      lng: forest.coordinates[1],
-      // Lower Angstrom means higher danger, so invert the synthetic severity.
-      angstrom: 5.8 - (intensity * 3.8),
-      gfi: 1 + (intensity * 11),
-      kbdi: 90 + (intensity * 520),
-      fwiBosnian: intensity * 80,
-    };
-  };
-
-  const calculateFireIndices = (weather: FireIndexWeatherData, hourIdx: number) => {
-    const { ai, gfi, kbdi, fwiBosnian } = computeFireIndexMetrics(weather, hourIdx);
-
-    // Angström Index
-    let aiRisk = t.riskLevels.low;
-    let aiColor = "text-emerald-500";
-    if (ai < 2.0) { aiRisk = t.riskLevels.extreme; aiColor = "text-purple-500"; }
-    else if (ai < 2.5) { aiRisk = t.riskLevels.veryHigh; aiColor = "text-red-600"; }
-    else if (ai < 3.0) { aiRisk = t.riskLevels.high; aiColor = "text-orange-500"; }
-    else if (ai < 4.0) { aiRisk = t.riskLevels.moderate; aiColor = "text-yellow-500"; }
-
-    // GFI
-    let gfiRisk = t.riskLevels.low;
-    let gfiColor = "text-emerald-500";
-    if (gfi > 15) { gfiRisk = t.riskLevels.extreme; gfiColor = "text-purple-500"; }
-    else if (gfi > 9) { gfiRisk = t.riskLevels.veryHigh; gfiColor = "text-red-600"; }
-    else if (gfi > 5) { gfiRisk = t.riskLevels.high; gfiColor = "text-orange-500"; }
-    else if (gfi > 2) { gfiRisk = t.riskLevels.moderate; gfiColor = "text-yellow-500"; }
-
-    // KBDI
-    let kbdiRisk = t.riskLevels.low;
-    let kbdiColor = "text-emerald-500";
-    if (kbdi > 600) { kbdiRisk = t.riskLevels.extreme; kbdiColor = "text-purple-500"; }
-    else if (kbdi > 400) { kbdiRisk = t.riskLevels.high; kbdiColor = "text-red-600"; }
-    else if (kbdi > 200) { kbdiRisk = t.riskLevels.moderate; kbdiColor = "text-orange-500"; }
-
-    // Bosnian FWI (Scientific)
-    let fwiRisk = t.riskLevels.low;
-    let fwiColor = "text-emerald-500";
-    if (fwiBosnian >= 70.0) { fwiRisk = t.riskLevels.extreme; fwiColor = "text-purple-600"; }
-    else if (fwiBosnian >= 50.0) { fwiRisk = t.riskLevels.extreme; fwiColor = "text-purple-500"; }
-    else if (fwiBosnian >= 38.0) { fwiRisk = t.riskLevels.veryHigh; fwiColor = "text-red-600"; }
-    else if (fwiBosnian >= 21.3) { fwiRisk = t.riskLevels.high; fwiColor = "text-orange-500"; }
-    else if (fwiBosnian >= 11.2) { fwiRisk = t.riskLevels.moderate; fwiColor = "text-yellow-500"; }
-
-    return { ai, aiRisk, aiColor, gfi, gfiRisk, gfiColor, kbdi, kbdiRisk, kbdiColor, fwiBosnian, fwiRisk, fwiColor };
-  };
 
   const activeFwiLayers = useMemo(
     () => [MapLayer.FWI_BOSNIAN].filter((layer) => activeLayers.has(layer)),
@@ -1595,10 +1598,41 @@ export const GISMap: React.FC<GISMapProps> = ({
                                                     </div>
                                                     <span className={`text-xs font-black uppercase ${risk.fwiColor}`}>{risk.fwiRisk}</span>
                                                 </div>
-                                                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-gradient-to-r from-green-500 via-orange-500 to-red-500" style={{ width: `${Math.min(100, (risk.fwiBosnian / 80) * 100)}%` }}></div>
+                                                <div className="relative pt-4 pb-2">
+                                                    {/* Value Indicator Arrow */}
+                                                    <div 
+                                                        className="absolute top-1.5 transition-all duration-700 ease-out z-20"
+                                                        style={{ 
+                                                            left: `${Math.min(100, (risk.fwiBosnian / 80) * 100)}%`, 
+                                                            transform: 'translateX(-50%)' 
+                                                        }}
+                                                    >
+                                                        <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[7px] border-t-white drop-shadow-[0_0_3px_rgba(0,0,0,0.5)]" />
+                                                    </div>
+                                                    
+                                                    {/* Full Gradient Scale Bar */}
+                                                    <div className="w-full h-2.5 rounded-full bg-gradient-to-r from-green-500 via-orange-500 to-red-500 shadow-inner relative overflow-hidden">
+                                                        {/* Scale Ticks */}
+                                                        <div className="absolute inset-0 flex justify-between px-[1px]">
+                                                            {[...Array(9)].map((_, i) => (
+                                                                <div key={i} className="w-px h-full bg-slate-950/20" />
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Scale Labels */}
+                                                    <div className="flex justify-between px-0.5 mt-1">
+                                                        {[0, 10, 20, 30, 40, 50, 60, 70, 80].map(v => (
+                                                            <span key={v} className="text-[7px] font-bold text-slate-500 font-mono">
+                                                                {v}
+                                                            </span>
+                                                        ))}
+                                                    </div>
                                                 </div>
-                                                <div className="mt-1 text-[10px] text-slate-500 font-mono text-right">{risk.fwiBosnian.toFixed(2)}</div>
+                                                <div className="mt-1 text-[10px] text-slate-500 font-mono text-right flex justify-end items-center gap-1">
+                                                    <span className="text-white font-black">{risk.fwiBosnian.toFixed(2)}</span>
+                                                    <span className="opacity-50">/ 80</span>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -1802,10 +1836,38 @@ export const GISMap: React.FC<GISMapProps> = ({
             </div>
             <span className="text-[10px] font-bold text-slate-500 tracking-wider">INDEX SCALE</span>
           </div>
-          <div className={`h-2 w-full rounded-full ${activeFwiLayerInfo.gradient} mb-1 opacity-90`} />
-          <div className="flex items-center justify-between text-[9px] font-bold text-slate-400">
-            <span>{activeFwiLayerInfo.min}</span>
-            <span>{activeFwiLayerInfo.max}</span>
+          <div className="relative mt-2 mb-1">
+            {/* Value Indicator Arrow */}
+            {activeFwiLayerInfo.currentValue !== null && (
+              <div 
+                className="absolute -top-2.5 transition-all duration-700 ease-out z-20"
+                style={{ 
+                  left: `${Math.min(100, (activeFwiLayerInfo.currentValue / 80) * 100)}%`, 
+                  transform: 'translateX(-50%)' 
+                }}
+              >
+                <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[7px] border-t-white drop-shadow-[0_0_3px_rgba(0,0,0,0.5)]" />
+              </div>
+            )}
+            
+            {/* Gradient Scale Bar */}
+            <div className={`h-2.5 w-full rounded-full ${activeFwiLayerInfo.gradient} shadow-inner relative overflow-hidden`}>
+              {/* Scale Ticks */}
+              <div className="absolute inset-0 flex justify-between px-[1px]">
+                {[...Array(9)].map((_, i) => (
+                  <div key={i} className="w-px h-full bg-slate-950/20" />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Scale Labels */}
+          <div className="flex justify-between px-0.5">
+            {[0, 10, 20, 30, 40, 50, 60, 70, 80].map(v => (
+              <span key={v} className="text-[8px] font-bold text-slate-500 font-mono">
+                {v}
+              </span>
+            ))}
           </div>
         </div>
       )}
@@ -1839,14 +1901,14 @@ export const GISMap: React.FC<GISMapProps> = ({
              <Loader2 size={64} className="text-blue-500 animate-spin relative z-10" strokeWidth={2.5} />
           </div>
           <div className="flex flex-col items-center gap-4 relative z-10">
-            <h2 className="text-3xl font-black text-white tracking-[0.2em] uppercase drop-shadow-2xl">
+            <h2 className="text-3xl md:text-5xl font-black text-white tracking-[0.2em] uppercase drop-shadow-2xl flex items-center gap-6">
               {t.dashboard.calculatingFwi}
+              <div className="flex gap-2 items-center h-full pt-2">
+                 <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.3s] shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+                 <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce [animation-delay:-0.15s] shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+                 <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+              </div>
             </h2>
-            <div className="flex gap-1.5">
-               <div className="w-2 h-2 rounded-full bg-blue-600 animate-bounce [animation-delay:-0.3s]" />
-               <div className="w-2 h-2 rounded-full bg-blue-600 animate-bounce [animation-delay:-0.15s]" />
-               <div className="w-2 h-2 rounded-full bg-blue-600 animate-bounce" />
-            </div>
           </div>
         </div>
       )}

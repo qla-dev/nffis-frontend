@@ -119,8 +119,8 @@ export const TRANSLATIONS = {
       highClouds: 'High Clouds',
       verticalWind: 'Vertical Wind',
       soilProfile: 'Soil Profile',
-      loading: 'Acquiring Telemetry...',
-      calculatingFwi: 'Calculating FWI...',
+      loading: 'Acquiring Telemetry',
+      calculatingFwi: 'Calculating BH FWI',
       today: 'Today',
       now: 'Now'
     },
@@ -298,8 +298,8 @@ export const TRANSLATIONS = {
       highClouds: 'Visoki Oblaci',
       verticalWind: 'Vertikalni Vjetar',
       soilProfile: 'Profil Tla',
-      loading: 'Učitavanje Telemetrije...',
-      calculatingFwi: 'Kalkulišemo FWI...',
+      loading: 'Učitavanje Telemetrije',
+      calculatingFwi: 'Kalkulišemo BH FWI',
       today: 'Danas',
       now: 'Sada'
     },
@@ -476,8 +476,8 @@ export const TRANSLATIONS = {
       highClouds: '上層雲',
       verticalWind: '垂直風',
       soilProfile: '土壌プロファイル',
-      loading: 'テレメトリ取得中...',
-      calculatingFwi: 'FWIを計算中...',
+      loading: 'テレメトリ取得中',
+      calculatingFwi: 'BH FWIを計算中',
       today: '今日',
       now: '現在'
     },

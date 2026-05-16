@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sun, Moon, LandPlot, Wind, Thermometer, Trees, Settings2, Info, Satellite, X, Map as MapIcon, Globe2, ShieldCheck, Trash2, Flame, Waves, Eye, Cloud, Radar, Mountain, ThermometerSun, Check, MapPin, Users } from 'lucide-react';
 import { MapLayer, Language, RegionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
@@ -57,11 +57,29 @@ export const MapControls: React.FC<MapControlsProps> = ({
   containerRef
 }) => {
   const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | 'fwi' | 'borders' | 'aws' | null>(null);
+  const localRef = useRef<HTMLDivElement>(null);
+  const effectiveRef = containerRef || localRef;
   const t = TRANSLATIONS[language];
 
   const togglePanel = (panel: 'assets' | 'layers' | 'satellite' | 'fwi' | 'borders' | 'aws') => {
     setActivePanel(activePanel === panel ? null : panel);
   };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (effectiveRef.current && !effectiveRef.current.contains(event.target as Node)) {
+        setActivePanel(null);
+      }
+    };
+
+    if (activePanel) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [activePanel, containerRef]);
 
   const handleBordersButtonClick = () => {
     if (!borderLayerVisible) {
@@ -97,9 +115,9 @@ export const MapControls: React.FC<MapControlsProps> = ({
     MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN].some((layer) => activeLayers.has(layer));
 
   return (
-    <div ref={containerRef} className="fixed top-0 left-0 right-0 pt-[env(safe-area-inset-top)] md:absolute md:top-4 md:right-4 md:left-auto md:pt-0 z-[2000] flex flex-col items-end gap-2">
+    <div ref={effectiveRef} className="fixed top-0 left-0 right-0 pt-[env(safe-area-inset-top)] md:absolute md:top-4 md:right-4 md:left-auto md:pt-0 z-[2000] flex flex-col items-end gap-2 pointer-events-none">
       {/* HORIZONTAL Control Cluster */}
-      <div className="w-full md:w-auto">
+      <div className="w-full md:w-auto pointer-events-auto">
         <div
           className="overflow-x-auto overflow-y-hidden px-3 py-2 md:px-0 md:py-0 bg-transparent border-none shadow-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain', overscrollBehaviorY: 'none' }}
@@ -235,7 +253,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
       </div>
 
       {/* Dropdown Panels Container */}
-      <div className="relative w-64 mr-4 md:mr-0">
+      <div className="relative w-64 mr-4 md:mr-0 pointer-events-auto">
         {activePanel === 'borders' && (
           <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-72 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">

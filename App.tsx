@@ -35,6 +35,7 @@ const App: React.FC = () => {
       MapLayer.BIH_BORDERS, 
       MapLayer.FORESTS, 
       MapLayer.LANDFILLS,
+      MapLayer.FWI_BOSNIAN,
       'AWS Precipitation' as MapLayer,
       'AWS Agro' as MapLayer,
       'AWS Meteo' as MapLayer
