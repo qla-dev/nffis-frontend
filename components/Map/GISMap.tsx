@@ -1744,12 +1744,19 @@ export const GISMap: React.FC<GISMapProps> = ({
                                                         </div>
                                                     </div>
 
-                                                    <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/10">
+                                                    <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/10 space-y-2.5">
                                                         <p className="text-[9px] text-slate-400 leading-relaxed italic">
-                                                            <span className="text-blue-400 font-black not-italic mr-1">INFO:</span>
+                                                            <span className="text-blue-400 font-black not-italic mr-1">MODEL:</span>
                                                             {language === Language.BS
-                                                                ? "Proračun automatski prilagođava ISI (Indeks širenja) na osnovu gustine goriva i nagiba terena."
-                                                                : "The calculation automatically adjusts the ISI (Spread Index) based on fuel density and terrain slope."}
+                                                                ? "Finalni BH FWI se dobija kombinacijom ISI i BUI indeksa, koristeći modifikovanu Canadian FWI formulu optimizovanu za orografiju i specifične vegetacijske zone Bosne i Hercegovine."
+                                                                : "Final BH FWI is derived by combining ISI and BUI indexes, using a modified Canadian FWI formula optimized for the orography and specific vegetation zones of Bosnia and Herzegovina."}
+                                                        </p>
+                                                        <div className="h-px bg-white/5 w-full"></div>
+                                                        <p className="text-[9px] text-slate-500 leading-relaxed italic">
+                                                            <span className="text-emerald-400 font-black not-italic mr-1">ADJUSTMENT:</span>
+                                                            {language === Language.BS
+                                                                ? "Sistem vrši automatsku korekciju rezultata na osnovu gustine goriva i nagiba terena, što direktno utiče na projektovanu brzinu širenja požara."
+                                                                : "The system automatically adjusts results based on fuel density and terrain slope, which directly impacts the projected fire spread rate."}
                                                         </p>
                                                     </div>
                                                 </div>
