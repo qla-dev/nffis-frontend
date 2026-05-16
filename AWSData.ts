@@ -215,84 +215,95 @@ export async function scrape(): Promise<ScrapedData> {
   const useProxy = typeof process === "undefined" || !process.env?.FHMZ_NO_PROXY;
   const url = useProxy ? CORS_PROXY + encodeURIComponent(FHMZ_URL) : FHMZ_URL;
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`FHMZ fetch failed: HTTP ${res.status}`);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`FHMZ fetch failed: HTTP ${res.status}`);
 
-  const html = await res.text();
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const tables = Array.from(doc.querySelectorAll("table"));
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const tables = Array.from(doc.querySelectorAll("table"));
 
-  // Report date printed on page
-  const bodyText = doc.body?.innerText ?? "";
-  const dateMatch = bodyText.match(/datum[:\s]*(\d{1,2}[.-/]\d{1,2}[.-/]\d{4})/i);
-  const reportDate = dateMatch ? dateMatch[1] : null;
+    if (tables.length < 3) {
+      console.warn(`Expected 3+ tables, got ${tables.length}. Falling back to dummy data.`);
+      return fhmzRealDummyData as ScrapedData;
+    }
 
-  const precipitation: PrecipitationStation[] = dataRows(tables[0]).map((tr) => {
-    const c = cells(tr);
+    // Report date printed on page
+    const bodyText = doc.body?.innerText ?? "";
+    const dateMatch = bodyText.match(/datum[:\s]*(\d{1,2}[.-/]\d{1,2}[.-/]\d{4})/i);
+    const reportDate = dateMatch ? dateMatch[1] : null;
+
+    const precipitation: PrecipitationStation[] = dataRows(tables[0]).map((tr) => {
+      const c = cells(tr);
+      return {
+        type: "precipitation",
+        time: c[0] ?? "",
+        city: c[1] ?? "",
+        tempC: parseNum(c[2] ?? ""),
+        humidityPct: parseNum(c[3] ?? ""),
+        precipMm: parseNum(c[4] ?? ""),
+      };
+    });
+
+    const agro: AgroStation[] = dataRows(tables[1]).map((tr) => {
+      const c = cells(tr);
+      return {
+        type: "agro",
+        time: c[0] ?? "",
+        station: c[1] ?? "",
+        windDir: parseStr(c[2] ?? ""),
+        windSpeedMs: parseNum(c[3] ?? ""),
+        pressureHpa: parseNum(c[4] ?? ""),
+        tempC: parseNum(c[5] ?? ""),
+        humidityPct: parseNum(c[6] ?? ""),
+        precipMm: parseNum(c[7] ?? ""),
+      };
+    });
+
+    const meteo: MeteoStation[] = dataRows(tables[2]).map((tr) => {
+      const c = cells(tr);
+      return {
+        type: "meteo",
+        date: c[0] ?? "",
+        time: c[1] ?? "",
+        station: c[2] ?? "",
+        windDir: parseStr(c[3] ?? ""),
+        windSpeedMs: parseNum(c[4] ?? ""),
+        pressureHpa: parseNum(c[5] ?? ""),
+        tempC: parseNum(c[6] ?? ""),
+        humidityPct: parseNum(c[7] ?? ""),
+        precipMm: parseNum(c[8] ?? ""),
+      };
+    });
+
+    const airQuality: AirQualityStation[] = dataRows(tables[3] || []).map((tr) => {
+      const c = cells(tr);
+      return {
+        type: "air_quality",
+        date: c[0] ?? "",
+        time: c[1] ?? "",
+        station: c[2] ?? "",
+        windDir: parseStr(c[3] ?? ""),
+        windSpeedMs: parseNum(c[4] ?? ""),
+        windSpeedKmh: parseNum(c[5] ?? ""),
+        pressureHpa: parseNum(c[6] ?? ""),
+        tempC: parseNum(c[7] ?? ""),
+        humidityPct: parseNum(c[8] ?? ""),
+      };
+    });
+
+    console.log(`✓ Successfully scraped live data: ${precipitation.length + agro.length + meteo.length + airQuality.length} stations`);
     return {
-      type: "precipitation",
-      time: c[0] ?? "",
-      city: c[1] ?? "",
-      tempC: parseNum(c[2] ?? ""),
-      humidityPct: parseNum(c[3] ?? ""),
-      precipMm: parseNum(c[4] ?? ""),
+      scrapedAt: new Date().toISOString(),
+      reportDate,
+      precipitation,
+      agro,
+      meteo,
+      airQuality,
+      all: [...precipitation, ...agro, ...meteo, ...airQuality],
     };
-  });
-
-  const agro: AgroStation[] = dataRows(tables[1]).map((tr) => {
-    const c = cells(tr);
-    return {
-      type: "agro",
-      time: c[0] ?? "",
-      station: c[1] ?? "",
-      windDir: parseStr(c[2] ?? ""),
-      windSpeedMs: parseNum(c[3] ?? ""),
-      pressureHpa: parseNum(c[4] ?? ""),
-      tempC: parseNum(c[5] ?? ""),
-      humidityPct: parseNum(c[6] ?? ""),
-      precipMm: parseNum(c[7] ?? ""),
-    };
-  });
-
-  const meteo: MeteoStation[] = dataRows(tables[2]).map((tr) => {
-    const c = cells(tr);
-    return {
-      type: "meteo",
-      date: c[0] ?? "",
-      time: c[1] ?? "",
-      station: c[2] ?? "",
-      windDir: parseStr(c[3] ?? ""),
-      windSpeedMs: parseNum(c[4] ?? ""),
-      pressureHpa: parseNum(c[5] ?? ""),
-      tempC: parseNum(c[6] ?? ""),
-      humidityPct: parseNum(c[7] ?? ""),
-      precipMm: parseNum(c[8] ?? ""),
-    };
-  });
-
-  const airQuality: AirQualityStation[] = dataRows(tables[3]).map((tr) => {
-    const c = cells(tr);
-    return {
-      type: "air_quality",
-      date: c[0] ?? "",
-      time: c[1] ?? "",
-      station: c[2] ?? "",
-      windDir: parseStr(c[3] ?? ""),
-      windSpeedMs: parseNum(c[4] ?? ""),
-      windSpeedKmh: parseNum(c[5] ?? ""),
-      pressureHpa: parseNum(c[6] ?? ""),
-      tempC: parseNum(c[7] ?? ""),
-      humidityPct: parseNum(c[8] ?? ""),
-    };
-  });
-
-  return {
-    scrapedAt: new Date().toISOString(),
-    reportDate,
-    precipitation,
-    agro,
-    meteo,
-    airQuality,
-    all: [...precipitation, ...agro, ...meteo, ...airQuality],
-  };
+  } catch (error) {
+    console.error("Failed to scrape live data, falling back to dummy:", error);
+    return fhmzRealDummyData as ScrapedData;
+  }
 }
