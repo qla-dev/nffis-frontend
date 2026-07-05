@@ -27,6 +27,8 @@ import { KBDIHeatLayer } from '../Layers/FWI/KBDIHeatLayer';
 import { BosnianFWIHeatLayer } from '../Layers/FWI/BosnianFWIHeatLayer';
 import { AWSFBiHLayer } from './layers/AWS/AWSFBiHLayer';
 import { AWSRsLayer } from './layers/AWS/AWSRsLayer';
+import { DatasetGeoJsonLayer } from './layers/Datasets/DatasetGeoJsonLayer';
+import type { DatasetLayer, DatasetLayerFilterState } from '../../services/datasetService';
 
 const GlobalLeaflet = (L as any).default || L;
 const FIRE_HEAT_GRADIENT = {
@@ -43,6 +45,7 @@ const FLOOD_HEAT_GRADIENT = {
 };
 const FWI_OVERLAY_PANE = 'fwi-overlay-pane';
 const METEOBLUE_OVERLAY_PANE = 'meteoblue-overlay-pane';
+const DATASET_LAYER_PANE = 'dataset-layer-pane';
 const FIREFIGHTER_DENSITY_FILLS: Record<FirefighterDensityBucket, string> = {
   'no-data': '#cbd5e1',
   '1-500': '#34d399',
@@ -134,6 +137,9 @@ interface GISMapProps {
   isReporting: boolean;
   onToggleLayer: (layer: MapLayer) => void;
   onSetBaseLayer: (layer: MapLayer | null) => void;
+  datasetLayers: DatasetLayer[];
+  activeDatasetLayerIds: Set<number>;
+  datasetLayerFilters: Record<number, DatasetLayerFilterState>;
   isDarkMode: boolean;
   onToggleTheme: () => void;
   language: Language;
@@ -170,7 +176,20 @@ interface ForestFireIndexSnapshot {
 const FWI_DEBUG_PREFIX = '[FWI DEBUG][GISMap]';
 
 export const GISMap: React.FC<GISMapProps> = ({ 
-  incidents, activeLayers, onReportClick, onCancelReport, isReporting, onToggleLayer, onSetBaseLayer, isDarkMode, onToggleTheme, language, onSetLanguage
+  incidents,
+  activeLayers,
+  onReportClick,
+  onCancelReport,
+  isReporting,
+  onToggleLayer,
+  onSetBaseLayer,
+  datasetLayers,
+  activeDatasetLayerIds,
+  datasetLayerFilters,
+  isDarkMode,
+  onToggleTheme,
+  language,
+  onSetLanguage
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
   const t = TRANSLATIONS[language];
@@ -700,12 +719,13 @@ export const GISMap: React.FC<GISMapProps> = ({
       return;
     }
 
-    const ensurePane = (name: string, zIndex: number) => {
+    const ensurePane = (name: string, zIndex: number, pointerEvents = 'none') => {
       const pane = map.getPane(name) ?? map.createPane(name);
       pane.style.zIndex = `${zIndex}`;
-      pane.style.pointerEvents = 'none';
+      pane.style.pointerEvents = pointerEvents;
     };
 
+    ensurePane(DATASET_LAYER_PANE, 345, 'auto');
     ensurePane(FWI_OVERLAY_PANE, 360);
     ensurePane(METEOBLUE_OVERLAY_PANE, 380);
   }, [map]);
@@ -1284,6 +1304,16 @@ export const GISMap: React.FC<GISMapProps> = ({
             <AWSRsLayer activeTypes={activeLayers} />
           </>
         )}
+        {datasetLayers
+          .filter((layer) => activeDatasetLayerIds.has(layer.id))
+          .map((layer) => (
+            <DatasetGeoJsonLayer
+              key={layer.id}
+              layer={layer}
+              filters={datasetLayerFilters[layer.id]}
+              pane={DATASET_LAYER_PANE}
+            />
+          ))}
         {activeLayers.has(MapLayer.RS_FIREFIGHTER_DENSITY) &&
           firefighterDensityData.features.length > 0 && (
             <GeoJSON

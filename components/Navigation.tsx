@@ -8,14 +8,16 @@ interface NavProps {
   onSetView: (view: AppState['view']) => void;
   onSetLang: (lang: Language) => void;
   onOpenReport: () => void;
+  onOpenLayers: () => void;
+  isLayersOpen: boolean;
 }
 
-export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, onOpenReport }) => {
+export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, onOpenReport, onOpenLayers, isLayersOpen }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const t = TRANSLATIONS[state.language];
 
   const NavItem = ({ icon: Icon, label, id, onClick, color = "text-slate-400" }: any) => {
-    const isActive = state.view === id && !onClick;
+    const isActive = id === 'layers' ? isLayersOpen : state.view === id && !onClick;
     return (
       <button
         onClick={() => onClick ? onClick() : onSetView(id)}
@@ -71,7 +73,7 @@ export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, on
           <NavItem icon={Map} label={t.map} id="map" />
           <NavItem icon={AlertTriangle} label={t.reports} id="reports" />
           <NavItem icon={BarChart3} label={t.stats} id="stats" />
-          <NavItem icon={ListFilter} label={t.layers} id="layers" />
+          <NavItem icon={ListFilter} label={t.layers} id="layers" onClick={onOpenLayers} />
           
           <div className="my-2 border-t border-slate-800/30 mx-2" />
           
@@ -144,8 +146,8 @@ export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, on
           <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.stats}</span>
         </button>
         <button 
-          onClick={() => onSetView('layers')} 
-          className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${state.view === 'layers' ? 'text-blue-500' : 'text-slate-500'}`}
+          onClick={onOpenLayers} 
+          className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${isLayersOpen ? 'text-blue-500' : 'text-slate-500'}`}
         >
           <ListFilter size={20} />
           <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.layers}</span>

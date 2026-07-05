@@ -1,12 +1,15 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Navigation } from './components/Navigation';
 import { GISMap } from './components/Map/GISMap';
 import { ReportModal } from './components/Report/ReportModal';
 import { SessionLoginGate } from './components/Auth/SessionLoginGate';
+import { DatasetLayerOverlay } from './components/Layers/DatasetLayerOverlay';
 import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './types';
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
-import { Activity, Shield, Waves, Flame, Search, Layers, Database, ChevronRight } from 'lucide-react';
+import { Waves, Flame, Database } from 'lucide-react';
+import type { DatasetLayer, DatasetLayerFilterState } from './services/datasetService';
+import { fetchDatasetLayers } from './services/datasetService';
 
 const BASE_LAYER_IDS = [
   MapLayer.SATELLITE,
@@ -48,12 +51,55 @@ const App: React.FC = () => {
 
   const [reportLocation, setReportLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [isDatasetLayerPanelOpen, setIsDatasetLayerPanelOpen] = useState(false);
+  const [datasetLayers, setDatasetLayers] = useState<DatasetLayer[]>([]);
+  const [datasetLayersLoading, setDatasetLayersLoading] = useState(false);
+  const [datasetLayersError, setDatasetLayersError] = useState<string | null>(null);
+  const [activeDatasetLayerIds, setActiveDatasetLayerIds] = useState<Set<number>>(new Set());
+  const [selectedDatasetLayerId, setSelectedDatasetLayerId] = useState<number | null>(null);
+  const [datasetLayerFilters, setDatasetLayerFilters] = useState<Record<number, DatasetLayerFilterState>>({});
+  const appliedDefaultDatasetLayersRef = useRef(false);
 
   const t = TRANSLATIONS[state.language];
 
-  const handleSetView = (view: AppState['view']) => setState(prev => ({ ...prev, view }));
+  const handleSetView = (view: AppState['view']) => {
+    setIsDatasetLayerPanelOpen(false);
+    setState(prev => ({ ...prev, view }));
+  };
   const handleSetLang = (language: Language) => setState(prev => ({ ...prev, language }));
   const handleToggleTheme = () => setState(prev => ({ ...prev, isDarkMode: !prev.isDarkMode }));
+
+  useEffect(() => {
+    let isMounted = true;
+    setDatasetLayersLoading(true);
+
+    fetchDatasetLayers()
+      .then((layers) => {
+        if (!isMounted) return;
+        setDatasetLayers(layers);
+        setDatasetLayersError(null);
+
+        if (!appliedDefaultDatasetLayersRef.current) {
+          const defaults = layers.filter((layer) => layer.visible_by_default).map((layer) => layer.id);
+          setActiveDatasetLayerIds(new Set(defaults));
+          setSelectedDatasetLayerId(defaults[0] ?? layers[0]?.id ?? null);
+          appliedDefaultDatasetLayersRef.current = true;
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setDatasetLayersError('Dataset catalog unavailable.');
+      })
+      .finally(() => {
+        if (isMounted) {
+          setDatasetLayersLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
   
   const startReporting = () => {
     setShowModal(false);
@@ -65,6 +111,11 @@ const App: React.FC = () => {
     setReportLocation(null);
     setState(prev => ({ ...prev, isReporting: false }));
   };
+
+  const openDatasetLayers = useCallback(() => {
+    setState(prev => ({ ...prev, view: 'map', isReporting: false }));
+    setIsDatasetLayerPanelOpen(true);
+  }, []);
 
   const toggleLayer = useCallback((layer: MapLayer) => {
     if (!layer) return;
@@ -117,19 +168,44 @@ const App: React.FC = () => {
     setReportLocation(null);
   };
 
-  const overlayLayers = Object.values(MapLayer).filter(
-    (layer) =>
-      !BASE_LAYER_IDS.includes(layer) &&
-      layer !== MapLayer.METEOBLUE &&
-      layer !== MapLayer.BIH_BORDERS &&
-      layer !== MapLayer.FWI_ANGSTROM &&
-      layer !== MapLayer.FWI_GFI &&
-      layer !== MapLayer.FWI_KBDI
-  );
+  const toggleDatasetLayer = useCallback((layerId: number) => {
+    setActiveDatasetLayerIds(prev => {
+      const next = new Set(prev);
+      if (next.has(layerId)) {
+        next.delete(layerId);
+      } else {
+        next.add(layerId);
+      }
+      return next;
+    });
+    setSelectedDatasetLayerId(layerId);
+  }, []);
+
+  const updateDatasetLayerFilter = useCallback((layerId: number, filter: DatasetLayerFilterState) => {
+    setDatasetLayerFilters(prev => ({
+      ...prev,
+      [layerId]: filter,
+    }));
+  }, []);
+
+  const clearDatasetLayerFilter = useCallback((layerId: number) => {
+    setDatasetLayerFilters(prev => {
+      const next = { ...prev };
+      delete next[layerId];
+      return next;
+    });
+  }, []);
 
   return (
     <div className={`flex h-screen w-full overflow-hidden ${state.isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      <Navigation state={state} onSetView={handleSetView} onSetLang={handleSetLang} onOpenReport={startReporting} />
+      <Navigation
+        state={state}
+        onSetView={handleSetView}
+        onSetLang={handleSetLang}
+        onOpenReport={startReporting}
+        onOpenLayers={openDatasetLayers}
+        isLayersOpen={isDatasetLayerPanelOpen}
+      />
       
       <main className="flex-1 relative md:ml-auto h-full min-h-0 min-w-0 overflow-hidden transition-all duration-300">
         {state.view === 'map' && (
@@ -141,6 +217,9 @@ const App: React.FC = () => {
             isReporting={state.isReporting} 
             onToggleLayer={toggleLayer}
             onSetBaseLayer={setBaseLayer}
+            datasetLayers={datasetLayers}
+            activeDatasetLayerIds={activeDatasetLayerIds}
+            datasetLayerFilters={datasetLayerFilters}
             isDarkMode={state.isDarkMode} 
             onToggleTheme={handleToggleTheme} 
             language={state.language} 
@@ -183,37 +262,24 @@ const App: React.FC = () => {
                   ))}
                 </div>
               )}
-
-              {state.view === 'layers' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  <div className={`border rounded-xl p-6 ${state.isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
-                      <Layers size={16} className="text-blue-500" /> Active GIS Layers
-                    </h3>
-                    <div className="space-y-1">
-                      {overlayLayers.map(layer => (
-                        <label key={layer} className={`flex items-center justify-between p-4 rounded-lg cursor-pointer transition-colors ${state.activeLayers.has(layer) ? (state.isDarkMode ? 'bg-blue-600/5 border border-blue-500/20' : 'bg-blue-50 border border-blue-200') : (state.isDarkMode ? 'hover:bg-slate-800/50 border border-transparent' : 'hover:bg-slate-50 border border-transparent')}`}>
-                          <div className="flex items-center gap-3">
-                            <div className={`w-2 h-2 rounded-full ${state.activeLayers.has(layer) ? 'bg-blue-500 animate-pulse' : 'bg-slate-400'}`} />
-                            <span className={`text-sm ${state.activeLayers.has(layer) ? (state.isDarkMode ? 'text-white font-medium' : 'text-slate-900 font-bold') : 'text-slate-500'}`}>
-                              {layer}
-                            </span>
-                          </div>
-                          <div 
-                            onClick={(e) => { e.preventDefault(); toggleLayer(layer); }}
-                            className={`w-9 h-5 rounded-full relative transition-colors duration-200 ${state.activeLayers.has(layer) ? 'bg-blue-600' : (state.isDarkMode ? 'bg-slate-700' : 'bg-slate-300')}`}
-                          >
-                            <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all duration-200 ${state.activeLayers.has(layer) ? 'left-5' : 'left-1'}`} />
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
+
+        <DatasetLayerOverlay
+          isOpen={isDatasetLayerPanelOpen}
+          layers={datasetLayers}
+          activeLayerIds={activeDatasetLayerIds}
+          selectedLayerId={selectedDatasetLayerId}
+          filters={datasetLayerFilters}
+          isLoading={datasetLayersLoading}
+          errorMessage={datasetLayersError}
+          onClose={() => setIsDatasetLayerPanelOpen(false)}
+          onToggleLayer={toggleDatasetLayer}
+          onSelectLayer={setSelectedDatasetLayerId}
+          onUpdateFilter={updateDatasetLayerFilter}
+          onClearFilter={clearDatasetLayerFilter}
+        />
 
         {showModal && (
           <ReportModal 
