@@ -4,16 +4,13 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
-  Database,
   Eye,
   EyeOff,
-  Filter,
   Layers,
   LineChart,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
-  PanelRightOpen,
   Pentagon,
   Search,
   SlidersHorizontal,
@@ -32,11 +29,13 @@ interface DatasetLayerOverlayProps {
   activeLayerIds: Set<number>;
   selectedLayerId: number | null;
   filters: Record<number, DatasetLayerFilterState>;
+  isFilterPanelOpen: boolean;
   isLoading: boolean;
   errorMessage?: string | null;
   onClose: () => void;
   onToggleLayer: (layerId: number) => void;
   onSelectLayer: (layerId: number) => void;
+  onFilterPanelOpenChange: (isOpen: boolean) => void;
   onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
   onClearFilter: (layerId: number) => void;
 }
@@ -90,23 +89,23 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   activeLayerIds,
   selectedLayerId,
   filters,
+  isFilterPanelOpen,
   isLoading,
   errorMessage,
   onClose,
   onToggleLayer,
   onSelectLayer,
+  onFilterPanelOpenChange,
   onUpdateFilter,
   onClearFilter,
 }) => {
   const [search, setSearch] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [showCatalog, setShowCatalog] = useState(true);
-  const [showFilters, setShowFilters] = useState(true);
 
   useEffect(() => {
     if (isOpen) {
       setShowCatalog(true);
-      setShowFilters(true);
     }
   }, [isOpen]);
 
@@ -158,7 +157,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
     <div className="fixed inset-y-0 left-0 right-0 z-[3600] pointer-events-none md:left-14">
       <div className="absolute inset-y-0 left-0 right-0 flex pointer-events-none">
         <div
-          className={`h-full border-r border-slate-800 bg-slate-950/96 text-slate-100 shadow-2xl shadow-black/50 backdrop-blur-md transition-all duration-200 pointer-events-auto ${
+          className={`h-full border-r border-slate-800 bg-slate-900 text-slate-100 shadow-2xl shadow-black/50 transition-all duration-200 pointer-events-auto ${
             showCatalog ? 'w-full max-w-[440px]' : 'w-12'
           }`}
         >
@@ -323,36 +322,19 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
 
         <div className="min-w-0 flex-1" />
 
-        <div
-          className={`h-full border-l border-slate-800 bg-slate-950/96 text-slate-100 shadow-2xl shadow-black/50 backdrop-blur-md transition-all duration-200 pointer-events-auto ${
-            showFilters ? 'hidden w-[380px] md:flex' : 'hidden w-12 md:flex'
-          }`}
-        >
-          {showFilters ? (
+        {isFilterPanelOpen && (
+          <div className="hidden h-full w-[380px] border-l border-slate-800 bg-slate-900 text-slate-100 shadow-2xl shadow-black/50 transition-all duration-200 pointer-events-auto md:flex">
             <DatasetFilterPanel
               layer={selectedLayer}
               active={selectedLayer ? activeLayerIds.has(selectedLayer.id) : false}
               filter={selectedLayer ? filters[selectedLayer.id] : undefined}
-              onCollapse={() => setShowFilters(false)}
+              onCollapse={() => onFilterPanelOpenChange(false)}
               onToggleLayer={onToggleLayer}
               onUpdateFilter={onUpdateFilter}
               onClearFilter={onClearFilter}
             />
-          ) : (
-            <div className="flex h-full flex-col items-center py-3">
-              <button
-                type="button"
-                className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-900 hover:text-white"
-                onClick={() => setShowFilters(true)}
-                title="Open filters"
-              >
-                <PanelRightOpen size={18} />
-              </button>
-              <div className="mt-3 h-px w-6 bg-slate-800" />
-              <Filter size={18} className="mt-3 text-blue-500" />
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

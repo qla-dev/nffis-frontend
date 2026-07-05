@@ -8,6 +8,7 @@ interface DatasetGeoJsonLayerProps {
   layer: DatasetLayer;
   filters?: DatasetLayerFilterState;
   pane: string;
+  onPolygonClick?: (layerId: number) => void;
 }
 
 function bboxForMap(map: L.Map): string {
@@ -64,7 +65,12 @@ function tooltipHtml(layer: DatasetLayer, feature: GeoJSON.Feature): string {
   `;
 }
 
-export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({ layer, filters, pane }) => {
+export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
+  layer,
+  filters,
+  pane,
+  onPolygonClick,
+}) => {
   const map = useMap();
   const [bbox, setBbox] = useState(() => bboxForMap(map));
   const [featureCollection, setFeatureCollection] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -142,6 +148,13 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({ layer,
           opacity: 1,
           className: 'nffis-dataset-tooltip',
         });
+
+        if (layer.geometry_family === 'polygon' && onPolygonClick) {
+          leafletLayer.on('click', (event: L.LeafletMouseEvent) => {
+            L.DomEvent.stopPropagation(event.originalEvent);
+            onPolygonClick(layer.id);
+          });
+        }
       }}
     />
   );

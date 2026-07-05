@@ -52,6 +52,7 @@ const App: React.FC = () => {
   const [reportLocation, setReportLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [isDatasetLayerPanelOpen, setIsDatasetLayerPanelOpen] = useState(false);
+  const [isDatasetFilterPanelOpen, setIsDatasetFilterPanelOpen] = useState(false);
   const [datasetLayers, setDatasetLayers] = useState<DatasetLayer[]>([]);
   const [datasetLayersLoading, setDatasetLayersLoading] = useState(false);
   const [datasetLayersError, setDatasetLayersError] = useState<string | null>(null);
@@ -64,6 +65,7 @@ const App: React.FC = () => {
 
   const handleSetView = (view: AppState['view']) => {
     setIsDatasetLayerPanelOpen(false);
+    setIsDatasetFilterPanelOpen(false);
     setState(prev => ({ ...prev, view }));
   };
   const handleSetLang = (language: Language) => setState(prev => ({ ...prev, language }));
@@ -112,9 +114,31 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, isReporting: false }));
   };
 
-  const openDatasetLayers = useCallback(() => {
+  const toggleDatasetLayersPanel = useCallback(() => {
     setState(prev => ({ ...prev, view: 'map', isReporting: false }));
+    setIsDatasetLayerPanelOpen((isOpen) => {
+      if (isOpen) {
+        setIsDatasetFilterPanelOpen(false);
+      }
+
+      return !isOpen;
+    });
+  }, []);
+
+  const closeDatasetLayersPanel = useCallback(() => {
+    setIsDatasetLayerPanelOpen(false);
+    setIsDatasetFilterPanelOpen(false);
+  }, []);
+
+  const openDatasetFilterForLayer = useCallback((layerId: number) => {
+    setSelectedDatasetLayerId(layerId);
     setIsDatasetLayerPanelOpen(true);
+    setIsDatasetFilterPanelOpen(true);
+  }, []);
+
+  const selectDatasetLayer = useCallback((layerId: number) => {
+    setSelectedDatasetLayerId(layerId);
+    setIsDatasetFilterPanelOpen(true);
   }, []);
 
   const toggleLayer = useCallback((layer: MapLayer) => {
@@ -203,7 +227,7 @@ const App: React.FC = () => {
         onSetView={handleSetView}
         onSetLang={handleSetLang}
         onOpenReport={startReporting}
-        onOpenLayers={openDatasetLayers}
+        onOpenLayers={toggleDatasetLayersPanel}
         isLayersOpen={isDatasetLayerPanelOpen}
       />
       
@@ -220,6 +244,7 @@ const App: React.FC = () => {
             datasetLayers={datasetLayers}
             activeDatasetLayerIds={activeDatasetLayerIds}
             datasetLayerFilters={datasetLayerFilters}
+            onDatasetPolygonClick={openDatasetFilterForLayer}
             isDarkMode={state.isDarkMode} 
             onToggleTheme={handleToggleTheme} 
             language={state.language} 
@@ -272,11 +297,13 @@ const App: React.FC = () => {
           activeLayerIds={activeDatasetLayerIds}
           selectedLayerId={selectedDatasetLayerId}
           filters={datasetLayerFilters}
+          isFilterPanelOpen={isDatasetFilterPanelOpen}
           isLoading={datasetLayersLoading}
           errorMessage={datasetLayersError}
-          onClose={() => setIsDatasetLayerPanelOpen(false)}
+          onClose={closeDatasetLayersPanel}
           onToggleLayer={toggleDatasetLayer}
-          onSelectLayer={setSelectedDatasetLayerId}
+          onSelectLayer={selectDatasetLayer}
+          onFilterPanelOpenChange={setIsDatasetFilterPanelOpen}
           onUpdateFilter={updateDatasetLayerFilter}
           onClearFilter={clearDatasetLayerFilter}
         />
