@@ -1,27 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Check,
   ChevronDown,
   ChevronRight,
   Circle,
-  Eye,
-  EyeOff,
   Layers,
   LineChart,
   PanelLeftClose,
   PanelLeftOpen,
-  PanelRightClose,
   Pentagon,
   Search,
-  SlidersHorizontal,
   X,
 } from 'lucide-react';
 import type {
-  DatasetFilterOption,
   DatasetLayer,
   DatasetLayerFilterState,
+  DatasetLayerStyle,
 } from '../../services/datasetService';
-import { fetchDatasetLayerFilterOptions } from '../../services/datasetService';
+import { EditLayerSidebar, type EditLayerSidebarTabId } from './EditLayerSidebar/EditLayerSidebar';
 
 interface DatasetLayerOverlayProps {
   isOpen: boolean;
@@ -30,12 +25,19 @@ interface DatasetLayerOverlayProps {
   selectedLayerId: number | null;
   filters: Record<number, DatasetLayerFilterState>;
   isFilterPanelOpen: boolean;
+  selectedFeature?: GeoJSON.Feature | null;
+  editorInitialTab: EditLayerSidebarTabId;
+  isSavingFeature: boolean;
+  saveError?: string | null;
   isLoading: boolean;
   errorMessage?: string | null;
   onClose: () => void;
   onToggleLayer: (layerId: number) => void;
   onSelectLayer: (layerId: number) => void;
   onFilterPanelOpenChange: (isOpen: boolean) => void;
+  onUpdateLayerStyle: (layerId: number, style: DatasetLayerStyle) => void;
+  onSaveLayerStyle: (layerId: number, style: DatasetLayerStyle) => Promise<void>;
+  onSaveFeatureAttributes: (attributes: Record<string, unknown>) => Promise<void>;
   onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
   onClearFilter: (layerId: number) => void;
 }
@@ -90,12 +92,19 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   selectedLayerId,
   filters,
   isFilterPanelOpen,
+  selectedFeature,
+  editorInitialTab,
+  isSavingFeature,
+  saveError,
   isLoading,
   errorMessage,
   onClose,
   onToggleLayer,
   onSelectLayer,
   onFilterPanelOpenChange,
+  onUpdateLayerStyle,
+  onSaveLayerStyle,
+  onSaveFeatureAttributes,
   onUpdateFilter,
   onClearFilter,
 }) => {
@@ -324,12 +333,19 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
 
         {isFilterPanelOpen && (
           <div className="hidden h-full w-[380px] border-l border-slate-800 bg-slate-900 text-slate-100 shadow-2xl shadow-black/50 transition-all duration-200 pointer-events-auto md:flex">
-            <DatasetFilterPanel
+            <EditLayerSidebar
               layer={selectedLayer}
               active={selectedLayer ? activeLayerIds.has(selectedLayer.id) : false}
               filter={selectedLayer ? filters[selectedLayer.id] : undefined}
+              selectedFeature={selectedFeature}
+              initialTab={editorInitialTab}
+              isSavingFeature={isSavingFeature}
+              saveError={saveError}
               onCollapse={() => onFilterPanelOpenChange(false)}
               onToggleLayer={onToggleLayer}
+              onUpdateLayerStyle={onUpdateLayerStyle}
+              onSaveLayerStyle={onSaveLayerStyle}
+              onSaveFeatureAttributes={onSaveFeatureAttributes}
               onUpdateFilter={onUpdateFilter}
               onClearFilter={onClearFilter}
             />
@@ -337,257 +353,5 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
         )}
       </div>
     </div>
-  );
-};
-
-interface DatasetFilterPanelProps {
-  layer: DatasetLayer | null;
-  active: boolean;
-  filter?: DatasetLayerFilterState;
-  onCollapse: () => void;
-  onToggleLayer: (layerId: number) => void;
-  onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
-  onClearFilter: (layerId: number) => void;
-}
-
-const DatasetFilterPanel: React.FC<DatasetFilterPanelProps> = ({
-  layer,
-  active,
-  filter,
-  onCollapse,
-  onToggleLayer,
-  onUpdateFilter,
-  onClearFilter,
-}) => {
-  const [options, setOptions] = useState<DatasetFilterOption[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (!layer) {
-      setOptions([]);
-      return;
-    }
-
-    let isMounted = true;
-    setIsLoading(true);
-
-    fetchDatasetLayerFilterOptions(layer.id)
-      .then((fields) => {
-        if (isMounted) setOptions(fields);
-      })
-      .catch(() => {
-        if (isMounted) setOptions([]);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [layer?.id]);
-
-  if (!layer) {
-    return (
-      <div className="flex h-full w-full flex-col">
-        <header className="flex h-14 items-center justify-between border-b border-slate-800 px-4">
-          <div className="flex items-center gap-2 text-sm font-black text-white">
-            <SlidersHorizontal size={17} className="text-blue-400" />
-            Filters
-          </div>
-          <button
-            type="button"
-            className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-900 hover:text-white"
-            onClick={onCollapse}
-            title="Collapse filters"
-          >
-            <PanelRightClose size={17} />
-          </button>
-        </header>
-        <div className="flex flex-1 items-center justify-center p-6 text-center text-sm font-bold text-slate-600">
-          Select a layer
-        </div>
-      </div>
-    );
-  }
-
-  const currentFilter = filter || {};
-  const count = filterCount(currentFilter);
-
-  const updateFilter = (next: DatasetLayerFilterState) => {
-    onUpdateFilter(layer.id, next);
-  };
-
-  return (
-    <div className="flex h-full w-full flex-col">
-      <header className="flex h-14 items-center justify-between border-b border-slate-800 px-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <SlidersHorizontal size={17} className="shrink-0 text-blue-400" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-black text-white">{layer.display_name}</div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
-              {layer.feature_count.toLocaleString()} features
-            </div>
-          </div>
-        </div>
-        <button
-          type="button"
-          className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-900 hover:text-white"
-          onClick={onCollapse}
-          title="Collapse filters"
-        >
-          <PanelRightClose size={17} />
-        </button>
-      </header>
-
-      <div className="border-b border-slate-800 p-3">
-        <button
-          type="button"
-          className={`flex h-10 w-full items-center justify-center gap-2 rounded-md border text-xs font-black uppercase tracking-[0.16em] transition-colors ${
-            active
-              ? 'border-blue-500/40 bg-blue-600/15 text-blue-100'
-              : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700'
-          }`}
-          onClick={() => onToggleLayer(layer.id)}
-        >
-          {active ? <Eye size={16} /> : <EyeOff size={16} />}
-          {active ? 'Visible' : 'Hidden'}
-        </button>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        <div className="mb-3 flex h-10 items-center gap-2 rounded-md border border-slate-800 bg-slate-900 px-3 text-slate-400 focus-within:border-blue-500/70">
-          <Search size={16} />
-          <input
-            value={currentFilter.q || ''}
-            onChange={(event) => updateFilter({ ...currentFilter, q: event.target.value })}
-            className="h-full min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-600"
-            placeholder="Search attributes"
-          />
-        </div>
-
-        {isLoading ? (
-          <div className="p-3 text-sm font-bold text-slate-500">Loading filters...</div>
-        ) : options.length === 0 ? (
-          <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 text-sm font-bold text-slate-500">
-            No indexed filters
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {options.map((option) => (
-              <FilterField
-                key={option.name}
-                option={option}
-                filter={currentFilter}
-                onChange={updateFilter}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <footer className="border-t border-slate-800 p-3">
-        <button
-          type="button"
-          disabled={count === 0}
-          onClick={() => onClearFilter(layer.id)}
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-800 bg-slate-900 text-xs font-black uppercase tracking-[0.16em] text-slate-400 transition-colors hover:border-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <X size={15} />
-          Clear {count > 0 ? count : ''} Filters
-        </button>
-      </footer>
-    </div>
-  );
-};
-
-interface FilterFieldProps {
-  option: DatasetFilterOption;
-  filter: DatasetLayerFilterState;
-  onChange: (filter: DatasetLayerFilterState) => void;
-}
-
-const FilterField: React.FC<FilterFieldProps> = ({ option, filter, onChange }) => {
-  const selectedValues = filter.values?.[option.name] || [];
-
-  if (option.kind === 'range') {
-    return (
-      <section className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <h4 className="truncate text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">
-            {option.name}
-          </h4>
-          <span className="text-[10px] font-bold text-slate-600">Range</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            value={filter.min?.[option.name] || ''}
-            onChange={(event) => onChange({
-              ...filter,
-              min: { ...(filter.min || {}), [option.name]: event.target.value },
-            })}
-            className="h-9 rounded-md border border-slate-800 bg-slate-900 px-3 text-xs text-white outline-none placeholder:text-slate-600 focus:border-blue-500/70"
-            placeholder={option.min !== null && option.min !== undefined ? String(option.min) : 'Min'}
-          />
-          <input
-            value={filter.max?.[option.name] || ''}
-            onChange={(event) => onChange({
-              ...filter,
-              max: { ...(filter.max || {}), [option.name]: event.target.value },
-            })}
-            className="h-9 rounded-md border border-slate-800 bg-slate-900 px-3 text-xs text-white outline-none placeholder:text-slate-600 focus:border-blue-500/70"
-            placeholder={option.max !== null && option.max !== undefined ? String(option.max) : 'Max'}
-          />
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <h4 className="truncate text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">
-          {option.name}
-        </h4>
-        <span className="text-[10px] font-bold text-slate-600">{selectedValues.length}</span>
-      </div>
-      <div className="max-h-44 space-y-1 overflow-y-auto pr-1">
-        {(option.values || []).slice(0, 80).map((entry) => {
-          const value = String(entry.value ?? '');
-          const checked = selectedValues.includes(value);
-
-          return (
-            <button
-              key={`${option.name}-${value}`}
-              type="button"
-              onClick={() => {
-                const nextValues = checked
-                  ? selectedValues.filter((item) => item !== value)
-                  : [...selectedValues, value];
-
-                onChange({
-                  ...filter,
-                  values: {
-                    ...(filter.values || {}),
-                    [option.name]: nextValues,
-                  },
-                });
-              }}
-              className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left transition-colors ${
-                checked
-                  ? 'border-blue-500/50 bg-blue-600/10'
-                  : 'border-transparent bg-slate-900/50 hover:border-slate-800'
-              }`}
-            >
-              <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${checked ? 'border-blue-500 bg-blue-600 text-white' : 'border-slate-700'}`}>
-                {checked && <Check size={11} />}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-300">{value || 'Blank'}</span>
-              <span className="text-[10px] font-bold text-slate-600">{entry.count}</span>
-            </button>
-          );
-        })}
-      </div>
-    </section>
   );
 };

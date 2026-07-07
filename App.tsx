@@ -8,8 +8,9 @@ import { DatasetLayerOverlay } from './components/Layers/DatasetLayerOverlay';
 import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './types';
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
 import { Waves, Flame, Database } from 'lucide-react';
-import type { DatasetLayer, DatasetLayerFilterState } from './services/datasetService';
-import { fetchDatasetLayers } from './services/datasetService';
+import type { DatasetLayer, DatasetLayerFilterState, DatasetLayerStyle } from './services/datasetService';
+import { fetchDatasetLayers, saveDatasetLayerStyle, updateDatasetFeatureAttributes } from './services/datasetService';
+import type { EditLayerSidebarTabId } from './components/Layers/EditLayerSidebar/EditLayerSidebar';
 
 const BASE_LAYER_IDS = [
   MapLayer.SATELLITE,
@@ -53,6 +54,11 @@ const App: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [isDatasetLayerPanelOpen, setIsDatasetLayerPanelOpen] = useState(false);
   const [isDatasetFilterPanelOpen, setIsDatasetFilterPanelOpen] = useState(false);
+  const [selectedDatasetFeature, setSelectedDatasetFeature] = useState<GeoJSON.Feature | null>(null);
+  const [datasetEditorInitialTab, setDatasetEditorInitialTab] = useState<EditLayerSidebarTabId>('visibility');
+  const [isSavingDatasetFeature, setIsSavingDatasetFeature] = useState(false);
+  const [datasetFeatureSaveError, setDatasetFeatureSaveError] = useState<string | null>(null);
+  const [datasetLayerRefreshKey, setDatasetLayerRefreshKey] = useState(0);
   const [datasetLayers, setDatasetLayers] = useState<DatasetLayer[]>([]);
   const [datasetLayersLoading, setDatasetLayersLoading] = useState(false);
   const [datasetLayersError, setDatasetLayersError] = useState<string | null>(null);
@@ -66,6 +72,8 @@ const App: React.FC = () => {
   const handleSetView = (view: AppState['view']) => {
     setIsDatasetLayerPanelOpen(false);
     setIsDatasetFilterPanelOpen(false);
+    setSelectedDatasetFeature(null);
+    setDatasetFeatureSaveError(null);
     setState(prev => ({ ...prev, view }));
   };
   const handleSetLang = (language: Language) => setState(prev => ({ ...prev, language }));
@@ -119,6 +127,8 @@ const App: React.FC = () => {
     setIsDatasetLayerPanelOpen((isOpen) => {
       if (isOpen) {
         setIsDatasetFilterPanelOpen(false);
+        setSelectedDatasetFeature(null);
+        setDatasetFeatureSaveError(null);
       }
 
       return !isOpen;
@@ -128,18 +138,63 @@ const App: React.FC = () => {
   const closeDatasetLayersPanel = useCallback(() => {
     setIsDatasetLayerPanelOpen(false);
     setIsDatasetFilterPanelOpen(false);
+    setSelectedDatasetFeature(null);
+    setDatasetFeatureSaveError(null);
   }, []);
 
-  const openDatasetFilterForLayer = useCallback((layerId: number) => {
+  const openDatasetFilterForLayer = useCallback((layerId: number, feature?: GeoJSON.Feature) => {
     setSelectedDatasetLayerId(layerId);
+    setSelectedDatasetFeature(feature || null);
+    setDatasetEditorInitialTab(feature ? 'attributes' : 'visibility');
+    setDatasetFeatureSaveError(null);
     setIsDatasetLayerPanelOpen(true);
     setIsDatasetFilterPanelOpen(true);
   }, []);
 
   const selectDatasetLayer = useCallback((layerId: number) => {
     setSelectedDatasetLayerId(layerId);
+    setSelectedDatasetFeature(null);
+    setDatasetEditorInitialTab('visibility');
+    setDatasetFeatureSaveError(null);
     setIsDatasetFilterPanelOpen(true);
   }, []);
+
+  const updateDatasetLayerStyle = useCallback((layerId: number, style: DatasetLayerStyle) => {
+    setDatasetLayers(prev => prev.map(layer => (
+      layer.id === layerId
+        ? { ...layer, style: { ...layer.style, ...style } }
+        : layer
+    )));
+  }, []);
+
+  const persistDatasetLayerStyle = useCallback(async (layerId: number, style: DatasetLayerStyle) => {
+    const updatedLayer = await saveDatasetLayerStyle(layerId, style);
+    setDatasetLayers(prev => prev.map(layer => (
+      layer.id === layerId ? updatedLayer : layer
+    )));
+  }, []);
+
+  const saveDatasetFeatureAttributes = useCallback(async (attributes: Record<string, unknown>) => {
+    const featureId = selectedDatasetFeature?.id ?? (selectedDatasetFeature?.properties as Record<string, unknown> | undefined)?.id;
+
+    if (!selectedDatasetLayerId || featureId === undefined || featureId === null) {
+      setDatasetFeatureSaveError('No editable feature is selected.');
+      return;
+    }
+
+    setIsSavingDatasetFeature(true);
+    setDatasetFeatureSaveError(null);
+
+    try {
+      const updatedFeature = await updateDatasetFeatureAttributes(selectedDatasetLayerId, featureId, attributes);
+      setSelectedDatasetFeature(updatedFeature);
+      setDatasetLayerRefreshKey(prev => prev + 1);
+    } catch {
+      setDatasetFeatureSaveError('Unable to save attributes.');
+    } finally {
+      setIsSavingDatasetFeature(false);
+    }
+  }, [selectedDatasetFeature, selectedDatasetLayerId]);
 
   const toggleLayer = useCallback((layer: MapLayer) => {
     if (!layer) return;
@@ -244,6 +299,7 @@ const App: React.FC = () => {
             datasetLayers={datasetLayers}
             activeDatasetLayerIds={activeDatasetLayerIds}
             datasetLayerFilters={datasetLayerFilters}
+            datasetLayerRefreshKey={datasetLayerRefreshKey}
             onDatasetPolygonClick={openDatasetFilterForLayer}
             isDarkMode={state.isDarkMode} 
             onToggleTheme={handleToggleTheme} 
@@ -298,12 +354,19 @@ const App: React.FC = () => {
           selectedLayerId={selectedDatasetLayerId}
           filters={datasetLayerFilters}
           isFilterPanelOpen={isDatasetFilterPanelOpen}
+          selectedFeature={selectedDatasetFeature}
+          editorInitialTab={datasetEditorInitialTab}
+          isSavingFeature={isSavingDatasetFeature}
+          saveError={datasetFeatureSaveError}
           isLoading={datasetLayersLoading}
           errorMessage={datasetLayersError}
           onClose={closeDatasetLayersPanel}
           onToggleLayer={toggleDatasetLayer}
           onSelectLayer={selectDatasetLayer}
           onFilterPanelOpenChange={setIsDatasetFilterPanelOpen}
+          onUpdateLayerStyle={updateDatasetLayerStyle}
+          onSaveLayerStyle={persistDatasetLayerStyle}
+          onSaveFeatureAttributes={saveDatasetFeatureAttributes}
           onUpdateFilter={updateDatasetLayerFilter}
           onClearFilter={clearDatasetLayerFilter}
         />

@@ -140,7 +140,8 @@ interface GISMapProps {
   datasetLayers: DatasetLayer[];
   activeDatasetLayerIds: Set<number>;
   datasetLayerFilters: Record<number, DatasetLayerFilterState>;
-  onDatasetPolygonClick: (layerId: number) => void;
+  datasetLayerRefreshKey: number;
+  onDatasetPolygonClick: (layerId: number, feature: GeoJSON.Feature) => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
   language: Language;
@@ -187,6 +188,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   datasetLayers,
   activeDatasetLayerIds,
   datasetLayerFilters,
+  datasetLayerRefreshKey,
   onDatasetPolygonClick,
   isDarkMode,
   onToggleTheme,
@@ -1314,6 +1316,7 @@ export const GISMap: React.FC<GISMapProps> = ({
               layer={layer}
               filters={datasetLayerFilters[layer.id]}
               pane={DATASET_LAYER_PANE}
+              refreshKey={datasetLayerRefreshKey}
               onPolygonClick={!isReporting && !isPickingLocation ? onDatasetPolygonClick : undefined}
             />
           ))}
