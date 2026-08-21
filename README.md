@@ -43,3 +43,5 @@ If the server still has the older npm-based `redeploy.php`, first commit and pus
 version, then upload only `redeploy.php` once through cPanel File Manager. Its one-file
 manual change is accepted during the next deploy; any other uncommitted server change
 still stops the deployment.
+
+test change
