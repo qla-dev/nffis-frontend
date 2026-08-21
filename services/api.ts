@@ -4,7 +4,7 @@ const localBackendHost = frontendHostname || '127.0.0.1';
 
 // The frontend is a standalone client: select its public backend only from its hostname.
 export const API_BASE_URL = isNffisHost
-  ? 'http://77.77.236.72:81/api'
+  ? 'https://api.nffis.com:81/api'
   : `http://${localBackendHost}:8080/api`;
 
 const apiOrigin = API_BASE_URL.startsWith('http')
