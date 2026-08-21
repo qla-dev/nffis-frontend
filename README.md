@@ -22,19 +22,24 @@ View your app in AI Studio: https://ai.studio/apps/drive/1m4-tsfYsevdEMjjAU6gq3F
 
 ## cPanel frontend redeploy
 
-`redeploy.php` updates a cPanel checkout from Git, runs `npm ci`, and builds `dist/`.
+`redeploy.php` updates a cPanel checkout from Git. It does not require Node.js or npm
+on cPanel: the built `dist/` files are committed with the frontend source.
 Open this URL from any machine to start it:
 
 ```text
 https://nffis.com/redeploy.php
 ```
 
-The cPanel account needs `git`, `npm`, outbound Git access, and permission to write the
-frontend checkout from its `main` branch. The endpoint is public and intentionally has
-no authentication; anyone who knows the URL can trigger a build. A lock prevents
-simultaneous deployments.
+Before deploying a frontend change, run `npm run build` on a development machine and
+commit the resulting `dist/` changes with the source changes. The cPanel account only
+needs `git`, outbound Git access, and permission to write the frontend checkout from
+its `main` branch. The endpoint is public and intentionally has no authentication;
+anyone who knows the URL can trigger a deployment. A lock prevents simultaneous deployments.
 
-The server must have Node.js/npm available. The script checks the normal `npm` command
-and standard cPanel Node paths. If the host uses a custom Node installation, set
-`NFFIS_FRONTEND_NPM` to its full npm executable path, for example
-`/home/CPANEL_USER/nodevenv/APP/20/bin/npm`.
+To check Git on the server without fetching or changing anything,
+open `https://nffis.com/redeploy.php?check=1`.
+
+If the server still has the older npm-based `redeploy.php`, first commit and push this
+version, then upload only `redeploy.php` once through cPanel File Manager. Its one-file
+manual change is accepted during the next deploy; any other uncommitted server change
+still stops the deployment.
