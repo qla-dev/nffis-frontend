@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "1.38.0",
     "@qartlabs/leaflet-geotiff": "^1.1.2",
     "geotiff": "^3.0.5",
     "leaflet": "1.9.4",

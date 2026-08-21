@@ -1,65 +1,57 @@
-const SESSION_STORAGE_KEY = "nffis.session-login";
-const HARDCODED_PASSWORD = "password123";
-export const SESSION_CHANGE_EVENT = "nffis:session-changed";
+import { apiRequest } from '@/services/api';
 
-const SESSION_USERS = {
-  "qla.dev": { isAdmin: false },
-  "qla.dev.admin": { isAdmin: true },
-} as const;
-
-export type SessionUsername = keyof typeof SESSION_USERS;
-
-function browserSessionStorage() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  return window.sessionStorage;
+export interface RolePermission {
+  can_view: boolean;
+  can_create: boolean;
+  can_update: boolean;
+  can_delete: boolean;
+  module: { id: number; name: string; slug: string; group: string };
 }
 
-export function getSessionUsername(): SessionUsername | null {
-  const username = browserSessionStorage()?.getItem(SESSION_STORAGE_KEY);
-
-  if (!username || !(username in SESSION_USERS)) {
-    return null;
-  }
-
-  return username as SessionUsername;
+export interface AuthenticatedUser {
+  id: number;
+  name: string;
+  username: string | null;
+  email: string;
+  role: {
+    id: number;
+    name: string;
+    slug: string;
+    level: number;
+    permissions: RolePermission[];
+  } | null;
 }
 
-export function hasActiveSession() {
-  return getSessionUsername() !== null;
+interface UserResponse {
+  user: AuthenticatedUser;
 }
 
-export function isAdminSession() {
-  return getSessionUsername() === "qla.dev.admin";
+export async function fetchCurrentUser(): Promise<AuthenticatedUser | null> {
+  try {
+    return (await apiRequest<UserResponse>('/me')).user;
+  } catch (error: any) {
+    if (error?.status === 401) return null;
+    throw error;
+  }
 }
 
-export function validateSessionCredentials(
-  username: string,
-  password: string
-): SessionUsername | null {
-  const trimmedUsername = username.trim();
-
-  if (!(trimmedUsername in SESSION_USERS) || password !== HARDCODED_PASSWORD) {
-    return null;
-  }
-
-  return trimmedUsername as SessionUsername;
+export async function login(loginValue: string, password: string): Promise<AuthenticatedUser> {
+  return (await apiRequest<UserResponse>('/login', {
+    method: 'POST',
+    body: JSON.stringify({ login: loginValue.trim(), password }),
+  })).user;
 }
 
-export function setSessionUsername(username: SessionUsername | null) {
-  const storage = browserSessionStorage();
-  if (!storage) {
-    return;
-  }
+export async function logout(): Promise<void> {
+  await apiRequest<{ message: string }>('/logout', { method: 'POST' });
+}
 
-  if (username) {
-    storage.setItem(SESSION_STORAGE_KEY, username);
-    window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
-    return;
-  }
-
-  storage.removeItem(SESSION_STORAGE_KEY);
-  window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
+export function hasPermission(
+  user: AuthenticatedUser | null,
+  module: string,
+  action: 'view' | 'create' | 'update' | 'delete',
+): boolean {
+  if (user?.role?.slug === 'super-admin') return true;
+  const permission = user?.role?.permissions.find((item) => item.module.slug === module);
+  return Boolean(permission?.[`can_${action}`]);
 }

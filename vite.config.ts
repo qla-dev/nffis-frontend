@@ -14,13 +14,13 @@ export default defineConfig(({ mode }) => {
             target: env.VITE_NFFIS_BACKEND_URL || 'http://127.0.0.1:8000',
             changeOrigin: true,
           },
+          '/sanctum': {
+            target: env.VITE_NFFIS_BACKEND_URL || 'http://127.0.0.1:8000',
+            changeOrigin: true,
+          },
         },
       },
       plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
-      },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

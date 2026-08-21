@@ -15,6 +15,21 @@ View your app in AI Studio: https://ai.studio/apps/drive/1m4-tsfYsevdEMjjAU6gq3F
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Set `VITE_NFFIS_BACKEND_URL` in `.env` when the backend is not running at the default local address.
+3. Configure `GEMINI_API_KEY` only in the backend environment; it must never be placed in frontend Vite variables.
+4. Run the app:
    `npm run dev`
+
+## cPanel frontend redeploy
+
+`redeploy.php` updates a cPanel checkout from Git, runs `npm ci`, and builds `dist/`.
+Open this URL from any machine to start it:
+
+```text
+https://nffis.com/redeploy.php
+```
+
+The cPanel account needs `git`, `npm`, outbound Git access, and permission to write the
+frontend checkout. `NFFIS_FRONTEND_DEPLOY_BRANCH` can optionally select a branch and
+defaults to `main`. The endpoint is public and intentionally has no authentication;
+anyone who knows the URL can trigger a build. A lock prevents simultaneous deployments.
