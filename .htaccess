@@ -4,11 +4,6 @@ RewriteEngine On
 # route. Keep it out of the frontend fallback below.
 RewriteRule ^redeploy\.php$ - [L]
 
-# Keep browser API traffic on https://nffis.com. Apache forwards it to the
-# backend's private production listener after TLS has been handled by cPanel.
-RewriteRule ^api(?:/(.*))?$ http://127.0.0.1:81/api/$1 [P,L]
-RewriteRule ^sanctum(?:/(.*))?$ http://127.0.0.1:81/sanctum/$1 [P,L]
-
 # Prevent rewrite loops once the request is already inside /dist.
 RewriteRule ^dist/ - [L]
 

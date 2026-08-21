@@ -1,3 +1,5 @@
+import { API_BASE_URL } from './api';
+
 export type DatasetLayerRenderer =
   | 'none'
   | 'single'
@@ -101,12 +103,10 @@ interface FetchFeaturesOptions {
   tolerance?: number;
 }
 
-const env = (import.meta as any).env || {};
-const API_BASE_URL = String(env.VITE_NFFIS_API_URL || '/api').replace(/\/$/, '');
-
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),

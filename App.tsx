@@ -11,6 +11,8 @@ import { Waves, Flame, Database } from 'lucide-react';
 import type { DatasetLayer, DatasetLayerFilterState, DatasetLayerStyle } from './services/datasetService';
 import { fetchDatasetLayers, saveDatasetLayerStyle, updateDatasetFeatureAttributes } from './services/datasetService';
 import type { EditLayerSidebarTabId } from './components/Layers/EditLayerSidebar/EditLayerSidebar';
+import { logout } from './lib/auth/session';
+import { AUTH_INVALIDATED_EVENT } from './services/api';
 
 const BASE_LAYER_IDS = [
   MapLayer.SATELLITE,
@@ -78,6 +80,11 @@ const App: React.FC = () => {
   };
   const handleSetLang = (language: Language) => setState(prev => ({ ...prev, language }));
   const handleToggleTheme = () => setState(prev => ({ ...prev, isDarkMode: !prev.isDarkMode }));
+  const handleLogout = useCallback(() => {
+    void logout().catch(() => undefined).finally(() => {
+      window.dispatchEvent(new Event(AUTH_INVALIDATED_EVENT));
+    });
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -283,6 +290,7 @@ const App: React.FC = () => {
         onSetLang={handleSetLang}
         onOpenReport={startReporting}
         onOpenLayers={toggleDatasetLayersPanel}
+        onLogout={handleLogout}
         isLayersOpen={isDatasetLayerPanelOpen}
       />
       

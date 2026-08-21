@@ -1,5 +1,5 @@
 import React from 'react';
-import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle } from 'lucide-react';
+import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut } from 'lucide-react';
 import { Language, AppState } from '../types';
 import { TRANSLATIONS } from '../constants';
 
@@ -9,10 +9,11 @@ interface NavProps {
   onSetLang: (lang: Language) => void;
   onOpenReport: () => void;
   onOpenLayers: () => void;
+  onLogout: () => void;
   isLayersOpen: boolean;
 }
 
-export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, onOpenReport, onOpenLayers, isLayersOpen }) => {
+export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, onOpenReport, onOpenLayers, onLogout, isLayersOpen }) => {
   const t = TRANSLATIONS[state.language];
   const languages = Object.values(Language);
   const activeLanguageIndex = languages.indexOf(state.language);
@@ -84,6 +85,7 @@ export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, on
              />
              <NavItem icon={Settings} label={t.system} onClick={() => {}} />
              <NavItem icon={HelpCircle} label={t.support} onClick={() => {}} />
+             <NavItem icon={LogOut} label="Sign out" onClick={onLogout} color="text-red-400" />
            </div>
         </div>
       </nav>

@@ -15,7 +15,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1m4-tsfYsevdEMjjAU6gq3F
 
 1. Install dependencies:
    `npm install`
-2. Set `VITE_NFFIS_BACKEND_URL` in `.env` when the backend is not running at the default local address.
+2. The browser selects the backend directly: local hosts use port `81`, while `nffis.com` uses `http://77.77.236.72`.
 3. Configure `GEMINI_API_KEY` only in the backend environment; it must never be placed in frontend Vite variables.
 4. Run the app:
    `npm run dev`

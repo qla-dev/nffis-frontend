@@ -1,29 +1,11 @@
-export const API_BACKENDS = {
-  local: '/api',
-  production: 'http://77.77.236.72',
-} as const;
-
-type ApiBackend = keyof typeof API_BACKENDS;
-
-const requestedBackend = String(import.meta.env.VITE_NFFIS_API_BACKEND || '').trim().toLowerCase();
 const frontendHostname = typeof window === 'undefined' ? '' : window.location.hostname.toLowerCase();
-const backendForHost: ApiBackend | undefined = frontendHostname.startsWith('localhost')
-  ? 'local'
-  : frontendHostname.startsWith('nffis')
-    ? 'production'
-    : undefined;
+const isNffisHost = frontendHostname === 'nffis.com' || frontendHostname.endsWith('.nffis.com');
+const localBackendHost = frontendHostname || '127.0.0.1';
 
-const apiBackend: ApiBackend = backendForHost || (requestedBackend === 'production'
-  ? 'production'
-  : requestedBackend === 'local'
-    ? 'local'
-    : import.meta.env.DEV
-      ? 'local'
-      : 'production');
-
-const explicitApiUrl = String(import.meta.env.VITE_NFFIS_API_URL || '').trim();
-
-export const API_BASE_URL = (explicitApiUrl || API_BACKENDS[apiBackend]).replace(/\/+$/, '');
+// The frontend is a standalone client: select its public backend only from its hostname.
+export const API_BASE_URL = isNffisHost
+  ? 'http://77.77.236.72'
+  : `http://${localBackendHost}:81/api`;
 
 const apiOrigin = API_BASE_URL.startsWith('http')
   ? new URL(API_BASE_URL).origin
