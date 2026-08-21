@@ -1,6 +1,6 @@
 export const API_BACKENDS = {
   local: '/api',
-  production: '/api',
+  production: 'http://77.77.236.72',
 } as const;
 
 type ApiBackend = keyof typeof API_BACKENDS;
