@@ -54,6 +54,25 @@ function run(string $command, string $workingDirectory): int
     return is_int($exitCode) && $exitCode >= 0 ? $exitCode : $closeCode;
 }
 
+function findExecutable(array $candidates): ?string
+{
+    foreach ($candidates as $candidate) {
+        if (str_contains($candidate, '/') && is_file($candidate) && is_executable($candidate)) {
+            return $candidate;
+        }
+
+        $output = [];
+        $exitCode = 1;
+        exec('command -v '.escapeshellarg($candidate).' 2>/dev/null', $output, $exitCode);
+
+        if ($exitCode === 0 && isset($output[0]) && trim($output[0]) !== '') {
+            return trim($output[0]);
+        }
+    }
+
+    return null;
+}
+
 $stateDirectory = (string) (getenv('NFFIS_FRONTEND_DEPLOY_STATE_DIR') ?: dirname(__DIR__).'/nffis-frontend-deploy-state');
 if (! is_dir($stateDirectory) && ! mkdir($stateDirectory, 0700, true) && ! is_dir($stateDirectory)) {
     respond(500, 'Deployment state directory is not writable.');
@@ -72,20 +91,36 @@ register_shutdown_function(static function () use ($lockHandle): void {
 $baseDirectory = __DIR__;
 $branch = 'main';
 
-foreach (['git', 'npm'] as $binary) {
+foreach (['git'] as $binary) {
     $result = run('command -v '.escapeshellarg($binary).' >/dev/null 2>&1', $baseDirectory);
     if ($result !== 0) {
         respond(503, "Required command is unavailable: {$binary}");
     }
 }
 
+$npm = findExecutable(array_filter([
+    getenv('NFFIS_FRONTEND_NPM') ?: null,
+    'npm',
+    '/opt/cpanel/ea-nodejs22/bin/npm',
+    '/opt/cpanel/ea-nodejs20/bin/npm',
+    '/opt/cpanel/ea-nodejs18/bin/npm',
+    '/usr/local/bin/npm',
+    '/usr/bin/npm',
+]));
+
+if ($npm === null) {
+    respond(503, 'npm is unavailable. Enable Node.js in cPanel or set NFFIS_FRONTEND_NPM to its full npm path.');
+}
+
+$npmCommand = escapeshellarg($npm);
+
 $commands = [
     'git diff --quiet',
     'git diff --cached --quiet',
     'git fetch --prune origin',
     'git merge --ff-only '.escapeshellarg('origin/'.$branch),
-    'npm ci --no-audit --no-fund',
-    'npm run build',
+    $npmCommand.' ci --no-audit --no-fund',
+    $npmCommand.' run build',
 ];
 
 foreach ($commands as $command) {

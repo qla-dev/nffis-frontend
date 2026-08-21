@@ -33,3 +33,8 @@ The cPanel account needs `git`, `npm`, outbound Git access, and permission to wr
 frontend checkout from its `main` branch. The endpoint is public and intentionally has
 no authentication; anyone who knows the URL can trigger a build. A lock prevents
 simultaneous deployments.
+
+The server must have Node.js/npm available. The script checks the normal `npm` command
+and standard cPanel Node paths. If the host uses a custom Node installation, set
+`NFFIS_FRONTEND_NPM` to its full npm executable path, for example
+`/home/CPANEL_USER/nodevenv/APP/20/bin/npm`.
