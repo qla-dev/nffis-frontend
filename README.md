@@ -30,6 +30,6 @@ https://nffis.com/redeploy.php
 ```
 
 The cPanel account needs `git`, `npm`, outbound Git access, and permission to write the
-frontend checkout. `NFFIS_FRONTEND_DEPLOY_BRANCH` can optionally select a branch and
-defaults to `main`. The endpoint is public and intentionally has no authentication;
-anyone who knows the URL can trigger a build. A lock prevents simultaneous deployments.
+frontend checkout from its `main` branch. The endpoint is public and intentionally has
+no authentication; anyone who knows the URL can trigger a build. A lock prevents
+simultaneous deployments.
