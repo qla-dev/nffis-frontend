@@ -70,9 +70,20 @@ register_shutdown_function(static function () use ($lockHandle): void {
 });
 
 $baseDirectory = __DIR__;
-$branch = (string) (getenv('NFFIS_FRONTEND_DEPLOY_BRANCH') ?: 'main');
+$branch = trim((string) (getenv('NFFIS_FRONTEND_DEPLOY_BRANCH') ?: 'main'));
+
+// cPanel environment editors sometimes preserve surrounding quotes. Accept
+// those, and also accept the familiar Git spelling "origin/main".
+if (strlen($branch) >= 2 && in_array($branch[0], ["'", '"'], true) && $branch[0] === $branch[-1]) {
+    $branch = substr($branch, 1, -1);
+}
+
+if (str_starts_with($branch, 'origin/')) {
+    $branch = substr($branch, strlen('origin/'));
+}
+
 if (! preg_match('/^[A-Za-z0-9._/-]+$/', $branch)) {
-    respond(500, 'Frontend deployment branch is invalid.');
+    respond(500, 'Frontend deployment branch is invalid. Use a branch name such as main.');
 }
 
 foreach (['git', 'npm'] as $binary) {
