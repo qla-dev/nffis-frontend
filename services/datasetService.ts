@@ -101,6 +101,7 @@ interface FetchFeaturesOptions {
   filters?: DatasetLayerFilterState;
   limit?: number;
   tolerance?: number;
+  signal?: AbortSignal;
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -186,7 +187,8 @@ export async function fetchDatasetLayerFeatures(
 
   const query = params.toString();
   const data = await requestJson<{ geojson: GeoJSON.FeatureCollection }>(
-    `/dataset-layers/${layerId}/features${query ? `?${query}` : ''}`
+    `/dataset-layers/${layerId}/features${query ? `?${query}` : ''}`,
+    { signal: options.signal },
   );
 
   return data.geojson;

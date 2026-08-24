@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { GeoJSON, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import type {
@@ -14,6 +14,7 @@ interface DatasetGeoJsonLayerProps {
   pane: string;
   refreshKey?: number;
   onPolygonClick?: (layerId: number, feature: GeoJSON.Feature) => void;
+  onLoadingChange?: (layerId: number, isLoading: boolean) => void;
 }
 
 function bboxForMap(map: L.Map): string {
@@ -125,10 +126,12 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
   pane,
   refreshKey = 0,
   onPolygonClick,
+  onLoadingChange,
 }) => {
   const map = useMap();
   const [bbox, setBbox] = useState(() => bboxForMap(map));
   const [featureCollection, setFeatureCollection] = useState<GeoJSON.FeatureCollection | null>(null);
+  const requestSequence = useRef(0);
   const filterKey = useMemo(() => JSON.stringify(filters || {}), [filters]);
   const styleKey = useMemo(() => JSON.stringify(layer.style || {}), [layer.style]);
 
@@ -139,22 +142,31 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
 
   useEffect(() => {
     const controller = new AbortController();
+    const requestId = ++requestSequence.current;
+    onLoadingChange?.(layer.id, true);
+
     const timeoutId = window.setTimeout(() => {
       fetchDatasetLayerFeatures(layer.id, {
         bbox,
         filters,
         limit: 1800,
         tolerance: toleranceForZoom(map.getZoom()),
+        signal: controller.signal,
       })
         .then((data) => {
-          if (!controller.signal.aborted) {
+          if (!controller.signal.aborted && requestSequence.current === requestId) {
             setFeatureCollection(data);
           }
         })
         .catch((error) => {
-          if (!controller.signal.aborted) {
+          if (!controller.signal.aborted && requestSequence.current === requestId) {
             console.error(`Failed to fetch dataset layer ${layer.id}`, error);
             setFeatureCollection(null);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted && requestSequence.current === requestId) {
+            onLoadingChange?.(layer.id, false);
           }
         });
     }, 140);
@@ -163,7 +175,7 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [bbox, filterKey, layer.id, map, filters, refreshKey]);
+  }, [bbox, filterKey, layer.id, map, filters, refreshKey, onLoadingChange]);
 
   if (!featureCollection || featureCollection.features.length === 0) {
     return null;

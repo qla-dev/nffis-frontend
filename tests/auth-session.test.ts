@@ -56,6 +56,20 @@ describe('authentication session', () => {
     await expect(logout()).resolves.toBeUndefined();
   });
 
+  it('reports a useful error when a successful login returns frontend HTML', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response('<!DOCTYPE html><html></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(login('qla.dev', 'password123')).rejects.toThrow(
+      'Authentication service returned an invalid response',
+    );
+  });
+
   it('returns a decoded CSRF header when the cookie exists', async () => {
     document.cookie = 'XSRF-TOKEN=a%2Bb%20c; path=/';
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));

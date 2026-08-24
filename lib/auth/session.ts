@@ -1,5 +1,4 @@
-const env = (import.meta as any).env || {};
-const API_BASE_URL = String(env.VITE_NFFIS_API_URL || '/api').replace(/\/$/, '');
+import { API_BASE_URL } from '../../services/api';
 
 export type PermissionAction = 'view' | 'create' | 'update' | 'delete';
 
@@ -77,6 +76,21 @@ async function responseMessage(response: Response): Promise<string> {
   return `Request failed with status ${response.status}.`;
 }
 
+async function authenticatedUser(response: Response): Promise<AuthUser> {
+  let payload: Partial<UserResponse>;
+  try {
+    payload = await response.json() as Partial<UserResponse>;
+  } catch {
+    throw new Error('Authentication service returned an invalid response. Please redeploy the frontend or check the API configuration.');
+  }
+
+  if (!payload.user) {
+    throw new Error('Authentication service response does not contain a user.');
+  }
+
+  return payload.user;
+}
+
 export async function csrfHeaders(): Promise<Record<string, string>> {
   const response = await fetch(backendUrl('/sanctum/csrf-cookie'), {
     credentials: 'include',
@@ -98,7 +112,7 @@ export async function currentUser(): Promise<AuthUser | null> {
   if (response.status === 401) return null;
   if (!response.ok) throw new Error(await responseMessage(response));
 
-  return ((await response.json()) as UserResponse).user;
+  return authenticatedUser(response);
 }
 
 export async function login(loginValue: string, password: string): Promise<AuthUser> {
@@ -115,7 +129,7 @@ export async function login(loginValue: string, password: string): Promise<AuthU
   });
 
   if (!response.ok) throw new Error(await responseMessage(response));
-  return ((await response.json()) as UserResponse).user;
+  return authenticatedUser(response);
 }
 
 export async function logout(): Promise<void> {

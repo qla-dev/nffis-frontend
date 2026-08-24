@@ -48,6 +48,20 @@ describe('dataset/GIS service', () => {
     expect(decodeURIComponent(url)).toContain('q=forest');
   });
 
+  it('passes an abort signal to a layer feature request', async () => {
+    const controller = new AbortController();
+    const geojson = { type: 'FeatureCollection', features: [] };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ geojson }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchDatasetLayerFeatures(9, { signal: controller.signal });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/dataset-layers/9/features',
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
+
   it('updates feature attributes and layer styles', async () => {
     const feature = { type: 'Feature', id: 'a/b', properties: { status: 'active' }, geometry: null };
     const layer = { id: 2, style: { color: '#f00' } };

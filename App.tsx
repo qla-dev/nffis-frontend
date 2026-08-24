@@ -74,6 +74,7 @@ const App: React.FC = () => {
   const [datasetLayersLoading, setDatasetLayersLoading] = useState(false);
   const [datasetLayersError, setDatasetLayersError] = useState<string | null>(null);
   const [activeDatasetLayerIds, setActiveDatasetLayerIds] = useState<Set<number>>(new Set());
+  const [loadingDatasetLayerIds, setLoadingDatasetLayerIds] = useState<Set<number>>(new Set());
   const [selectedDatasetLayerId, setSelectedDatasetLayerId] = useState<number | null>(null);
   const [datasetLayerFilters, setDatasetLayerFilters] = useState<Record<number, DatasetLayerFilterState>>({});
   const appliedDefaultDatasetLayersRef = useRef(false);
@@ -335,6 +336,9 @@ const App: React.FC = () => {
   };
 
   const toggleDatasetLayer = useCallback((layerId: number) => {
+    if (loadingDatasetLayerIds.has(layerId)) return;
+    const isActive = activeDatasetLayerIds.has(layerId);
+
     setActiveDatasetLayerIds(prev => {
       const next = new Set(prev);
       if (next.has(layerId)) {
@@ -344,7 +348,22 @@ const App: React.FC = () => {
       }
       return next;
     });
+    setLoadingDatasetLayerIds(previous => {
+      const next = new Set(previous);
+      if (isActive) next.delete(layerId);
+      else next.add(layerId);
+      return next;
+    });
     setSelectedDatasetLayerId(layerId);
+  }, [activeDatasetLayerIds, loadingDatasetLayerIds]);
+
+  const handleDatasetLayerLoadingChange = useCallback((layerId: number, isLoading: boolean) => {
+    setLoadingDatasetLayerIds(previous => {
+      const next = new Set(previous);
+      if (isLoading) next.add(layerId);
+      else next.delete(layerId);
+      return next;
+    });
   }, []);
 
   const updateDatasetLayerFilter = useCallback((layerId: number, filter: DatasetLayerFilterState) => {
@@ -393,6 +412,7 @@ const App: React.FC = () => {
             datasetLayerFilters={datasetLayerFilters}
             datasetLayerRefreshKey={datasetLayerRefreshKey}
             onDatasetPolygonClick={openDatasetFilterForLayer}
+            onDatasetLayerLoadingChange={handleDatasetLayerLoadingChange}
             isDarkMode={state.isDarkMode} 
             onToggleTheme={handleToggleTheme} 
             language={state.language} 
@@ -451,6 +471,7 @@ const App: React.FC = () => {
           isOpen={isDatasetLayerPanelOpen}
           layers={datasetLayers}
           activeLayerIds={activeDatasetLayerIds}
+          loadingLayerIds={loadingDatasetLayerIds}
           selectedLayerId={selectedDatasetLayerId}
           filters={datasetLayerFilters}
           isFilterPanelOpen={isDatasetFilterPanelOpen}

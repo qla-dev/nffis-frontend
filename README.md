@@ -23,7 +23,8 @@ View your app in AI Studio: https://ai.studio/apps/drive/1m4-tsfYsevdEMjjAU6gq3F
 ## cPanel frontend redeploy
 
 `redeploy.php` updates a cPanel checkout from Git, installs the locked dependencies,
-and builds `dist/` on the server.
+and builds `dist/` on the server. Before pulling, it restores only the generated
+`dist/` files so an earlier server build cannot block the next fast-forward update.
 Open this URL from any machine to start it:
 
 ```text

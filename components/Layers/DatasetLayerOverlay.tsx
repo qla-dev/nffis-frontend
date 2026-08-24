@@ -5,6 +5,7 @@ import {
   Circle,
   Layers,
   LineChart,
+  Loader2,
   PanelLeftClose,
   PanelLeftOpen,
   Pentagon,
@@ -22,6 +23,7 @@ interface DatasetLayerOverlayProps {
   isOpen: boolean;
   layers: DatasetLayer[];
   activeLayerIds: Set<number>;
+  loadingLayerIds: Set<number>;
   selectedLayerId: number | null;
   filters: Record<number, DatasetLayerFilterState>;
   isFilterPanelOpen: boolean;
@@ -90,6 +92,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   isOpen,
   layers,
   activeLayerIds,
+  loadingLayerIds,
   selectedLayerId,
   filters,
   isFilterPanelOpen,
@@ -256,6 +259,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                             <div className="space-y-1">
                               {categoryLayers.map((layer) => {
                                 const isActive = activeLayerIds.has(layer.id);
+                                const isLayerLoading = loadingLayerIds.has(layer.id);
                                 const isSelected = selectedLayerId === layer.id;
                                 const color = layer.style.markerColor || layer.style.color || layer.style.fillColor || '#60a5fa';
                                 const count = filterCount(filters[layer.id]);
@@ -289,19 +293,23 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                                       tabIndex={0}
                                       onClick={(event) => {
                                         event.stopPropagation();
-                                        onToggleLayer(layer.id);
+                                        if (!isLayerLoading) onToggleLayer(layer.id);
                                       }}
                                       onKeyDown={(event) => {
                                         if (event.key === 'Enter' || event.key === ' ') {
                                           event.preventDefault();
                                           event.stopPropagation();
-                                          onToggleLayer(layer.id);
+                                          if (!isLayerLoading) onToggleLayer(layer.id);
                                         }
                                       }}
-                                      className="shrink-0"
-                                      title={isActive ? 'Hide layer' : 'Show layer'}
+                                      aria-disabled={isLayerLoading}
+                                      aria-label={isLayerLoading ? `Loading ${layer.display_name}` : undefined}
+                                      className={`shrink-0 ${isLayerLoading ? 'cursor-wait' : ''}`}
+                                      title={isLayerLoading ? 'Loading layer data...' : isActive ? 'Hide layer' : 'Show layer'}
                                     >
-                                      <Toggle checked={isActive} />
+                                      {isLayerLoading
+                                        ? <Loader2 size={18} className="animate-spin text-blue-400" />
+                                        : <Toggle checked={isActive} />}
                                     </span>
                                   </button>
                                 );

@@ -144,6 +144,7 @@ interface GISMapProps {
   datasetLayerFilters: Record<number, DatasetLayerFilterState>;
   datasetLayerRefreshKey: number;
   onDatasetPolygonClick: (layerId: number, feature: GeoJSON.Feature) => void;
+  onDatasetLayerLoadingChange: (layerId: number, isLoading: boolean) => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
   language: Language;
@@ -196,6 +197,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   datasetLayerFilters,
   datasetLayerRefreshKey,
   onDatasetPolygonClick,
+  onDatasetLayerLoadingChange,
   isDarkMode,
   onToggleTheme,
   language,
@@ -1332,6 +1334,7 @@ export const GISMap: React.FC<GISMapProps> = ({
               pane={DATASET_LAYER_PANE}
               refreshKey={datasetLayerRefreshKey}
               onPolygonClick={!isReporting && !isPickingLocation ? onDatasetPolygonClick : undefined}
+              onLoadingChange={onDatasetLayerLoadingChange}
             />
           ))}
         {activeLayers.has(MapLayer.RS_FIREFIGHTER_DENSITY) &&
