@@ -35,6 +35,7 @@ interface EditLayerSidebarProps {
   initialTab: EditLayerSidebarTabId;
   isSavingFeature: boolean;
   saveError?: string | null;
+  canUpdateLayer: boolean;
   onCollapse: () => void;
   onToggleLayer: (layerId: number) => void;
   onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
@@ -60,6 +61,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
   initialTab,
   isSavingFeature,
   saveError,
+  canUpdateLayer,
   onCollapse,
   onToggleLayer,
   onUpdateFilter,
@@ -96,7 +98,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
       return <SourceTab layer={layer} />;
     }
 
-    if (activeTab === 'symbology') {
+    if (activeTab === 'symbology' && canUpdateLayer) {
       return (
         <SymbologyTab
           layer={layer}
@@ -106,7 +108,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
       );
     }
 
-    if (activeTab === 'attributes') {
+    if (activeTab === 'attributes' && canUpdateLayer) {
       return (
         <AttributesTab
           layer={layer}
@@ -171,7 +173,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
               }
             }}
           >
-            {TABS.map((tab) => {
+            {TABS.filter((tab) => canUpdateLayer || (tab.id !== 'symbology' && tab.id !== 'attributes')).map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
 

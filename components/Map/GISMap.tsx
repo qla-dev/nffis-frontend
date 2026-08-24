@@ -17,6 +17,7 @@ import {
 } from '../../bihData';
 import { FIREFIGHTER_STATIONS, type FirefighterStation, type FirefighterStationType } from '../../firefighterData';
 import { MapControls } from './MapControls';
+import { MapScaleControl } from './MapScaleControl';
 import { ForestHoverCard } from './ForestHoverCard';
 import { FirefighterHoverCard } from './FirefighterHoverCard';
 import { FirefighterStationModal } from './FirefighterStationModal';
@@ -28,6 +29,7 @@ import { BosnianFWIHeatLayer } from '../Layers/FWI/BosnianFWIHeatLayer';
 import { AWSFBiHLayer } from './layers/AWS/AWSFBiHLayer';
 import { AWSRsLayer } from './layers/AWS/AWSRsLayer';
 import { DatasetGeoJsonLayer } from './layers/Datasets/DatasetGeoJsonLayer';
+import { LiveWindVectorLayer } from './layers/Wind/LiveWindVectorLayer';
 import type { DatasetLayer, DatasetLayerFilterState } from '../../services/datasetService';
 
 const GlobalLeaflet = (L as any).default || L;
@@ -146,6 +148,10 @@ interface GISMapProps {
   onToggleTheme: () => void;
   language: Language;
   onSetLanguage: (lang: Language) => void;
+  canViewMapLayers: boolean;
+  canViewFwi: boolean;
+  canViewAws: boolean;
+  canAdjustAws: boolean;
 }
 
 interface FireIndexWeatherData {
@@ -193,7 +199,11 @@ export const GISMap: React.FC<GISMapProps> = ({
   isDarkMode,
   onToggleTheme,
   language,
-  onSetLanguage
+  onSetLanguage,
+  canViewMapLayers,
+  canViewFwi,
+  canViewAws,
+  canAdjustAws,
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
   const t = TRANSLATIONS[language];
@@ -996,7 +1006,10 @@ export const GISMap: React.FC<GISMapProps> = ({
             const url =
               `https://api.open-meteo.com/v1/forecast?latitude=${forest.coordinates[0]}` +
               `&longitude=${forest.coordinates[1]}` +
-              '&current=time' +
+              // `time` is not a weather variable - asking for it 400s the whole request.
+              // Open-Meteo always returns current.time alongside whatever variable is
+              // requested, and current.time is the only field this fetch actually reads.
+              '&current=temperature_2m' +
               '&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m' +
               '&daily=precipitation_sum' +
               '&timezone=auto';
@@ -1293,19 +1306,20 @@ export const GISMap: React.FC<GISMapProps> = ({
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_KBDI)}
         />
-        <BosnianFWIHeatLayer
+        {canViewFwi && <BosnianFWIHeatLayer
           points={forestFwiData}
           rasterBounds={heatViewportBounds ?? undefined}
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_BOSNIAN)}
-        />
+        />}
+        {canViewMapLayers && <LiveWindVectorLayer visible={activeLayers.has(MapLayer.WIND_VECTOR)} />}
         {/* AWS — FBiH and RS layers, filtered by the three typed sub-layers */}
-        {(activeLayers.has('AWS Precipitation' as MapLayer) || 
+        {canViewAws && (activeLayers.has('AWS Precipitation' as MapLayer) ||
           activeLayers.has('AWS Agro' as MapLayer) || 
           activeLayers.has('AWS Meteo' as MapLayer)) && (
           <>
-            <AWSFBiHLayer activeTypes={activeLayers} />
-            <AWSRsLayer activeTypes={activeLayers} />
+            <AWSFBiHLayer activeTypes={activeLayers} canAdjust={canAdjustAws} />
+            <AWSRsLayer activeTypes={activeLayers} canAdjust={canAdjustAws} />
           </>
         )}
         {datasetLayers
@@ -1936,6 +1950,9 @@ export const GISMap: React.FC<GISMapProps> = ({
         onToggleBrckoDistrict={handleToggleBrckoDistrict}
         onToggleCanton={handleToggleCanton}
         onStartPickingLocation={() => setIsPickingLocation(true)}
+        canViewMapLayers={canViewMapLayers}
+        canViewFwi={canViewFwi}
+        canViewAws={canViewAws}
       />
 
       {/* PICK LOCATION BANNER - Relocated to top instead of status panel */}
@@ -2062,6 +2079,9 @@ export const GISMap: React.FC<GISMapProps> = ({
           </div>
         </div>
       )}
+
+      {/* Dynamic map scale */}
+      <MapScaleControl map={map} />
 
       {/* GPS FAB */}
       <div ref={gpsFabRef} className="absolute bottom-8 right-6 z-[2000]">

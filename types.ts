@@ -14,6 +14,7 @@ export enum MapLayer {
   NASA_FIRMS = 'NASA FIRMS (Hotspots)',
   THERMAL = 'Thermal Infrared (LST)',
   WINDY = 'Windy.com (Dark GIS)',
+  WIND_VECTOR = 'Live Wind Vector',
   WEATHER_TEMP = 'Temperature Map',
   FOREST_TEMP = 'Forest Temp (Live)',
   WIND_SPEED = 'Wind Dynamics',

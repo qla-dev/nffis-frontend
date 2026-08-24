@@ -1,57 +1,148 @@
-import { apiRequest } from '@/services/api';
+const env = (import.meta as any).env || {};
+const API_BASE_URL = String(env.VITE_NFFIS_API_URL || '/api').replace(/\/$/, '');
 
-export interface RolePermission {
+export type PermissionAction = 'view' | 'create' | 'update' | 'delete';
+
+export interface AuthModule {
+  id: number;
+  name: string;
+  slug: string;
+  group: string;
+}
+
+export interface AuthPermission {
+  id: number;
+  role_id: number;
+  module_id: number;
   can_view: boolean;
   can_create: boolean;
   can_update: boolean;
   can_delete: boolean;
-  module: { id: number; name: string; slug: string; group: string };
+  module: AuthModule;
 }
 
-export interface AuthenticatedUser {
+export interface AuthRole {
   id: number;
   name: string;
-  username: string | null;
+  slug: string;
+  level: number;
+  permissions: AuthPermission[];
+}
+
+export interface AuthUser {
+  id: number;
+  name: string;
+  username: string;
   email: string;
-  role: {
-    id: number;
-    name: string;
-    slug: string;
-    level: number;
-    permissions: RolePermission[];
-  } | null;
+  role: AuthRole | null;
 }
 
 interface UserResponse {
-  user: AuthenticatedUser;
+  user: AuthUser;
 }
 
-export async function fetchCurrentUser(): Promise<AuthenticatedUser | null> {
+function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+function backendUrl(path: string): string {
+  const apiSuffix = /\/api$/i;
+  const base = apiSuffix.test(API_BASE_URL)
+    ? API_BASE_URL.replace(apiSuffix, '')
+    : API_BASE_URL;
+
+  return `${base}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+function cookie(name: string): string | null {
+  const prefix = `${name}=`;
+  const item = document.cookie.split('; ').find((entry) => entry.startsWith(prefix));
+  return item ? decodeURIComponent(item.slice(prefix.length)) : null;
+}
+
+async function responseMessage(response: Response): Promise<string> {
   try {
-    return (await apiRequest<UserResponse>('/me')).user;
-  } catch (error: any) {
-    if (error?.status === 401) return null;
-    throw error;
+    const payload = await response.json();
+    if (typeof payload?.message === 'string') return payload.message;
+
+    const firstValidationError = Object.values(payload?.errors || {})
+      .flat()
+      .find((value) => typeof value === 'string');
+
+    if (typeof firstValidationError === 'string') return firstValidationError;
+  } catch {
+    // Use the HTTP fallback below when the body is not JSON.
   }
+
+  return `Request failed with status ${response.status}.`;
 }
 
-export async function login(loginValue: string, password: string): Promise<AuthenticatedUser> {
-  return (await apiRequest<UserResponse>('/login', {
+export async function csrfHeaders(): Promise<Record<string, string>> {
+  const response = await fetch(backendUrl('/sanctum/csrf-cookie'), {
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+  });
+
+  if (!response.ok) throw new Error(await responseMessage(response));
+
+  const token = cookie('XSRF-TOKEN');
+  return token ? { 'X-XSRF-TOKEN': token } : {};
+}
+
+export async function currentUser(): Promise<AuthUser | null> {
+  const response = await fetch(apiUrl('/me'), {
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+  });
+
+  if (response.status === 401) return null;
+  if (!response.ok) throw new Error(await responseMessage(response));
+
+  return ((await response.json()) as UserResponse).user;
+}
+
+export async function login(loginValue: string, password: string): Promise<AuthUser> {
+  const headers = await csrfHeaders();
+  const response = await fetch(apiUrl('/login'), {
     method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...headers,
+    },
     body: JSON.stringify({ login: loginValue.trim(), password }),
-  })).user;
+  });
+
+  if (!response.ok) throw new Error(await responseMessage(response));
+  return ((await response.json()) as UserResponse).user;
 }
 
 export async function logout(): Promise<void> {
-  await apiRequest<{ message: string }>('/logout', { method: 'POST' });
+  const headers = await csrfHeaders();
+  const response = await fetch(apiUrl('/logout'), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { Accept: 'application/json', ...headers },
+  });
+
+  if (!response.ok && response.status !== 401) {
+    throw new Error(await responseMessage(response));
+  }
 }
 
 export function hasPermission(
-  user: AuthenticatedUser | null,
-  module: string,
-  action: 'view' | 'create' | 'update' | 'delete',
+  user: AuthUser | null,
+  moduleSlug: string,
+  action: PermissionAction
 ): boolean {
-  if (user?.role?.slug === 'super-admin') return true;
-  const permission = user?.role?.permissions.find((item) => item.module.slug === module);
-  return Boolean(permission?.[`can_${action}`]);
+  if (!user?.role) return false;
+  if (user.role.slug === 'super-admin') return true;
+
+  const permission = user.role.permissions?.find((item) => item.module?.slug === moduleSlug);
+  return Boolean(permission?.[`can_${action}` as keyof AuthPermission]);
+}
+
+export function canUploadAws(user: AuthUser | null): boolean {
+  return user?.role?.slug === 'super-admin' || user?.role?.level === 6;
 }

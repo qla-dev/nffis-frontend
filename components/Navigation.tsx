@@ -1,7 +1,8 @@
 import React from 'react';
-import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut } from 'lucide-react';
+import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound } from 'lucide-react';
 import { Language, AppState } from '../types';
 import { TRANSLATIONS } from '../constants';
+import type { AuthUser } from '../lib/auth/session';
 
 interface NavProps {
   state: AppState;
@@ -9,11 +10,27 @@ interface NavProps {
   onSetLang: (lang: Language) => void;
   onOpenReport: () => void;
   onOpenLayers: () => void;
-  onLogout: () => void;
   isLayersOpen: boolean;
+  user: AuthUser;
+  canViewReports: boolean;
+  canCreateReports: boolean;
+  canViewLayers: boolean;
+  onLogout: () => void;
 }
 
-export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, onOpenReport, onOpenLayers, onLogout, isLayersOpen }) => {
+export const Navigation: React.FC<NavProps> = ({
+  state,
+  onSetView,
+  onSetLang,
+  onOpenReport,
+  onOpenLayers,
+  isLayersOpen,
+  user,
+  canViewReports,
+  canCreateReports,
+  canViewLayers,
+  onLogout,
+}) => {
   const t = TRANSLATIONS[state.language];
   const languages = Object.values(Language);
   const activeLanguageIndex = languages.indexOf(state.language);
@@ -61,18 +78,20 @@ export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, on
         {/* Navigation Groups */}
         <div className="flex-1 py-4 flex flex-col gap-1">
           <NavItem icon={Map} label={t.map} id="map" />
-          <NavItem icon={AlertTriangle} label={t.reports} id="reports" />
-          <NavItem icon={BarChart3} label={t.stats} id="stats" />
-          <NavItem icon={ListFilter} label={t.layers} id="layers" onClick={onOpenLayers} />
+          {canViewReports && <NavItem icon={AlertTriangle} label={t.reports} id="reports" />}
+          {canViewReports && <NavItem icon={BarChart3} label={t.stats} id="stats" />}
+          {canViewLayers && <NavItem icon={ListFilter} label={t.layers} id="layers" onClick={onOpenLayers} />}
           
           <div className="my-2 border-t border-slate-800/30 mx-2" />
           
-          <NavItem 
-            icon={AlertTriangle} 
-            label={t.reportIncident} 
-            onClick={onOpenReport} 
-            color="text-red-500"
-          />
+          {canCreateReports && (
+            <NavItem
+              icon={AlertTriangle}
+              label={t.reportIncident}
+              onClick={onOpenReport}
+              color="text-red-500"
+            />
+          )}
         </div>
 
         {/* Bottom Actions */}
@@ -85,6 +104,7 @@ export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, on
              />
              <NavItem icon={Settings} label={t.system} onClick={() => {}} />
              <NavItem icon={HelpCircle} label={t.support} onClick={() => {}} />
+             <NavItem icon={UserRound} label={`${user.username} · ${user.role?.name || 'No role'}`} onClick={() => {}} />
              <NavItem icon={LogOut} label="Sign out" onClick={onLogout} color="text-red-400" />
            </div>
         </div>
@@ -99,39 +119,58 @@ export const Navigation: React.FC<NavProps> = ({ state, onSetView, onSetLang, on
           <Map size={20} />
           <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.map}</span>
         </button>
-        <button 
-          onClick={() => onSetView('reports')} 
-          className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${state.view === 'reports' ? 'text-blue-500' : 'text-slate-500'}`}
-        >
-          <AlertTriangle size={20} />
-          <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.reports}</span>
-        </button>
+        {canViewReports ? (
+          <button
+            onClick={() => onSetView('reports')}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${state.view === 'reports' ? 'text-blue-500' : 'text-slate-500'}`}
+          >
+            <AlertTriangle size={20} />
+            <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.reports}</span>
+          </button>
+        ) : <span />}
         
         {/* Action Button Container - Maintains its center column slot */}
         <div className="flex justify-center w-full">
-          <button 
-            onClick={onOpenReport} 
-            className="bg-red-600 w-14 h-14 rounded-full -mt-10 shadow-2xl text-white border-4 border-slate-900 flex items-center justify-center active:scale-90 transition-transform"
-          >
-            <AlertTriangle size={26} fill="currentColor" />
-          </button>
+          {canCreateReports && (
+            <button
+              onClick={onOpenReport}
+              className="bg-red-600 w-14 h-14 rounded-full -mt-10 shadow-2xl text-white border-4 border-slate-900 flex items-center justify-center active:scale-90 transition-transform"
+              title={t.reportIncident}
+            >
+              <AlertTriangle size={26} fill="currentColor" />
+            </button>
+          )}
         </div>
 
-        <button 
-          onClick={() => onSetView('stats')} 
-          className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${state.view === 'stats' ? 'text-blue-500' : 'text-slate-500'}`}
-        >
-          <BarChart3 size={20} />
-          <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.stats}</span>
-        </button>
-        <button 
-          onClick={onOpenLayers} 
-          className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${isLayersOpen ? 'text-blue-500' : 'text-slate-500'}`}
-        >
-          <ListFilter size={20} />
-          <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.layers}</span>
-        </button>
+        {canViewReports ? (
+          <button
+            onClick={() => onSetView('stats')}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${state.view === 'stats' ? 'text-blue-500' : 'text-slate-500'}`}
+          >
+            <BarChart3 size={20} />
+            <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.stats}</span>
+          </button>
+        ) : <span />}
+        {canViewLayers ? (
+          <button
+            onClick={onOpenLayers}
+            className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${isLayersOpen ? 'text-blue-500' : 'text-slate-500'}`}
+          >
+            <ListFilter size={20} />
+            <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.layers}</span>
+          </button>
+        ) : <span />}
       </nav>
+
+      <button
+        type="button"
+        onClick={onLogout}
+        className="fixed right-3 top-3 z-[5000] flex h-9 items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/95 px-3 text-[10px] font-black uppercase tracking-wider text-slate-300 shadow-xl md:hidden"
+        title={`Sign out ${user.username}`}
+      >
+        <LogOut size={14} className="text-red-400" />
+        {user.role?.name || user.username}
+      </button>
     </>
   );
 };

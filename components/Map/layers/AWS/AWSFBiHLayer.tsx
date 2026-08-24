@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Marker, useMap, Tooltip } from 'react-leaflet';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import {
   scrape,
@@ -9,9 +9,11 @@ import {
 } from '../../../../AWSFBiHData';
 import { AWSHoverCard } from './AWSHoverCard';
 import { MapLayer } from '../../../../types';
+import { awsStationIdentity, fetchAwsStationAdjustments, type AwsStationAdjustment } from '../../../../services/awsStationService';
 
 interface AWSFBiHLayerProps {
   activeTypes: Set<MapLayer>;
+  canAdjust: boolean;
 }
 
 function typeToKey(s: AnyStation): MapLayer | null {
@@ -53,13 +55,22 @@ function makeIcon(station: AnyStation) {
   return L.divIcon({ html, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
 }
 
-export const AWSFBiHLayer: React.FC<AWSFBiHLayerProps> = ({ activeTypes }) => {
+export const AWSFBiHLayer: React.FC<AWSFBiHLayerProps> = ({ activeTypes, canAdjust }) => {
   const [data, setData] = useState<ScrapedData | null>(null);
-  const map = useMap();
+  const [adjustments, setAdjustments] = useState<AwsStationAdjustment[]>([]);
 
   useEffect(() => {
     scrape().then(setData).catch(() => setData(null));
+    const controller = new AbortController();
+    fetchAwsStationAdjustments(controller.signal).then(setAdjustments).catch(() => setAdjustments([]));
+    return () => controller.abort();
   }, []);
+
+  const adjustmentMap = useMemo(() => new Map(adjustments.map((item) => [awsStationIdentity(item.source, item.station_type, item.station_key), item])), [adjustments]);
+
+  const handleAdjusted = (adjustment: AwsStationAdjustment) => {
+    setAdjustments((current) => [...current.filter((item) => item.id !== adjustment.id), adjustment]);
+  };
 
   const stations = (data ? data.all : allFhmzStations).filter(s => {
     const key = typeToKey(s);
@@ -69,8 +80,10 @@ export const AWSFBiHLayer: React.FC<AWSFBiHLayerProps> = ({ activeTypes }) => {
 
   return (
     <>
-      {stations.map((station, i) => {
-        const name = 'city' in station ? station.city : station.station;
+      {stations.map((sourceStation, i) => {
+        const name = 'city' in sourceStation ? sourceStation.city : sourceStation.station;
+        const adjustment = adjustmentMap.get(awsStationIdentity('fbih', sourceStation.type, name));
+        const station = adjustment ? { ...sourceStation, ...adjustment.values } as AnyStation : sourceStation;
         const coords = COORDS[name];
         if (!coords) return null;
         return (
@@ -79,12 +92,18 @@ export const AWSFBiHLayer: React.FC<AWSFBiHLayerProps> = ({ activeTypes }) => {
             position={coords}
             icon={makeIcon(station)}
           >
-            <Tooltip direction="top" offset={[0, -10]} opacity={1}>
-              <AWSHoverCard station={station} />
-            </Tooltip>
+            <Popup closeButton closeOnClick={false} maxWidth={360} minWidth={280} className="aws-edit-popup">
+              <AWSHoverCard station={station} source="fbih" canAdjust={canAdjust} adjustment={adjustment} onAdjusted={handleAdjusted} />
+            </Popup>
           </Marker>
         );
       })}
+      <style>{`
+        .aws-edit-popup .leaflet-popup-content-wrapper,
+        .aws-edit-popup .leaflet-popup-tip { background: transparent; box-shadow: none; }
+        .aws-edit-popup .leaflet-popup-content { margin: 0; width: auto !important; }
+        .aws-edit-popup .leaflet-popup-close-button { color: #94a3b8 !important; z-index: 10; top: 5px !important; right: 5px !important; }
+      `}</style>
     </>
   );
 };

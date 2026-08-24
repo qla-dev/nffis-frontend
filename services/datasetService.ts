@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './api';
+import { apiRequest } from './api';
 
 export type DatasetLayerRenderer =
   | 'none'
@@ -104,21 +104,7 @@ interface FetchFeaturesOptions {
 }
 
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: {
-      Accept: 'application/json',
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(init.headers || {}),
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Dataset API request failed with ${response.status}`);
-  }
-
-  return response.json() as Promise<T>;
+  return apiRequest<T>(path, init);
 }
 
 export async function fetchDatasetLayers(): Promise<DatasetLayer[]> {

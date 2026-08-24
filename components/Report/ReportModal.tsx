@@ -9,12 +9,13 @@ import { IncidentType, Language, OpenMeteoResponse } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { analyzeIncidentUrgency } from '../../services/geminiService';
 import { CloudRain, Snowflake, CloudLightning } from 'lucide-react';
+import type { CreateReportPayload } from '../../services/reportStatisticsService';
 
 interface ReportModalProps {
   language: Language;
   location: { lat: number; lng: number } | null;
   onClose: () => void;
-  onSubmit: (data: any) => void;
+  onSubmit: (data: CreateReportPayload & { type: IncidentType; urgency: 'high' | 'medium' | 'low' }) => Promise<void>;
 }
 
 // Helper to map WMO codes to icons/labels
@@ -54,9 +55,12 @@ const getWeatherInfo = (code: number) => {
 
 export const ReportModal: React.FC<ReportModalProps> = ({ language, location, onClose, onSubmit }) => {
   const t = TRANSLATIONS[language];
-  const [type, setType] = useState<IncidentType>(IncidentType.FIRE);
+  // Flooding was retired as a reportable incident type; wildfire is the only one that can be filed.
+  // Historical FLOOD incidents are still rendered everywhere they already were.
+  const type = IncidentType.FIRE;
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   
   // Weather Data State
   const [weather, setWeather] = useState<OpenMeteoResponse | null>(null);
@@ -90,25 +94,39 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!location) return;
+    if (!location || !weather) return;
 
     setIsSubmitting(true);
-    // Use AI to analyze the report for urgency and environmental context
-    const aiResult = await analyzeIncidentUrgency(description, type);
-    
-    // Simulate extraction delay
-    setTimeout(() => {
-      onSubmit({
+    setSubmitError(null);
+
+    try {
+      const aiResult = await analyzeIncidentUrgency(description, type);
+      const current = weather.current;
+      await onSubmit({
         type,
+        incident_type: type,
         description,
-        lat: location.lat,
-        lng: location.lng,
+        latitude: location.lat,
+        longitude: location.lng,
+        timezone: weather.timezone,
+        reported_at: new Date().toISOString(),
+        weather_condition: getWeatherInfo(current.weather_code).label,
+        temperature_c: current.temperature_2m,
+        feels_like_c: current.apparent_temperature,
+        pressure_hpa: current.pressure_msl,
+        precipitation_mm: current.precipitation,
+        cloud_cover_percent: current.cloud_cover,
+        wind_speed_kmh: current.wind_speed_10m,
+        wind_direction_degrees: current.wind_direction_10m,
+        wind_gust_kmh: current.wind_gusts_10m,
+        humidity_percent: current.relative_humidity_2m,
         urgency: aiResult.urgency as any,
-        windDirection: weather?.current.wind_direction_10m || 0,
-        windSpeed: weather?.current.wind_speed_10m || 0 
       });
+    } catch (submitRequestError) {
+      setSubmitError(submitRequestError instanceof Error ? submitRequestError.message : 'The incident report could not be submitted.');
+    } finally {
       setIsSubmitting(false);
-    }, 1500);
+    }
   };
 
   // Helper functions for formatting
@@ -347,36 +365,8 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
             
             <form id="incident-report-form" onSubmit={handleSubmit} className="p-6 pb-32 lg:pb-6 flex flex-col gap-6 overflow-visible lg:flex-1 lg:overflow-y-auto">
                 
-                {/* Incident Type Selection */}
-                <div className="space-y-3">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Incident Type</label>
-                    <div className="grid grid-cols-2 gap-3">
-                        <button
-                            type="button"
-                            onClick={() => setType(IncidentType.FIRE)}
-                            className={`p-4 rounded-xl font-bold flex flex-col items-center gap-2 border-2 transition-all ${
-                                type === IncidentType.FIRE 
-                                ? 'border-red-500 bg-red-500/10 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)]' 
-                                : 'border-slate-800 bg-slate-950 text-slate-500 hover:border-slate-700'
-                            }`}
-                        >
-                            <span className="text-2xl">🔥</span>
-                            <span>Wildfire</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setType(IncidentType.FLOOD)}
-                            className={`p-4 rounded-xl font-bold flex flex-col items-center gap-2 border-2 transition-all ${
-                                type === IncidentType.FLOOD 
-                                ? 'border-blue-500 bg-blue-500/10 text-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' 
-                                : 'border-slate-800 bg-slate-950 text-slate-500 hover:border-slate-700'
-                            }`}
-                        >
-                            <span className="text-2xl">🌊</span>
-                            <span>Flooding</span>
-                        </button>
-                    </div>
-                </div>
+                {/* No incident-type picker: wildfire is the only reportable type, so the
+                    choice is implicit and the form goes straight to the situation report. */}
 
                 {/* Description Input */}
                 <div className="space-y-3 flex-1">
@@ -401,6 +391,13 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
                         <span className="text-white font-mono">{weather?.current.relative_humidity_2m ?? 0}%</span>
                     </div>
                 </div>
+
+                {submitError && (
+                  <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+                    <AlertCircle className="mt-0.5 shrink-0" size={16} />
+                    <span>{submitError}</span>
+                  </div>
+                )}
 
                 <button
                     type="submit"

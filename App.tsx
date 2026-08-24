@@ -5,14 +5,21 @@ import { GISMap } from './components/Map/GISMap';
 import { ReportModal } from './components/Report/ReportModal';
 import { SessionLoginGate } from './components/Auth/SessionLoginGate';
 import { DatasetLayerOverlay } from './components/Layers/DatasetLayerOverlay';
+import StatisticsDashboard from './components/Statistics/StatisticsDashboard';
 import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './types';
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
 import { Waves, Flame, Database } from 'lucide-react';
 import type { DatasetLayer, DatasetLayerFilterState, DatasetLayerStyle } from './services/datasetService';
 import { fetchDatasetLayers, saveDatasetLayerStyle, updateDatasetFeatureAttributes } from './services/datasetService';
+import { createIncidentReport, type CreateReportPayload } from './services/reportStatisticsService';
 import type { EditLayerSidebarTabId } from './components/Layers/EditLayerSidebar/EditLayerSidebar';
-import { logout } from './lib/auth/session';
-import { AUTH_INVALIDATED_EVENT } from './services/api';
+import {
+  currentUser as fetchCurrentUser,
+  canUploadAws,
+  hasPermission,
+  logout as logoutSession,
+  type AuthUser,
+} from './lib/auth/session';
 
 const BASE_LAYER_IDS = [
   MapLayer.SATELLITE,
@@ -33,6 +40,8 @@ const FWI_LAYER_IDS = [
 const FWI_DEBUG_PREFIX = '[FWI DEBUG]';
 
 const App: React.FC = () => {
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [state, setState] = useState<AppState>({
     language: Language.EN,
     // Enable AWS layers by default along with core GIS layers
@@ -70,8 +79,38 @@ const App: React.FC = () => {
   const appliedDefaultDatasetLayersRef = useRef(false);
 
   const t = TRANSLATIONS[state.language];
+  const canViewReports = hasPermission(authUser, 'reports', 'view');
+  const canCreateReports = hasPermission(authUser, 'reports', 'create');
+  const canViewDatasetLayers = hasPermission(authUser, 'dataset-layers', 'view');
+  const canUpdateDatasetLayers = hasPermission(authUser, 'dataset-layers', 'update');
+  const canViewMapLayers = hasPermission(authUser, 'map-layers', 'view');
+  const canViewFwi = hasPermission(authUser, 'fire-weather-indices', 'view');
+  const canViewAws = hasPermission(authUser, 'aws-monitoring', 'view');
+  const canAdjustAws = canUploadAws(authUser);
+
+  useEffect(() => {
+    let mounted = true;
+
+    fetchCurrentUser()
+      .then((user) => {
+        if (mounted) setAuthUser(user);
+      })
+      .catch(() => {
+        if (mounted) setAuthUser(null);
+      })
+      .finally(() => {
+        if (mounted) setIsCheckingSession(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleSetView = (view: AppState['view']) => {
+    if ((view === 'reports' || view === 'stats') && !canViewReports) return;
+    if (view === 'layers' && !canViewDatasetLayers) return;
+
     setIsDatasetLayerPanelOpen(false);
     setIsDatasetFilterPanelOpen(false);
     setSelectedDatasetFeature(null);
@@ -80,13 +119,14 @@ const App: React.FC = () => {
   };
   const handleSetLang = (language: Language) => setState(prev => ({ ...prev, language }));
   const handleToggleTheme = () => setState(prev => ({ ...prev, isDarkMode: !prev.isDarkMode }));
-  const handleLogout = useCallback(() => {
-    void logout().catch(() => undefined).finally(() => {
-      window.dispatchEvent(new Event(AUTH_INVALIDATED_EVENT));
-    });
-  }, []);
 
   useEffect(() => {
+    if (!authUser || !canViewDatasetLayers) {
+      setDatasetLayers([]);
+      setDatasetLayersLoading(false);
+      return;
+    }
+
     let isMounted = true;
     setDatasetLayersLoading(true);
 
@@ -116,11 +156,18 @@ const App: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [authUser?.id, canViewDatasetLayers]);
   
   const startReporting = () => {
+    if (!canCreateReports) return;
+
     setShowModal(false);
     setReportLocation(null);
+    // Reporting owns the screen: drop any open GIS sidebar so nothing overlaps the map picker.
+    setIsDatasetLayerPanelOpen(false);
+    setIsDatasetFilterPanelOpen(false);
+    setSelectedDatasetFeature(null);
+    setDatasetFeatureSaveError(null);
     setState(prev => ({ ...prev, view: 'map', isReporting: true }));
   };
   
@@ -130,6 +177,8 @@ const App: React.FC = () => {
   };
 
   const toggleDatasetLayersPanel = useCallback(() => {
+    if (!canViewDatasetLayers) return;
+
     setState(prev => ({ ...prev, view: 'map', isReporting: false }));
     setIsDatasetLayerPanelOpen((isOpen) => {
       if (isOpen) {
@@ -140,7 +189,7 @@ const App: React.FC = () => {
 
       return !isOpen;
     });
-  }, []);
+  }, [canViewDatasetLayers]);
 
   const closeDatasetLayersPanel = useCallback(() => {
     setIsDatasetLayerPanelOpen(false);
@@ -150,13 +199,15 @@ const App: React.FC = () => {
   }, []);
 
   const openDatasetFilterForLayer = useCallback((layerId: number, feature?: GeoJSON.Feature) => {
+    if (!canViewDatasetLayers) return;
+
     setSelectedDatasetLayerId(layerId);
     setSelectedDatasetFeature(feature || null);
-    setDatasetEditorInitialTab(feature ? 'attributes' : 'visibility');
+    setDatasetEditorInitialTab(feature && canUpdateDatasetLayers ? 'attributes' : feature ? 'information' : 'visibility');
     setDatasetFeatureSaveError(null);
     setIsDatasetLayerPanelOpen(true);
     setIsDatasetFilterPanelOpen(true);
-  }, []);
+  }, [canUpdateDatasetLayers, canViewDatasetLayers]);
 
   const selectDatasetLayer = useCallback((layerId: number) => {
     setSelectedDatasetLayerId(layerId);
@@ -175,13 +226,20 @@ const App: React.FC = () => {
   }, []);
 
   const persistDatasetLayerStyle = useCallback(async (layerId: number, style: DatasetLayerStyle) => {
+    if (!canUpdateDatasetLayers) return;
+
     const updatedLayer = await saveDatasetLayerStyle(layerId, style);
     setDatasetLayers(prev => prev.map(layer => (
       layer.id === layerId ? updatedLayer : layer
     )));
-  }, []);
+  }, [canUpdateDatasetLayers]);
 
   const saveDatasetFeatureAttributes = useCallback(async (attributes: Record<string, unknown>) => {
+    if (!canUpdateDatasetLayers) {
+      setDatasetFeatureSaveError('Your role cannot update dataset layers.');
+      return;
+    }
+
     const featureId = selectedDatasetFeature?.id ?? (selectedDatasetFeature?.properties as Record<string, unknown> | undefined)?.id;
 
     if (!selectedDatasetLayerId || featureId === undefined || featureId === null) {
@@ -201,7 +259,21 @@ const App: React.FC = () => {
     } finally {
       setIsSavingDatasetFeature(false);
     }
-  }, [selectedDatasetFeature, selectedDatasetLayerId]);
+  }, [canUpdateDatasetLayers, selectedDatasetFeature, selectedDatasetLayerId]);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await logoutSession();
+    } finally {
+      setAuthUser(null);
+      setDatasetLayers([]);
+      setActiveDatasetLayerIds(new Set());
+      setIsDatasetLayerPanelOpen(false);
+      setIsDatasetFilterPanelOpen(false);
+      setState((previous) => ({ ...previous, view: 'map', isReporting: false }));
+      appliedDefaultDatasetLayersRef.current = false;
+    }
+  }, []);
 
   const toggleLayer = useCallback((layer: MapLayer) => {
     if (!layer) return;
@@ -243,11 +315,19 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, isReporting: false }));
   }, []);
 
-  const handleReportSubmit = (data: any) => {
+  const handleReportSubmit = async (data: CreateReportPayload & { type: IncidentType; urgency: IncidentReport['urgency'] }) => {
+    const { type, urgency, ...payload } = data;
+    const createdReport = await createIncidentReport(payload);
     const newIncident: IncidentReport = {
-      id: Math.random().toString(36).substring(7),
-      timestamp: Date.now(),
-      ...data
+      id: String(createdReport.id),
+      type,
+      lat: data.latitude,
+      lng: data.longitude,
+      description: data.description,
+      urgency,
+      timestamp: new Date(createdReport.reported_at).getTime(),
+      windDirection: createdReport.wind_direction_degrees,
+      windSpeed: createdReport.wind_speed_kmh,
     };
     setState(prev => ({ ...prev, incidents: [newIncident, ...prev.incidents] }));
     setShowModal(false);
@@ -284,15 +364,19 @@ const App: React.FC = () => {
 
   return (
     <div className={`flex h-screen w-full overflow-hidden ${state.isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      <Navigation
+      {authUser && <Navigation
         state={state}
         onSetView={handleSetView}
         onSetLang={handleSetLang}
         onOpenReport={startReporting}
         onOpenLayers={toggleDatasetLayersPanel}
-        onLogout={handleLogout}
         isLayersOpen={isDatasetLayerPanelOpen}
-      />
+        user={authUser}
+        canViewReports={canViewReports}
+        canCreateReports={canCreateReports}
+        canViewLayers={canViewDatasetLayers}
+        onLogout={handleLogout}
+      />}
       
       <main className="flex-1 relative md:ml-auto h-full min-h-0 min-w-0 overflow-hidden transition-all duration-300">
         {state.view === 'map' && (
@@ -313,6 +397,10 @@ const App: React.FC = () => {
             onToggleTheme={handleToggleTheme} 
             language={state.language} 
             onSetLanguage={handleSetLang}
+            canViewMapLayers={canViewMapLayers}
+            canViewFwi={canViewFwi}
+            canViewAws={canViewAws}
+            canAdjustAws={canAdjustAws}
           />
         )}
 
@@ -351,6 +439,10 @@ const App: React.FC = () => {
                   ))}
                 </div>
               )}
+
+              {state.view === 'stats' && (
+                <StatisticsDashboard language={state.language} isDarkMode={state.isDarkMode} />
+              )}
             </div>
           </div>
         )}
@@ -377,6 +469,7 @@ const App: React.FC = () => {
           onSaveFeatureAttributes={saveDatasetFeatureAttributes}
           onUpdateFilter={updateDatasetLayerFilter}
           onClearFilter={clearDatasetLayerFilter}
+          canUpdateLayer={canUpdateDatasetLayers}
         />
 
         {showModal && (
@@ -392,7 +485,11 @@ const App: React.FC = () => {
         )}
       </main>
 
-      <SessionLoginGate />
+      <SessionLoginGate
+        user={authUser}
+        checking={isCheckingSession}
+        onAuthenticated={setAuthUser}
+      />
     </div>
   );
 };

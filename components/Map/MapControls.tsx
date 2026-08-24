@@ -33,6 +33,9 @@ interface MapControlsProps {
   onToggleCanton: (code: CantonCode) => void;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   onStartPickingLocation?: () => void;
+  canViewMapLayers: boolean;
+  canViewFwi: boolean;
+  canViewAws: boolean;
 }
 
 export const MapControls: React.FC<MapControlsProps> = ({
@@ -56,7 +59,10 @@ export const MapControls: React.FC<MapControlsProps> = ({
   onToggleBrckoDistrict,
   onToggleCanton,
   containerRef,
-  onStartPickingLocation
+  onStartPickingLocation,
+  canViewMapLayers,
+  canViewFwi,
+  canViewAws,
 }) => {
   const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | 'fwi' | 'borders' | 'aws' | null>(null);
   const localRef = useRef<HTMLDivElement>(null);
@@ -134,6 +140,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
 
             {/* BiH Cantons */}
             <button 
+              hidden={!canViewMapLayers}
               onClick={handleBordersButtonClick} 
               className={`p-2.5 rounded-lg transition-colors ${borderLayerVisible ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
               title="BiH Cantons"
@@ -142,6 +149,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
             </button>
 
             <button
+              hidden={!canViewMapLayers}
               onClick={() => onToggleLayer(MapLayer.FIREFIGHTER_STATIONS)}
               className={`p-2.5 rounded-lg transition-colors ${
                 activeLayers.has(MapLayer.FIREFIGHTER_STATIONS)
@@ -154,6 +162,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
             </button>
 
             <button
+              hidden={!canViewMapLayers}
               onClick={() => onToggleLayer(MapLayer.RS_FIREFIGHTER_DENSITY)}
               className={`p-2.5 rounded-lg transition-colors ${
                 activeLayers.has(MapLayer.RS_FIREFIGHTER_DENSITY)
@@ -168,16 +177,18 @@ export const MapControls: React.FC<MapControlsProps> = ({
             <div className="w-px h-6 bg-slate-800 mx-1" />
 
             {/* Wind */}
-            <button 
-              onClick={() => onToggleLayer(MapLayer.WINDY)} 
-              className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.WINDY) ? 'text-cyan-400 bg-cyan-950/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
+            <button
+              hidden={!canViewMapLayers}
+              onClick={() => onToggleLayer(MapLayer.WIND_VECTOR)}
+              className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.WIND_VECTOR) ? 'text-cyan-400 bg-cyan-950/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
               title={t.liveWindVector}
             >
-              <Wind size={18} className={activeLayers.has(MapLayer.WINDY) ? 'animate-pulse' : ''} />
+              <Wind size={18} className={activeLayers.has(MapLayer.WIND_VECTOR) ? 'animate-pulse' : ''} />
             </button>
 
             {/* Meteoblue Temp Toggle */}
             <button 
+              hidden={!canViewMapLayers}
               onClick={() => onToggleLayer(MapLayer.METEOBLUE)}
               className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.METEOBLUE) ? 'text-blue-400 bg-blue-950/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'text-slate-400 hover:bg-slate-800'}`}
               title="Meteoblue Temperature"
@@ -187,6 +198,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
 
             {/* FWI */}
             <button 
+              hidden={!canViewFwi}
               onClick={() => togglePanel('fwi')}
               className={`inline-flex items-center justify-center px-3 py-2.5 rounded-lg leading-none transition-colors ${activePanel === 'fwi' || isAnyFwiActive ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
               title="FWI"
@@ -195,6 +207,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
             </button>
 
             <button 
+              hidden={!canViewAws}
               onClick={() => togglePanel('aws')}
               className={`inline-flex items-center justify-center px-3 py-2.5 rounded-lg leading-none transition-colors ${
                 activePanel === 'aws' || 
@@ -213,6 +226,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
 
             {/* Assets & Regions */}
             <button 
+              hidden={!canViewMapLayers}
               onClick={() => togglePanel('assets')} 
               className={`p-2.5 rounded-lg transition-colors ${activePanel === 'assets' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
               title={t.assetsRegions}
@@ -222,6 +236,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
 
             {/* Data Overlays */}
             <button 
+              hidden={!canViewMapLayers}
               onClick={() => togglePanel('layers')} 
               className={`p-2.5 rounded-lg transition-colors ${activePanel === 'layers' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
               title={t.dataOverlays}
@@ -233,6 +248,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
             
             {/* Legend */}
             <button 
+              hidden={!canViewMapLayers}
               onClick={onToggleLegend} 
               className={`p-2.5 rounded-lg transition-colors ${showLegend ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
               title={t.gisLegend}
@@ -244,6 +260,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
 
             {/* Imagery Source (Satellite Icon) */}
             <button 
+              hidden={!canViewMapLayers}
               onClick={() => togglePanel('satellite')} 
               className={`p-2.5 rounded-lg transition-colors ${activePanel === 'satellite' || isAnyBaseLayerActive ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
               title={t.imagerySource}
@@ -256,7 +273,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
 
       {/* Dropdown Panels Container */}
       <div className="relative w-64 mr-4 md:mr-0 pointer-events-auto">
-        {activePanel === 'borders' && (
+        {canViewMapLayers && activePanel === 'borders' && (
           <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-72 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">
               BiH Cantons
@@ -344,7 +361,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
         )}
         
         {/* Satellite Panel */}
-        {activePanel === 'satellite' && (
+        {canViewMapLayers && activePanel === 'satellite' && (
           <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200">
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
               {t.imagerySource}
@@ -454,7 +471,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
           </div>
         )}
 
-        {activePanel === 'fwi' && (
+        {canViewFwi && activePanel === 'fwi' && (
           <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200">
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
               FWI
@@ -517,7 +534,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
         )}
 
         {/* AWS Panel */}
-        {activePanel === 'aws' && (
+        {canViewAws && activePanel === 'aws' && (
           <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200">
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
               {(t as any).aws?.title || 'Automatske Stanice'}
@@ -555,7 +572,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
         )}
 
         {/* Assets & Regions Panel */}
-        {activePanel === 'assets' && (
+        {canViewMapLayers && activePanel === 'assets' && (
           <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">
               {t.assetsRegions}
@@ -591,7 +608,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
         )}
 
         {/* Layer Quick Panel (Data Overlays) */}
-        {activePanel === 'layers' && (
+        {canViewMapLayers && activePanel === 'layers' && (
           <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">
               {t.dataOverlays}

@@ -31,6 +31,7 @@ interface DatasetLayerOverlayProps {
   saveError?: string | null;
   isLoading: boolean;
   errorMessage?: string | null;
+  canUpdateLayer: boolean;
   onClose: () => void;
   onToggleLayer: (layerId: number) => void;
   onSelectLayer: (layerId: number) => void;
@@ -98,6 +99,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   saveError,
   isLoading,
   errorMessage,
+  canUpdateLayer,
   onClose,
   onToggleLayer,
   onSelectLayer,
@@ -348,6 +350,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
               onSaveFeatureAttributes={onSaveFeatureAttributes}
               onUpdateFilter={onUpdateFilter}
               onClearFilter={onClearFilter}
+              canUpdateLayer={canUpdateLayer}
             />
           </div>
         )}
