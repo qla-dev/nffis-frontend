@@ -1,11 +1,12 @@
 const frontendHostname = typeof window === 'undefined' ? '' : window.location.hostname.toLowerCase();
 const isNffisHost = frontendHostname === 'nffis.com' || frontendHostname.endsWith('.nffis.com');
-const localBackendHost = frontendHostname || '127.0.0.1';
 
-// The frontend is a standalone client: select its public backend only from its hostname.
+// In development all requests go through Vite's proxy. This keeps the CSRF
+// cookie accessible to localhost even when VITE_API_BASE_URL targets nffis.
+// The proxy itself selects that configured target in vite.config.ts.
 export const API_BASE_URL = isNffisHost
   ? 'https://api.nffis.com:81/api'
-  : `http://${localBackendHost}:8080/api`;
+  : '/api';
 
 const apiOrigin = API_BASE_URL.startsWith('http')
   ? new URL(API_BASE_URL).origin

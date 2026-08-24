@@ -15,7 +15,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1m4-tsfYsevdEMjjAU6gq3F
 
 1. Install dependencies:
    `npm install`
-2. The browser selects the backend directly: local hosts use port `8080`, while `nffis.com` uses `http://77.77.236.72:8080/api`.
+2. Start the local Laravel API on `http://localhost:8080`. Vite proxies `/api` and `/sanctum` through `localhost:3000`, keeping the session and CSRF cookies same-origin. Set `VITE_LOCAL_API_ORIGIN` if the local API uses a different origin, or `VITE_API_BASE_URL` to route the proxy to the deployed API.
 3. Configure `GEMINI_API_KEY` only in the backend environment; it must never be placed in frontend Vite variables.
 4. Run the app:
    `npm run dev`
