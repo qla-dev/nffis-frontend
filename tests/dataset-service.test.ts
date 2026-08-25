@@ -7,6 +7,7 @@ import {
   fetchDatasetLayers,
   saveDatasetLayerStyle,
   updateDatasetFeatureAttributes,
+  updateDatasetFeatureGeometry,
 } from '../services/datasetService';
 
 describe('dataset/GIS service', () => {
@@ -84,6 +85,31 @@ describe('dataset/GIS service', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/dataset-layers/2/style', expect.objectContaining({
       method: 'PATCH', body: JSON.stringify({ style: { color: '#f00' } }),
       headers: expect.objectContaining({ 'X-XSRF-TOKEN': 'dataset-csrf' }),
+    }));
+  });
+
+  it('preserves polygon holes and SRID when saving PostGIS geometry', async () => {
+    const geometry: GeoJSON.Polygon = {
+      type: 'Polygon',
+      coordinates: [
+        [[18, 43], [19, 43], [19, 44], [18, 43]],
+        [[18.2, 43.2], [18.3, 43.2], [18.2, 43.3], [18.2, 43.2]],
+      ],
+    };
+    const feature = { type: 'Feature', id: 7, properties: {}, geometry };
+    const geometry_metadata = { srid: 4326, is_valid: true, vertex_count: 8 };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ feature, geometry_metadata }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(updateDatasetFeatureGeometry(3, 7, geometry, 4326)).resolves.toEqual({
+      feature,
+      geometryMetadata: geometry_metadata,
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/dataset-layers/3/features/7', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ geometry, source_srid: 4326 }),
     }));
   });
 

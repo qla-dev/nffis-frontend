@@ -9,8 +9,8 @@ import StatisticsDashboard from './components/Statistics/StatisticsDashboard';
 import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './types';
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
 import { Waves, Flame, Database } from 'lucide-react';
-import type { DatasetLayer, DatasetLayerFilterState, DatasetLayerStyle } from './services/datasetService';
-import { fetchDatasetLayers, saveDatasetLayerStyle, updateDatasetFeatureAttributes } from './services/datasetService';
+import type { DatasetGeometryMetadata, DatasetLayer, DatasetLayerFilterState, DatasetLayerStyle } from './services/datasetService';
+import { fetchDatasetLayers, saveDatasetLayerStyle, updateDatasetFeatureAttributes, updateDatasetFeatureGeometry } from './services/datasetService';
 import { createIncidentReport, type CreateReportPayload } from './services/reportStatisticsService';
 import type { EditLayerSidebarTabId } from './components/Layers/EditLayerSidebar/EditLayerSidebar';
 import {
@@ -69,6 +69,8 @@ const App: React.FC = () => {
   const [datasetEditorInitialTab, setDatasetEditorInitialTab] = useState<EditLayerSidebarTabId>('visibility');
   const [isSavingDatasetFeature, setIsSavingDatasetFeature] = useState(false);
   const [datasetFeatureSaveError, setDatasetFeatureSaveError] = useState<string | null>(null);
+  const [datasetGeometryMetadata, setDatasetGeometryMetadata] = useState<DatasetGeometryMetadata | null>(null);
+  const [isEditingDatasetGeometry, setIsEditingDatasetGeometry] = useState(false);
   const [datasetLayerRefreshKey, setDatasetLayerRefreshKey] = useState(0);
   const [datasetLayers, setDatasetLayers] = useState<DatasetLayer[]>([]);
   const [datasetLayersLoading, setDatasetLayersLoading] = useState(false);
@@ -262,6 +264,63 @@ const App: React.FC = () => {
     }
   }, [canUpdateDatasetLayers, selectedDatasetFeature, selectedDatasetLayerId]);
 
+  const saveDatasetFeatureGeometry = useCallback(async (geometry: GeoJSON.Geometry, sourceSrid: number) => {
+    if (!canUpdateDatasetLayers) {
+      setDatasetFeatureSaveError('Your role cannot update dataset geometry.');
+      return;
+    }
+
+    const featureId = selectedDatasetFeature?.id ?? (selectedDatasetFeature?.properties as Record<string, unknown> | undefined)?.id;
+    if (!selectedDatasetLayerId || featureId === undefined || featureId === null) {
+      setDatasetFeatureSaveError('No editable feature is selected.');
+      return;
+    }
+
+    setIsSavingDatasetFeature(true);
+    setDatasetFeatureSaveError(null);
+    try {
+      const result = await updateDatasetFeatureGeometry(selectedDatasetLayerId, featureId, geometry, sourceSrid);
+      setSelectedDatasetFeature(result.feature);
+      setDatasetGeometryMetadata(result.geometryMetadata);
+      setDatasetLayerRefreshKey((previous) => previous + 1);
+      setIsEditingDatasetGeometry(false);
+    } catch {
+      setDatasetFeatureSaveError('PostGIS could not validate or save this geometry.');
+    } finally {
+      setIsSavingDatasetFeature(false);
+    }
+  }, [canUpdateDatasetLayers, selectedDatasetFeature, selectedDatasetLayerId]);
+
+  const addDatasetGeometryVertex = useCallback((latitude: number, longitude: number) => {
+    setSelectedDatasetFeature((previous) => {
+      if (!previous || previous.geometry?.type !== 'Polygon') return previous;
+      const rings = previous.geometry.coordinates.map((ring) => [...ring]);
+      const outer = rings[0] || [];
+      const open = outer.length > 1 && outer[0][0] === outer.at(-1)?.[0] && outer[0][1] === outer.at(-1)?.[1] ? outer.slice(0, -1) : outer;
+      const next = [...open, [longitude, latitude]];
+      rings[0] = next.length >= 3 ? [...next, next[0]] : next;
+      return { ...previous, geometry: { type: 'Polygon', coordinates: rings } };
+    });
+  }, []);
+
+  const undoDatasetGeometryVertex = useCallback(() => {
+    setSelectedDatasetFeature((previous) => {
+      if (!previous || previous.geometry?.type !== 'Polygon') return previous;
+      const rings = previous.geometry.coordinates.map((ring) => [...ring]);
+      const outer = rings[0] || [];
+      const open = outer.length > 1 && outer[0][0] === outer.at(-1)?.[0] && outer[0][1] === outer.at(-1)?.[1] ? outer.slice(0, -1) : outer;
+      const next = open.slice(0, -1);
+      rings[0] = next.length >= 3 ? [...next, next[0]] : next;
+      return { ...previous, geometry: { type: 'Polygon', coordinates: rings } };
+    });
+  }, []);
+
+  const clearDatasetGeometryBoundary = useCallback(() => {
+    setSelectedDatasetFeature((previous) => previous?.geometry?.type === 'Polygon'
+      ? { ...previous, geometry: { type: 'Polygon', coordinates: [[], ...previous.geometry.coordinates.slice(1)] } }
+      : previous);
+  }, []);
+
   const handleLogout = useCallback(async () => {
     try {
       await logoutSession();
@@ -421,6 +480,9 @@ const App: React.FC = () => {
             canViewFwi={canViewFwi}
             canViewAws={canViewAws}
             canAdjustAws={canAdjustAws}
+            isEditingDatasetGeometry={isEditingDatasetGeometry}
+            editingDatasetGeometry={selectedDatasetFeature?.geometry}
+            onDatasetGeometryVertex={addDatasetGeometryVertex}
           />
         )}
 
@@ -479,6 +541,8 @@ const App: React.FC = () => {
           editorInitialTab={datasetEditorInitialTab}
           isSavingFeature={isSavingDatasetFeature}
           saveError={datasetFeatureSaveError}
+          geometryMetadata={datasetGeometryMetadata}
+          isEditingGeometry={isEditingDatasetGeometry}
           isLoading={datasetLayersLoading}
           errorMessage={datasetLayersError}
           onClose={closeDatasetLayersPanel}
@@ -488,6 +552,11 @@ const App: React.FC = () => {
           onUpdateLayerStyle={updateDatasetLayerStyle}
           onSaveLayerStyle={persistDatasetLayerStyle}
           onSaveFeatureAttributes={saveDatasetFeatureAttributes}
+          onSaveFeatureGeometry={saveDatasetFeatureGeometry}
+          onStartGeometryEditing={() => setIsEditingDatasetGeometry(true)}
+          onStopGeometryEditing={() => setIsEditingDatasetGeometry(false)}
+          onUndoGeometryVertex={undoDatasetGeometryVertex}
+          onClearGeometryBoundary={clearDatasetGeometryBoundary}
           onUpdateFilter={updateDatasetLayerFilter}
           onClearFilter={clearDatasetLayerFilter}
           canUpdateLayer={canUpdateDatasetLayers}

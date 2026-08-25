@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type {
   DatasetLayer,
+  DatasetGeometryMetadata,
   DatasetLayerFilterState,
   DatasetLayerStyle,
 } from '../../services/datasetService';
@@ -31,6 +32,8 @@ interface DatasetLayerOverlayProps {
   editorInitialTab: EditLayerSidebarTabId;
   isSavingFeature: boolean;
   saveError?: string | null;
+  geometryMetadata?: DatasetGeometryMetadata | null;
+  isEditingGeometry: boolean;
   isLoading: boolean;
   errorMessage?: string | null;
   canUpdateLayer: boolean;
@@ -41,6 +44,11 @@ interface DatasetLayerOverlayProps {
   onUpdateLayerStyle: (layerId: number, style: DatasetLayerStyle) => void;
   onSaveLayerStyle: (layerId: number, style: DatasetLayerStyle) => Promise<void>;
   onSaveFeatureAttributes: (attributes: Record<string, unknown>) => Promise<void>;
+  onSaveFeatureGeometry: (geometry: GeoJSON.Geometry, sourceSrid: number) => Promise<void>;
+  onStartGeometryEditing: () => void;
+  onStopGeometryEditing: () => void;
+  onUndoGeometryVertex: () => void;
+  onClearGeometryBoundary: () => void;
   onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
   onClearFilter: (layerId: number) => void;
 }
@@ -100,6 +108,8 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   editorInitialTab,
   isSavingFeature,
   saveError,
+  geometryMetadata,
+  isEditingGeometry,
   isLoading,
   errorMessage,
   canUpdateLayer,
@@ -110,6 +120,11 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   onUpdateLayerStyle,
   onSaveLayerStyle,
   onSaveFeatureAttributes,
+  onSaveFeatureGeometry,
+  onStartGeometryEditing,
+  onStopGeometryEditing,
+  onUndoGeometryVertex,
+  onClearGeometryBoundary,
   onUpdateFilter,
   onClearFilter,
 }) => {
@@ -351,11 +366,18 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
               initialTab={editorInitialTab}
               isSavingFeature={isSavingFeature}
               saveError={saveError}
+              geometryMetadata={geometryMetadata}
+              isEditingGeometry={isEditingGeometry}
               onCollapse={() => onFilterPanelOpenChange(false)}
               onToggleLayer={onToggleLayer}
               onUpdateLayerStyle={onUpdateLayerStyle}
               onSaveLayerStyle={onSaveLayerStyle}
               onSaveFeatureAttributes={onSaveFeatureAttributes}
+              onSaveFeatureGeometry={onSaveFeatureGeometry}
+              onStartGeometryEditing={onStartGeometryEditing}
+              onStopGeometryEditing={onStopGeometryEditing}
+              onUndoGeometryVertex={onUndoGeometryVertex}
+              onClearGeometryBoundary={onClearGeometryBoundary}
               onUpdateFilter={onUpdateFilter}
               onClearFilter={onClearFilter}
               canUpdateLayer={canUpdateLayer}

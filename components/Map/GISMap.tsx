@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, Tooltip, Polygon, Polyline, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
 import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar, MapPin } from 'lucide-react';
@@ -153,6 +153,9 @@ interface GISMapProps {
   canViewFwi: boolean;
   canViewAws: boolean;
   canAdjustAws: boolean;
+  isEditingDatasetGeometry: boolean;
+  editingDatasetGeometry?: GeoJSON.Geometry | null;
+  onDatasetGeometryVertex: (latitude: number, longitude: number) => void;
 }
 
 interface FireIndexWeatherData {
@@ -206,6 +209,9 @@ export const GISMap: React.FC<GISMapProps> = ({
   canViewFwi,
   canViewAws,
   canAdjustAws,
+  isEditingDatasetGeometry,
+  editingDatasetGeometry,
+  onDatasetGeometryVertex,
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
   const t = TRANSLATIONS[language];
@@ -1115,6 +1121,19 @@ export const GISMap: React.FC<GISMapProps> = ({
     return null;
   };
 
+  const DatasetGeometryEditor = () => {
+    useMapEvents({
+      click(event) {
+        if (isEditingDatasetGeometry) onDatasetGeometryVertex(event.latlng.lat, event.latlng.lng);
+      },
+    });
+
+    if (!isEditingDatasetGeometry || editingDatasetGeometry?.type !== 'Polygon') return null;
+    const ring = editingDatasetGeometry.coordinates[0] || [];
+    const positions = ring.map(([longitude, latitude]) => [latitude, longitude] as [number, number]);
+    return <LayerGroup>{positions.length >= 3 ? <Polygon positions={positions} pathOptions={{ color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.18, weight: 3 }} /> : <Polyline positions={positions} pathOptions={{ color: '#f59e0b', weight: 3 }} />}{positions.map((position, index) => <CircleMarker key={`${position.join('-')}-${index}`} center={position} radius={5} pathOptions={{ color: '#fff', fillColor: '#f59e0b', fillOpacity: 1, weight: 2 }} />)}</LayerGroup>;
+  };
+
   const CustomLocationPicker = () => {
     useMapEvents({
       click(e) {
@@ -1253,6 +1272,7 @@ export const GISMap: React.FC<GISMapProps> = ({
       {/* MAP CONTAINER */}
       <MapContainer center={BIH_CENTER} zoom={8} className="w-full h-full" ref={setMap} zoomControl={false}>
         <ReportLocationPicker />
+        <DatasetGeometryEditor />
         <CustomLocationPicker />
         {!shouldRenderStandaloneMeteoblue && (
           <TileLayer
@@ -1333,7 +1353,7 @@ export const GISMap: React.FC<GISMapProps> = ({
               filters={datasetLayerFilters[layer.id]}
               pane={DATASET_LAYER_PANE}
               refreshKey={datasetLayerRefreshKey}
-              onPolygonClick={!isReporting && !isPickingLocation ? onDatasetPolygonClick : undefined}
+              onPolygonClick={!isReporting && !isPickingLocation && !isEditingDatasetGeometry ? onDatasetPolygonClick : undefined}
               onLoadingChange={onDatasetLayerLoadingChange}
             />
           ))}
