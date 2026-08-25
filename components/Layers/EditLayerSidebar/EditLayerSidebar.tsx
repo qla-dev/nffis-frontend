@@ -42,12 +42,6 @@ interface EditLayerSidebarProps {
   geometryMetadata?: DatasetGeometryMetadata | null;
   isEditingGeometry: boolean;
   canUpdateLayer: boolean;
-  canCreateLayer: boolean;
-  isCreatingPolygon: boolean;
-  drawingPointCount: number;
-  drawingName: string;
-  snappingEnabled: boolean;
-  snapMessage?: string | null;
   onCollapse: () => void;
   onToggleLayer: (layerId: number) => void;
   onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
@@ -60,13 +54,6 @@ interface EditLayerSidebarProps {
   onStopGeometryEditing: () => void;
   onUndoGeometryVertex: () => void;
   onClearGeometryBoundary: () => void;
-  onDrawingNameChange: (name: string) => void;
-  onSnappingEnabledChange: (enabled: boolean) => void;
-  onStartPolygonDrawing: () => void;
-  onCancelPolygonDrawing: () => void;
-  onUndoDrawingPoint: () => void;
-  onClearDrawing: () => void;
-  onSaveNewPolygon: () => Promise<void>;
 }
 
 const TABS = [
@@ -89,12 +76,6 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
   geometryMetadata,
   isEditingGeometry,
   canUpdateLayer,
-  canCreateLayer,
-  isCreatingPolygon,
-  drawingPointCount,
-  drawingName,
-  snappingEnabled,
-  snapMessage,
   onCollapse,
   onToggleLayer,
   onUpdateFilter,
@@ -107,13 +88,6 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
   onStopGeometryEditing,
   onUndoGeometryVertex,
   onClearGeometryBoundary,
-  onDrawingNameChange,
-  onSnappingEnabledChange,
-  onStartPolygonDrawing,
-  onCancelPolygonDrawing,
-  onUndoDrawingPoint,
-  onClearDrawing,
-  onSaveNewPolygon,
 }) => {
   const [activeTab, setActiveTab] = useState<EditLayerSidebarTabId>(initialTab);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -165,8 +139,8 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
       );
     }
 
-    if (activeTab === 'geometry' && (canUpdateLayer || canCreateLayer)) {
-      return <GeometryTab layer={layer} selectedFeature={selectedFeature} isSaving={isSavingFeature} saveError={saveError} geometryMetadata={geometryMetadata} canUpdate={canUpdateLayer} canCreate={canCreateLayer} isCreatingPolygon={isCreatingPolygon} drawingPointCount={drawingPointCount} drawingName={drawingName} snappingEnabled={snappingEnabled} snapMessage={snapMessage} onDrawingNameChange={onDrawingNameChange} onSnappingEnabledChange={onSnappingEnabledChange} onStartPolygonDrawing={onStartPolygonDrawing} onCancelPolygonDrawing={onCancelPolygonDrawing} onUndoDrawingPoint={onUndoDrawingPoint} onClearDrawing={onClearDrawing} onSaveNewPolygon={onSaveNewPolygon} isMapEditing={isEditingGeometry} onStartMapEditing={onStartGeometryEditing} onStopMapEditing={onStopGeometryEditing} onUndoVertex={onUndoGeometryVertex} onClearBoundary={onClearGeometryBoundary} onSave={onSaveFeatureGeometry} />;
+    if (activeTab === 'geometry' && canUpdateLayer) {
+      return <GeometryTab layer={layer} selectedFeature={selectedFeature} isSaving={isSavingFeature} saveError={saveError} geometryMetadata={geometryMetadata} isMapEditing={isEditingGeometry} onStartMapEditing={onStartGeometryEditing} onStopMapEditing={onStopGeometryEditing} onUndoVertex={onUndoGeometryVertex} onClearBoundary={onClearGeometryBoundary} onSave={onSaveFeatureGeometry} />;
     }
 
     return (
@@ -222,7 +196,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
               }
             }}
           >
-            {TABS.filter((tab) => (tab.id === 'geometry' && canCreateLayer) || canUpdateLayer || !['symbology', 'attributes', 'geometry'].includes(tab.id)).map((tab) => {
+            {TABS.filter((tab) => canUpdateLayer || !['symbology', 'attributes', 'geometry'].includes(tab.id)).map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
 

@@ -15,7 +15,6 @@ interface DatasetGeoJsonLayerProps {
   refreshKey?: number;
   onPolygonClick?: (layerId: number, feature: GeoJSON.Feature) => void;
   onLoadingChange?: (layerId: number, isLoading: boolean) => void;
-  onFeaturesLoaded?: (layerId: number, features: GeoJSON.FeatureCollection | null) => void;
 }
 
 function bboxForMap(map: L.Map): string {
@@ -128,7 +127,6 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
   refreshKey = 0,
   onPolygonClick,
   onLoadingChange,
-  onFeaturesLoaded,
 }) => {
   const map = useMap();
   const [bbox, setBbox] = useState(() => bboxForMap(map));
@@ -158,14 +156,12 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
         .then((data) => {
           if (!controller.signal.aborted && requestSequence.current === requestId) {
             setFeatureCollection(data);
-            onFeaturesLoaded?.(layer.id, data);
           }
         })
         .catch((error) => {
           if (!controller.signal.aborted && requestSequence.current === requestId) {
             console.error(`Failed to fetch dataset layer ${layer.id}`, error);
             setFeatureCollection(null);
-            onFeaturesLoaded?.(layer.id, null);
           }
         })
         .finally(() => {
@@ -179,7 +175,7 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [bbox, filterKey, layer.id, map, filters, refreshKey, onLoadingChange, onFeaturesLoaded]);
+  }, [bbox, filterKey, layer.id, map, filters, refreshKey, onLoadingChange]);
 
   if (!featureCollection || featureCollection.features.length === 0) {
     return null;

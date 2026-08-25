@@ -31,7 +31,6 @@ import { AWSRsLayer } from './layers/AWS/AWSRsLayer';
 import { DatasetGeoJsonLayer } from './layers/Datasets/DatasetGeoJsonLayer';
 import { LiveWindVectorLayer } from './layers/Wind/LiveWindVectorLayer';
 import type { DatasetLayer, DatasetLayerFilterState } from '../../services/datasetService';
-import { polygonRings, snapToGeometry, type Coordinate } from '../../lib/gis/snapping';
 
 const GlobalLeaflet = (L as any).default || L;
 const FIRE_HEAT_GRADIENT = {
@@ -157,11 +156,6 @@ interface GISMapProps {
   isEditingDatasetGeometry: boolean;
   editingDatasetGeometry?: GeoJSON.Geometry | null;
   onDatasetGeometryVertex: (latitude: number, longitude: number) => void;
-  selectedDatasetLayerId: number | null;
-  isCreatingDatasetPolygon: boolean;
-  datasetDrawingCoordinates: Coordinate[];
-  datasetSnappingEnabled: boolean;
-  onDatasetDrawVertex: (coordinate: Coordinate, snapKind?: 'vertex' | 'segment') => void;
 }
 
 interface FireIndexWeatherData {
@@ -218,15 +212,8 @@ export const GISMap: React.FC<GISMapProps> = ({
   isEditingDatasetGeometry,
   editingDatasetGeometry,
   onDatasetGeometryVertex,
-  selectedDatasetLayerId,
-  isCreatingDatasetPolygon,
-  datasetDrawingCoordinates,
-  datasetSnappingEnabled,
-  onDatasetDrawVertex,
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
-  const [loadedDatasetFeatures, setLoadedDatasetFeatures] = useState<Record<number, GeoJSON.FeatureCollection | null>>({});
-  const [lastSnap, setLastSnap] = useState<{ coordinate: Coordinate; kind: 'vertex' | 'segment' } | null>(null);
   const t = TRANSLATIONS[language];
 
   // Helpers
@@ -1135,37 +1122,16 @@ export const GISMap: React.FC<GISMapProps> = ({
   };
 
   const DatasetGeometryEditor = () => {
-    const editorMap = useMap();
     useMapEvents({
       click(event) {
-        if (isCreatingDatasetPolygon) {
-          let coordinate: Coordinate = [event.latlng.lng, event.latlng.lat];
-          let snapKind: 'vertex' | 'segment' | undefined;
-          if (datasetSnappingEnabled && selectedDatasetLayerId) {
-            const features = loadedDatasetFeatures[selectedDatasetLayerId]?.features || [];
-            const rings = features.flatMap((feature) => polygonRings(feature.geometry)).map((ring) => ring.map((candidate) => {
-              const point = editorMap.latLngToContainerPoint([candidate[1], candidate[0]]);
-              return { coordinate: candidate, x: point.x, y: point.y };
-            }));
-            const pointer = editorMap.latLngToContainerPoint(event.latlng);
-            const snapped = snapToGeometry(pointer, rings);
-            if (snapped) {
-              coordinate = snapped.coordinate;
-              snapKind = snapped.kind;
-              setLastSnap({ coordinate, kind: snapped.kind });
-            } else setLastSnap(null);
-          }
-          onDatasetDrawVertex(coordinate, snapKind);
-        } else if (isEditingDatasetGeometry) onDatasetGeometryVertex(event.latlng.lat, event.latlng.lng);
+        if (isEditingDatasetGeometry) onDatasetGeometryVertex(event.latlng.lat, event.latlng.lng);
       },
     });
 
-    if (!isEditingDatasetGeometry && !isCreatingDatasetPolygon) return null;
-    const ring = isCreatingDatasetPolygon
-      ? datasetDrawingCoordinates
-      : editingDatasetGeometry?.type === 'Polygon' ? editingDatasetGeometry.coordinates[0] || [] : [];
+    if (!isEditingDatasetGeometry || editingDatasetGeometry?.type !== 'Polygon') return null;
+    const ring = editingDatasetGeometry.coordinates[0] || [];
     const positions = ring.map(([longitude, latitude]) => [latitude, longitude] as [number, number]);
-    return <LayerGroup>{positions.length >= 3 ? <Polygon positions={positions} pathOptions={{ color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.18, weight: 3 }} /> : <Polyline positions={positions} pathOptions={{ color: '#f59e0b', weight: 3 }} />}{positions.map((position, index) => <CircleMarker key={`${position.join('-')}-${index}`} center={position} radius={5} pathOptions={{ color: '#fff', fillColor: '#f59e0b', fillOpacity: 1, weight: 2 }} />)}{isCreatingDatasetPolygon && lastSnap && <CircleMarker center={[lastSnap.coordinate[1], lastSnap.coordinate[0]]} radius={9} pathOptions={{ color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.25, weight: 3 }}><Tooltip permanent direction="top">Snapped to {lastSnap.kind}</Tooltip></CircleMarker>}</LayerGroup>;
+    return <LayerGroup>{positions.length >= 3 ? <Polygon positions={positions} pathOptions={{ color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.18, weight: 3 }} /> : <Polyline positions={positions} pathOptions={{ color: '#f59e0b', weight: 3 }} />}{positions.map((position, index) => <CircleMarker key={`${position.join('-')}-${index}`} center={position} radius={5} pathOptions={{ color: '#fff', fillColor: '#f59e0b', fillOpacity: 1, weight: 2 }} />)}</LayerGroup>;
   };
 
   const CustomLocationPicker = () => {
@@ -1389,7 +1355,6 @@ export const GISMap: React.FC<GISMapProps> = ({
               refreshKey={datasetLayerRefreshKey}
               onPolygonClick={!isReporting && !isPickingLocation && !isEditingDatasetGeometry ? onDatasetPolygonClick : undefined}
               onLoadingChange={onDatasetLayerLoadingChange}
-              onFeaturesLoaded={(layerId, features) => setLoadedDatasetFeatures((previous) => ({ ...previous, [layerId]: features }))}
             />
           ))}
         {activeLayers.has(MapLayer.RS_FIREFIGHTER_DENSITY) &&

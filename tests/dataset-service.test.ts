@@ -8,7 +8,6 @@ import {
   saveDatasetLayerStyle,
   updateDatasetFeatureAttributes,
   updateDatasetFeatureGeometry,
-  createDatasetPolygonFeature,
 } from '../services/datasetService';
 
 describe('dataset/GIS service', () => {
@@ -112,16 +111,6 @@ describe('dataset/GIS service', () => {
       method: 'PATCH',
       body: JSON.stringify({ geometry, source_srid: 4326 }),
     }));
-  });
-
-  it('creates a named polygon feature through the dataset API', async () => {
-    const geometry: GeoJSON.Polygon = { type: 'Polygon', coordinates: [[[18, 43], [19, 43], [18, 44], [18, 43]]] };
-    const feature = { type: 'Feature', id: 8, properties: { name: 'Nova zona' }, geometry };
-    const geometry_metadata = { srid: 4326, is_valid: true, vertex_count: 4 };
-    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 })).mockResolvedValueOnce(new Response(JSON.stringify({ feature, geometry_metadata }), { status: 201 }));
-    vi.stubGlobal('fetch', fetchMock);
-    await expect(createDatasetPolygonFeature(3, 'Nova zona', geometry)).resolves.toEqual({ feature, geometryMetadata: geometry_metadata });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/dataset-layers/3/features', expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Nova zona', geometry, attributes: {}, source_srid: 4326 }) }));
   });
 
   it('rejects non-successful dataset responses', async () => {
