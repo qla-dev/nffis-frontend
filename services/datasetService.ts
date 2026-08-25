@@ -239,6 +239,20 @@ export async function updateDatasetFeatureGeometry(
   return { feature: data.feature, geometryMetadata: data.geometry_metadata };
 }
 
+export async function createDatasetPolygonFeature(
+  layerId: number,
+  name: string,
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon,
+  attributes: Record<string, unknown> = {},
+  sourceSrid = 4326,
+): Promise<{ feature: GeoJSON.Feature; geometryMetadata: DatasetGeometryMetadata }> {
+  const data = await requestJson<{ feature: GeoJSON.Feature; geometry_metadata: DatasetGeometryMetadata }>(
+    `/dataset-layers/${layerId}/features`,
+    { method: 'POST', body: JSON.stringify({ name, geometry, attributes, source_srid: sourceSrid }) },
+  );
+  return { feature: data.feature, geometryMetadata: data.geometry_metadata };
+}
+
 export async function saveDatasetLayerStyle(
   layerId: number,
   style: DatasetLayerStyle

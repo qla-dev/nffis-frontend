@@ -37,6 +37,12 @@ interface DatasetLayerOverlayProps {
   isLoading: boolean;
   errorMessage?: string | null;
   canUpdateLayer: boolean;
+  canCreateLayer: boolean;
+  isCreatingPolygon: boolean;
+  drawingPointCount: number;
+  drawingName: string;
+  snappingEnabled: boolean;
+  snapMessage?: string | null;
   onClose: () => void;
   onToggleLayer: (layerId: number) => void;
   onSelectLayer: (layerId: number) => void;
@@ -49,6 +55,13 @@ interface DatasetLayerOverlayProps {
   onStopGeometryEditing: () => void;
   onUndoGeometryVertex: () => void;
   onClearGeometryBoundary: () => void;
+  onDrawingNameChange: (name: string) => void;
+  onSnappingEnabledChange: (enabled: boolean) => void;
+  onStartPolygonDrawing: () => void;
+  onCancelPolygonDrawing: () => void;
+  onUndoDrawingPoint: () => void;
+  onClearDrawing: () => void;
+  onSaveNewPolygon: () => Promise<void>;
   onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
   onClearFilter: (layerId: number) => void;
 }
@@ -113,6 +126,12 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   isLoading,
   errorMessage,
   canUpdateLayer,
+  canCreateLayer,
+  isCreatingPolygon,
+  drawingPointCount,
+  drawingName,
+  snappingEnabled,
+  snapMessage,
   onClose,
   onToggleLayer,
   onSelectLayer,
@@ -125,6 +144,13 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   onStopGeometryEditing,
   onUndoGeometryVertex,
   onClearGeometryBoundary,
+  onDrawingNameChange,
+  onSnappingEnabledChange,
+  onStartPolygonDrawing,
+  onCancelPolygonDrawing,
+  onUndoDrawingPoint,
+  onClearDrawing,
+  onSaveNewPolygon,
   onUpdateFilter,
   onClearFilter,
 }) => {
@@ -381,6 +407,19 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
               onUpdateFilter={onUpdateFilter}
               onClearFilter={onClearFilter}
               canUpdateLayer={canUpdateLayer}
+              canCreateLayer={canCreateLayer}
+              isCreatingPolygon={isCreatingPolygon}
+              drawingPointCount={drawingPointCount}
+              drawingName={drawingName}
+              snappingEnabled={snappingEnabled}
+              snapMessage={snapMessage}
+              onDrawingNameChange={onDrawingNameChange}
+              onSnappingEnabledChange={onSnappingEnabledChange}
+              onStartPolygonDrawing={onStartPolygonDrawing}
+              onCancelPolygonDrawing={onCancelPolygonDrawing}
+              onUndoDrawingPoint={onUndoDrawingPoint}
+              onClearDrawing={onClearDrawing}
+              onSaveNewPolygon={onSaveNewPolygon}
             />
           </div>
         )}

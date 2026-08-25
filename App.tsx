@@ -10,7 +10,8 @@ import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './ty
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
 import { Waves, Flame, Database } from 'lucide-react';
 import type { DatasetGeometryMetadata, DatasetLayer, DatasetLayerFilterState, DatasetLayerStyle } from './services/datasetService';
-import { fetchDatasetLayers, saveDatasetLayerStyle, updateDatasetFeatureAttributes, updateDatasetFeatureGeometry } from './services/datasetService';
+import { createDatasetPolygonFeature, fetchDatasetLayers, saveDatasetLayerStyle, updateDatasetFeatureAttributes, updateDatasetFeatureGeometry } from './services/datasetService';
+import type { Coordinate } from './lib/gis/snapping';
 import { createIncidentReport, type CreateReportPayload } from './services/reportStatisticsService';
 import type { EditLayerSidebarTabId } from './components/Layers/EditLayerSidebar/EditLayerSidebar';
 import {
@@ -71,6 +72,11 @@ const App: React.FC = () => {
   const [datasetFeatureSaveError, setDatasetFeatureSaveError] = useState<string | null>(null);
   const [datasetGeometryMetadata, setDatasetGeometryMetadata] = useState<DatasetGeometryMetadata | null>(null);
   const [isEditingDatasetGeometry, setIsEditingDatasetGeometry] = useState(false);
+  const [isCreatingDatasetPolygon, setIsCreatingDatasetPolygon] = useState(false);
+  const [datasetDrawingCoordinates, setDatasetDrawingCoordinates] = useState<Coordinate[]>([]);
+  const [datasetDrawingName, setDatasetDrawingName] = useState('');
+  const [datasetSnappingEnabled, setDatasetSnappingEnabled] = useState(true);
+  const [datasetSnapMessage, setDatasetSnapMessage] = useState<string | null>(null);
   const [datasetLayerRefreshKey, setDatasetLayerRefreshKey] = useState(0);
   const [datasetLayers, setDatasetLayers] = useState<DatasetLayer[]>([]);
   const [datasetLayersLoading, setDatasetLayersLoading] = useState(false);
@@ -86,6 +92,7 @@ const App: React.FC = () => {
   const canCreateReports = hasPermission(authUser, 'reports', 'create');
   const canViewDatasetLayers = hasPermission(authUser, 'dataset-layers', 'view');
   const canUpdateDatasetLayers = hasPermission(authUser, 'dataset-layers', 'update');
+  const canCreateDatasetLayers = hasPermission(authUser, 'dataset-layers', 'create');
   const canViewMapLayers = hasPermission(authUser, 'map-layers', 'view');
   const canViewFwi = hasPermission(authUser, 'fire-weather-indices', 'view');
   const canViewAws = hasPermission(authUser, 'aws-monitoring', 'view');
@@ -321,6 +328,50 @@ const App: React.FC = () => {
       : previous);
   }, []);
 
+  const startDatasetPolygonDrawing = useCallback(() => {
+    if (!canCreateDatasetLayers || !selectedDatasetLayerId) return;
+    setIsEditingDatasetGeometry(false);
+    setIsCreatingDatasetPolygon(true);
+    setDatasetDrawingCoordinates([]);
+    setDatasetDrawingName('');
+    setDatasetSnapMessage(null);
+  }, [canCreateDatasetLayers, selectedDatasetLayerId]);
+
+  const cancelDatasetPolygonDrawing = useCallback(() => {
+    setIsCreatingDatasetPolygon(false);
+    setDatasetDrawingCoordinates([]);
+    setDatasetSnapMessage(null);
+  }, []);
+
+  const addDatasetDrawVertex = useCallback((coordinate: Coordinate, snapKind?: 'vertex' | 'segment') => {
+    setDatasetDrawingCoordinates((previous) => {
+      const last = previous.at(-1);
+      if (last?.[0] === coordinate[0] && last?.[1] === coordinate[1]) return previous;
+      return [...previous, coordinate];
+    });
+    setDatasetSnapMessage(snapKind ? `Tačka je spojena na postojeći ${snapKind === 'vertex' ? 'vertex' : 'segment'}.` : null);
+  }, []);
+
+  const saveNewDatasetPolygon = useCallback(async () => {
+    if (!selectedDatasetLayerId || datasetDrawingCoordinates.length < 3 || !datasetDrawingName.trim()) return;
+    const closedRing = [...datasetDrawingCoordinates, datasetDrawingCoordinates[0]];
+    setIsSavingDatasetFeature(true);
+    setDatasetFeatureSaveError(null);
+    try {
+      const result = await createDatasetPolygonFeature(selectedDatasetLayerId, datasetDrawingName.trim(), { type: 'Polygon', coordinates: [closedRing] });
+      setSelectedDatasetFeature(result.feature);
+      setDatasetGeometryMetadata(result.geometryMetadata);
+      setDatasetLayerRefreshKey((previous) => previous + 1);
+      setDatasetLayers((previous) => previous.map((layer) => layer.id === selectedDatasetLayerId ? { ...layer, feature_count: layer.feature_count + 1 } : layer));
+      cancelDatasetPolygonDrawing();
+      setDatasetEditorInitialTab('geometry');
+    } catch {
+      setDatasetFeatureSaveError('Novi poligon nije spremljen. Provjeri obavezna polja layera.');
+    } finally {
+      setIsSavingDatasetFeature(false);
+    }
+  }, [cancelDatasetPolygonDrawing, datasetDrawingCoordinates, datasetDrawingName, selectedDatasetLayerId]);
+
   const handleLogout = useCallback(async () => {
     try {
       await logoutSession();
@@ -483,6 +534,11 @@ const App: React.FC = () => {
             isEditingDatasetGeometry={isEditingDatasetGeometry}
             editingDatasetGeometry={selectedDatasetFeature?.geometry}
             onDatasetGeometryVertex={addDatasetGeometryVertex}
+            selectedDatasetLayerId={selectedDatasetLayerId}
+            isCreatingDatasetPolygon={isCreatingDatasetPolygon}
+            datasetDrawingCoordinates={datasetDrawingCoordinates}
+            datasetSnappingEnabled={datasetSnappingEnabled}
+            onDatasetDrawVertex={addDatasetDrawVertex}
           />
         )}
 
@@ -560,6 +616,19 @@ const App: React.FC = () => {
           onUpdateFilter={updateDatasetLayerFilter}
           onClearFilter={clearDatasetLayerFilter}
           canUpdateLayer={canUpdateDatasetLayers}
+          canCreateLayer={canCreateDatasetLayers}
+          isCreatingPolygon={isCreatingDatasetPolygon}
+          drawingPointCount={datasetDrawingCoordinates.length}
+          drawingName={datasetDrawingName}
+          snappingEnabled={datasetSnappingEnabled}
+          snapMessage={datasetSnapMessage}
+          onDrawingNameChange={setDatasetDrawingName}
+          onSnappingEnabledChange={setDatasetSnappingEnabled}
+          onStartPolygonDrawing={startDatasetPolygonDrawing}
+          onCancelPolygonDrawing={cancelDatasetPolygonDrawing}
+          onUndoDrawingPoint={() => setDatasetDrawingCoordinates((previous) => previous.slice(0, -1))}
+          onClearDrawing={() => setDatasetDrawingCoordinates([])}
+          onSaveNewPolygon={saveNewDatasetPolygon}
         />
 
         {showModal && (
