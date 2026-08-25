@@ -10,7 +10,7 @@ import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './ty
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
 import { Waves, Flame, Database } from 'lucide-react';
 import type { DatasetLayer, DatasetLayerFilterState, DatasetLayerStyle } from './services/datasetService';
-import { fetchDatasetLayers, saveDatasetLayerStyle, updateDatasetFeatureAttributes } from './services/datasetService';
+import { bulkSaveDatasetFeatureGeometries, createDatasetPolygon, fetchDatasetLayers, saveDatasetLayerStyle, updateDatasetFeatureAttributes } from './services/datasetService';
 import { createIncidentReport, type CreateReportPayload } from './services/reportStatisticsService';
 import type { EditLayerSidebarTabId } from './components/Layers/EditLayerSidebar/EditLayerSidebar';
 import {
@@ -20,6 +20,7 @@ import {
   logout as logoutSession,
   type AuthUser,
 } from './lib/auth/session';
+import { changedFeatures, cloneFeatures, closeRing, type GeoEditorMode, type Position } from './lib/gis/geoEditor';
 
 const BASE_LAYER_IDS = [
   MapLayer.SATELLITE,
@@ -77,6 +78,17 @@ const App: React.FC = () => {
   const [loadingDatasetLayerIds, setLoadingDatasetLayerIds] = useState<Set<number>>(new Set());
   const [selectedDatasetLayerId, setSelectedDatasetLayerId] = useState<number | null>(null);
   const [datasetLayerFilters, setDatasetLayerFilters] = useState<Record<number, DatasetLayerFilterState>>({});
+  const [loadedDatasetFeatures, setLoadedDatasetFeatures] = useState<Record<number, GeoJSON.FeatureCollection | null>>({});
+  const [geoEditorMode, setGeoEditorMode] = useState<GeoEditorMode>('view');
+  const [geoEditorOriginalFeatures, setGeoEditorOriginalFeatures] = useState<GeoJSON.Feature[]>([]);
+  const [geoEditorFeatures, setGeoEditorFeatures] = useState<GeoJSON.Feature[]>([]);
+  const [geoEditorDrawing, setGeoEditorDrawing] = useState<Position[]>([]);
+  const [geoEditorSnappingEnabled, setGeoEditorSnappingEnabled] = useState(true);
+  const [geoEditorSelectedFeatureId, setGeoEditorSelectedFeatureId] = useState<string | null>(null);
+  const [geoEditorNewPolygonName, setGeoEditorNewPolygonName] = useState('');
+  const [isSavingGeometry, setIsSavingGeometry] = useState(false);
+  const [geometrySaveError, setGeometrySaveError] = useState<string | null>(null);
+  const geoEditorLayerIdRef = useRef<number | null>(null);
   const appliedDefaultDatasetLayersRef = useRef(false);
 
   const t = TRANSLATIONS[state.language];
@@ -84,6 +96,7 @@ const App: React.FC = () => {
   const canCreateReports = hasPermission(authUser, 'reports', 'create');
   const canViewDatasetLayers = hasPermission(authUser, 'dataset-layers', 'view');
   const canUpdateDatasetLayers = hasPermission(authUser, 'dataset-layers', 'update');
+  const canCreateDatasetLayers = hasPermission(authUser, 'dataset-layers', 'create');
   const canViewMapLayers = hasPermission(authUser, 'map-layers', 'view');
   const canViewFwi = hasPermission(authUser, 'fire-weather-indices', 'view');
   const canViewAws = hasPermission(authUser, 'aws-monitoring', 'view');
@@ -204,17 +217,29 @@ const App: React.FC = () => {
 
     setSelectedDatasetLayerId(layerId);
     setSelectedDatasetFeature(feature || null);
-    setDatasetEditorInitialTab(feature && canUpdateDatasetLayers ? 'attributes' : feature ? 'information' : 'visibility');
+    const featureId = feature?.id ?? (feature?.properties as Record<string, unknown> | undefined)?.id;
+    if (geoEditorMode === 'edit-single' && featureId !== undefined && featureId !== null) {
+      setGeoEditorSelectedFeatureId(String(featureId));
+      setDatasetEditorInitialTab('geoeditor');
+    } else {
+      setDatasetEditorInitialTab(feature && canUpdateDatasetLayers ? 'attributes' : feature ? 'information' : 'visibility');
+    }
     setDatasetFeatureSaveError(null);
     setIsDatasetLayerPanelOpen(true);
     setIsDatasetFilterPanelOpen(true);
-  }, [canUpdateDatasetLayers, canViewDatasetLayers]);
+  }, [canUpdateDatasetLayers, canViewDatasetLayers, geoEditorMode]);
 
   const selectDatasetLayer = useCallback((layerId: number) => {
     setSelectedDatasetLayerId(layerId);
     setSelectedDatasetFeature(null);
     setDatasetEditorInitialTab('visibility');
     setDatasetFeatureSaveError(null);
+    setGeoEditorMode('view');
+    setGeoEditorDrawing([]);
+    setGeoEditorSelectedFeatureId(null);
+    setGeoEditorOriginalFeatures([]);
+    setGeoEditorFeatures([]);
+    geoEditorLayerIdRef.current = null;
     setIsDatasetFilterPanelOpen(true);
   }, []);
 
@@ -381,6 +406,97 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const handleDatasetFeaturesLoaded = useCallback((layerId: number, collection: GeoJSON.FeatureCollection | null) => {
+    setLoadedDatasetFeatures((previous) => ({ ...previous, [layerId]: collection }));
+    if (layerId !== selectedDatasetLayerId || !collection || geoEditorLayerIdRef.current === layerId) return;
+    const features = cloneFeatures(collection.features);
+    setGeoEditorOriginalFeatures(features);
+    setGeoEditorFeatures(cloneFeatures(features));
+    geoEditorLayerIdRef.current = layerId;
+  }, [selectedDatasetLayerId]);
+
+  const geoEditorPendingChanges = changedFeatures(geoEditorOriginalFeatures, geoEditorFeatures).length;
+
+  const handleGeoEditorModeChange = useCallback((mode: GeoEditorMode) => {
+    const layer = datasetLayers.find((candidate) => candidate.id === selectedDatasetLayerId);
+    if (!layer || layer.geometry_family !== 'polygon') {
+      setGeometrySaveError('Select a polygon layer first.');
+      return;
+    }
+    if (mode === 'draw' && !canCreateDatasetLayers) {
+      setGeometrySaveError('Your role cannot create dataset polygons.');
+      return;
+    }
+    if ((mode === 'edit-single' || mode === 'edit-shared') && !canUpdateDatasetLayers) {
+      setGeometrySaveError('Your role cannot update dataset polygons.');
+      return;
+    }
+    const loaded = loadedDatasetFeatures[layer.id];
+    if (!loaded) {
+      setGeometrySaveError('Show the layer and wait for its data to load before editing.');
+      return;
+    }
+    if (geoEditorLayerIdRef.current !== layer.id) {
+      const features = cloneFeatures(loaded.features);
+      setGeoEditorOriginalFeatures(features);
+      setGeoEditorFeatures(cloneFeatures(features));
+      geoEditorLayerIdRef.current = layer.id;
+    }
+    setActiveDatasetLayerIds((previous) => new Set(previous).add(layer.id));
+    setGeometrySaveError(null);
+    setGeoEditorMode(mode);
+  }, [canCreateDatasetLayers, canUpdateDatasetLayers, datasetLayers, loadedDatasetFeatures, selectedDatasetLayerId]);
+
+  const finishGeoEditorDrawing = useCallback(() => {
+    if (geoEditorDrawing.length < 3 || !geoEditorNewPolygonName.trim()) return;
+    const temporaryId = `nffis-new-${Date.now()}`;
+    const feature: GeoJSON.Feature<GeoJSON.Polygon> = {
+      type: 'Feature', id: temporaryId,
+      properties: { id: temporaryId, name: geoEditorNewPolygonName.trim(), __nffis_new: true },
+      geometry: { type: 'Polygon', coordinates: [closeRing(geoEditorDrawing)] },
+    };
+    setGeoEditorFeatures((previous) => [...previous, feature]);
+    setGeoEditorDrawing([]);
+    setGeoEditorNewPolygonName('');
+    setGeoEditorMode('view');
+  }, [geoEditorDrawing, geoEditorNewPolygonName]);
+
+  const resetGeoEditor = useCallback(() => {
+    setGeoEditorFeatures(cloneFeatures(geoEditorOriginalFeatures));
+    setGeoEditorDrawing([]);
+    setGeoEditorSelectedFeatureId(null);
+    setGeometrySaveError(null);
+    setGeoEditorMode('view');
+  }, [geoEditorOriginalFeatures]);
+
+  const saveGeoEditor = useCallback(async () => {
+    if (!selectedDatasetLayerId) return;
+    const changed = changedFeatures(geoEditorOriginalFeatures, geoEditorFeatures);
+    const created = changed.filter((feature) => feature.properties?.__nffis_new === true);
+    const updated = changed.filter((feature) => feature.properties?.__nffis_new !== true);
+    setIsSavingGeometry(true);
+    setGeometrySaveError(null);
+    try {
+      if (updated.length) {
+        await bulkSaveDatasetFeatureGeometries(selectedDatasetLayerId, updated.map((feature) => ({ id: feature.id ?? feature.properties?.id as string | number, geometry: feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon })));
+      }
+      for (const feature of created) {
+        await createDatasetPolygon(selectedDatasetLayerId, String(feature.properties?.name || 'Polygon'), feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon);
+      }
+      setGeoEditorMode('view');
+      setGeoEditorDrawing([]);
+      setGeoEditorSelectedFeatureId(null);
+      setGeoEditorOriginalFeatures([]);
+      setGeoEditorFeatures([]);
+      geoEditorLayerIdRef.current = null;
+      setDatasetLayerRefreshKey((previous) => previous + 1);
+    } catch (error) {
+      setGeometrySaveError(error instanceof Error ? error.message : 'Unable to save polygon geometry.');
+    } finally {
+      setIsSavingGeometry(false);
+    }
+  }, [geoEditorFeatures, geoEditorOriginalFeatures, selectedDatasetLayerId]);
+
   return (
     <div className={`flex h-screen w-full overflow-hidden ${state.isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       {authUser && <Navigation
@@ -421,6 +537,15 @@ const App: React.FC = () => {
             canViewFwi={canViewFwi}
             canViewAws={canViewAws}
             canAdjustAws={canAdjustAws}
+            geoEditorMode={geoEditorMode}
+            geoEditorFeatures={geoEditorFeatures}
+            geoEditorSelectedFeatureId={geoEditorSelectedFeatureId}
+            geoEditorDrawing={geoEditorDrawing}
+            geoEditorSnappingEnabled={geoEditorSnappingEnabled}
+            geoEditorShowDraft={geoEditorPendingChanges > 0}
+            onGeoEditorDrawingChange={setGeoEditorDrawing}
+            onGeoEditorFeaturesChange={setGeoEditorFeatures}
+            onDatasetFeaturesLoaded={handleDatasetFeaturesLoaded}
           />
         )}
 
@@ -491,6 +616,23 @@ const App: React.FC = () => {
           onUpdateFilter={updateDatasetLayerFilter}
           onClearFilter={clearDatasetLayerFilter}
           canUpdateLayer={canUpdateDatasetLayers}
+          canCreateLayer={canCreateDatasetLayers}
+          geoEditorMode={geoEditorMode}
+          geoEditorDrawing={geoEditorDrawing}
+          geoEditorSnappingEnabled={geoEditorSnappingEnabled}
+          geoEditorNewPolygonName={geoEditorNewPolygonName}
+          geoEditorPendingChanges={geoEditorPendingChanges}
+          geoEditorSelectedFeatureId={geoEditorSelectedFeatureId}
+          isSavingGeometry={isSavingGeometry}
+          geometrySaveError={geometrySaveError}
+          onGeoEditorModeChange={handleGeoEditorModeChange}
+          onGeoEditorSnappingChange={setGeoEditorSnappingEnabled}
+          onGeoEditorNewPolygonNameChange={setGeoEditorNewPolygonName}
+          onGeoEditorUndoDrawing={() => setGeoEditorDrawing((previous) => previous.slice(0, -1))}
+          onGeoEditorClearDrawing={() => setGeoEditorDrawing([])}
+          onGeoEditorFinishDrawing={finishGeoEditorDrawing}
+          onGeoEditorSave={saveGeoEditor}
+          onGeoEditorReset={resetGeoEditor}
         />
 
         {showModal && (

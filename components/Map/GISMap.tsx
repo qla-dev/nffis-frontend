@@ -29,8 +29,11 @@ import { BosnianFWIHeatLayer } from '../Layers/FWI/BosnianFWIHeatLayer';
 import { AWSFBiHLayer } from './layers/AWS/AWSFBiHLayer';
 import { AWSRsLayer } from './layers/AWS/AWSRsLayer';
 import { DatasetGeoJsonLayer } from './layers/Datasets/DatasetGeoJsonLayer';
+import { DatasetGeoEditorLayer } from './layers/Datasets/DatasetGeoEditorLayer';
 import { LiveWindVectorLayer } from './layers/Wind/LiveWindVectorLayer';
 import type { DatasetLayer, DatasetLayerFilterState } from '../../services/datasetService';
+import type { GeoEditorMode, Position } from '../../lib/gis/geoEditor';
+import { BH_FWI_CSS_GRADIENT, BH_FWI_RASTER_BOUNDS } from '../../lib/fwi/bhFwiColorScale';
 
 const GlobalLeaflet = (L as any).default || L;
 const FIRE_HEAT_GRADIENT = {
@@ -153,6 +156,15 @@ interface GISMapProps {
   canViewFwi: boolean;
   canViewAws: boolean;
   canAdjustAws: boolean;
+  geoEditorMode: GeoEditorMode;
+  geoEditorFeatures: GeoJSON.Feature[];
+  geoEditorSelectedFeatureId: string | null;
+  geoEditorDrawing: Position[];
+  geoEditorSnappingEnabled: boolean;
+  geoEditorShowDraft: boolean;
+  onGeoEditorDrawingChange: (positions: Position[]) => void;
+  onGeoEditorFeaturesChange: (features: GeoJSON.Feature[]) => void;
+  onDatasetFeaturesLoaded: (layerId: number, features: GeoJSON.FeatureCollection | null) => void;
 }
 
 interface FireIndexWeatherData {
@@ -206,6 +218,15 @@ export const GISMap: React.FC<GISMapProps> = ({
   canViewFwi,
   canViewAws,
   canAdjustAws,
+  geoEditorMode,
+  geoEditorFeatures,
+  geoEditorSelectedFeatureId,
+  geoEditorDrawing,
+  geoEditorSnappingEnabled,
+  geoEditorShowDraft,
+  onGeoEditorDrawingChange,
+  onGeoEditorFeaturesChange,
+  onDatasetFeaturesLoaded,
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
   const t = TRANSLATIONS[language];
@@ -649,8 +670,8 @@ export const GISMap: React.FC<GISMapProps> = ({
         title: t.dashboard.fwiBosnian, 
         min: 0, 
         max: 80, 
-        gradient: 'bg-gradient-to-r from-green-500 via-orange-500 to-red-500', 
-        iconColor: 'bg-red-500',
+        gradient: BH_FWI_CSS_GRADIENT,
+        iconGradient: BH_FWI_CSS_GRADIENT,
         currentValue: activeFwiValue
       };
     }
@@ -1310,7 +1331,8 @@ export const GISMap: React.FC<GISMapProps> = ({
         />
         {canViewFwi && <BosnianFWIHeatLayer
           points={forestFwiData}
-          rasterBounds={heatViewportBounds ?? undefined}
+          rasterBounds={BH_FWI_RASTER_BOUNDS}
+          rasterMask={bihBorderData as GeoJSON.FeatureCollection}
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_BOSNIAN)}
         />}
@@ -1333,10 +1355,21 @@ export const GISMap: React.FC<GISMapProps> = ({
               filters={datasetLayerFilters[layer.id]}
               pane={DATASET_LAYER_PANE}
               refreshKey={datasetLayerRefreshKey}
-              onPolygonClick={!isReporting && !isPickingLocation ? onDatasetPolygonClick : undefined}
+              onPolygonClick={!isReporting && !isPickingLocation && geoEditorMode !== 'draw' && geoEditorMode !== 'edit-shared' ? onDatasetPolygonClick : undefined}
               onLoadingChange={onDatasetLayerLoadingChange}
+              onFeaturesLoaded={onDatasetFeaturesLoaded}
             />
           ))}
+        <DatasetGeoEditorLayer
+          mode={geoEditorMode}
+          features={geoEditorFeatures}
+          selectedFeatureId={geoEditorSelectedFeatureId}
+          drawing={geoEditorDrawing}
+          snappingEnabled={geoEditorSnappingEnabled}
+          showDraft={geoEditorShowDraft}
+          onDrawingChange={onGeoEditorDrawingChange}
+          onFeaturesChange={onGeoEditorFeaturesChange}
+        />
         {activeLayers.has(MapLayer.RS_FIREFIGHTER_DENSITY) &&
           firefighterDensityData.features.length > 0 && (
             <GeoJSON
@@ -2042,7 +2075,7 @@ export const GISMap: React.FC<GISMapProps> = ({
         <div className="absolute bottom-8 right-24 z-[2000] hidden md:flex flex-col bg-slate-950/90 backdrop-blur-md border border-slate-800 p-4 rounded-xl shadow-2xl w-80 animate-in slide-in-from-right-2 duration-300">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <div className={`w-2.5 h-2.5 rounded-full ${activeFwiLayerInfo.iconColor} shadow-[0_0_8px_rgba(239,68,68,0.5)]`} />
+              <div className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_rgba(249,115,22,0.55)]" style={{ background: activeFwiLayerInfo.iconGradient }} />
               <span className="text-[12px] font-black text-white tracking-wide">{activeFwiLayerInfo.title}</span>
             </div>
             <span className="text-[10px] font-black text-slate-500 tracking-widest uppercase opacity-80">Index Scale</span>
@@ -2062,7 +2095,7 @@ export const GISMap: React.FC<GISMapProps> = ({
             )}
             
             {/* Gradient Scale Bar */}
-            <div className={`h-4 w-full rounded-full ${activeFwiLayerInfo.gradient} shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] relative overflow-hidden border border-white/10`}>
+            <div className="h-4 w-full rounded-full shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] relative overflow-hidden border border-white/10" style={{ background: activeFwiLayerInfo.gradient }}>
               {/* Scale Ticks */}
               <div className="absolute inset-0 flex justify-between px-[1px]">
                 {[...Array(9)].map((_, i) => (

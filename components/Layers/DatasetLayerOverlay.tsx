@@ -18,6 +18,7 @@ import type {
   DatasetLayerStyle,
 } from '../../services/datasetService';
 import { EditLayerSidebar, type EditLayerSidebarTabId } from './EditLayerSidebar/EditLayerSidebar';
+import type { GeoEditorMode, Position } from '../../lib/gis/geoEditor';
 
 interface DatasetLayerOverlayProps {
   isOpen: boolean;
@@ -34,6 +35,15 @@ interface DatasetLayerOverlayProps {
   isLoading: boolean;
   errorMessage?: string | null;
   canUpdateLayer: boolean;
+  canCreateLayer: boolean;
+  geoEditorMode: GeoEditorMode;
+  geoEditorDrawing: Position[];
+  geoEditorSnappingEnabled: boolean;
+  geoEditorNewPolygonName: string;
+  geoEditorPendingChanges: number;
+  geoEditorSelectedFeatureId: string | null;
+  isSavingGeometry: boolean;
+  geometrySaveError?: string | null;
   onClose: () => void;
   onToggleLayer: (layerId: number) => void;
   onSelectLayer: (layerId: number) => void;
@@ -43,6 +53,14 @@ interface DatasetLayerOverlayProps {
   onSaveFeatureAttributes: (attributes: Record<string, unknown>) => Promise<void>;
   onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
   onClearFilter: (layerId: number) => void;
+  onGeoEditorModeChange: (mode: GeoEditorMode) => void;
+  onGeoEditorSnappingChange: (enabled: boolean) => void;
+  onGeoEditorNewPolygonNameChange: (name: string) => void;
+  onGeoEditorUndoDrawing: () => void;
+  onGeoEditorClearDrawing: () => void;
+  onGeoEditorFinishDrawing: () => void;
+  onGeoEditorSave: () => Promise<void>;
+  onGeoEditorReset: () => void;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -103,6 +121,15 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   isLoading,
   errorMessage,
   canUpdateLayer,
+  canCreateLayer,
+  geoEditorMode,
+  geoEditorDrawing,
+  geoEditorSnappingEnabled,
+  geoEditorNewPolygonName,
+  geoEditorPendingChanges,
+  geoEditorSelectedFeatureId,
+  isSavingGeometry,
+  geometrySaveError,
   onClose,
   onToggleLayer,
   onSelectLayer,
@@ -112,6 +139,14 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   onSaveFeatureAttributes,
   onUpdateFilter,
   onClearFilter,
+  onGeoEditorModeChange,
+  onGeoEditorSnappingChange,
+  onGeoEditorNewPolygonNameChange,
+  onGeoEditorUndoDrawing,
+  onGeoEditorClearDrawing,
+  onGeoEditorFinishDrawing,
+  onGeoEditorSave,
+  onGeoEditorReset,
 }) => {
   const [search, setSearch] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
@@ -359,6 +394,23 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
               onUpdateFilter={onUpdateFilter}
               onClearFilter={onClearFilter}
               canUpdateLayer={canUpdateLayer}
+              canCreateLayer={canCreateLayer}
+              geoEditorMode={geoEditorMode}
+              geoEditorDrawing={geoEditorDrawing}
+              geoEditorSnappingEnabled={geoEditorSnappingEnabled}
+              geoEditorNewPolygonName={geoEditorNewPolygonName}
+              geoEditorPendingChanges={geoEditorPendingChanges}
+              geoEditorSelectedFeatureId={geoEditorSelectedFeatureId}
+              isSavingGeometry={isSavingGeometry}
+              geometrySaveError={geometrySaveError}
+              onGeoEditorModeChange={onGeoEditorModeChange}
+              onGeoEditorSnappingChange={onGeoEditorSnappingChange}
+              onGeoEditorNewPolygonNameChange={onGeoEditorNewPolygonNameChange}
+              onGeoEditorUndoDrawing={onGeoEditorUndoDrawing}
+              onGeoEditorClearDrawing={onGeoEditorClearDrawing}
+              onGeoEditorFinishDrawing={onGeoEditorFinishDrawing}
+              onGeoEditorSave={onGeoEditorSave}
+              onGeoEditorReset={onGeoEditorReset}
             />
           </div>
         )}

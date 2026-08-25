@@ -7,6 +7,8 @@ import {
   fetchDatasetLayers,
   saveDatasetLayerStyle,
   updateDatasetFeatureAttributes,
+  bulkSaveDatasetFeatureGeometries,
+  createDatasetPolygon,
 } from '../services/datasetService';
 
 describe('dataset/GIS service', () => {
@@ -90,5 +92,21 @@ describe('dataset/GIS service', () => {
   it('rejects non-successful dataset responses', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 403 })));
     await expect(fetchDatasetLayers()).rejects.toThrow('API request failed with 403');
+  });
+
+  it('creates polygons and bulk-saves edited PostGIS geometries', async () => {
+    const geometry: GeoJSON.Polygon = { type: 'Polygon', coordinates: [[[18, 44], [19, 44], [19, 45], [18, 44]]] };
+    const feature = { type: 'Feature', id: 91, properties: { name: 'Zone' }, geometry };
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(async () => { document.cookie = 'XSRF-TOKEN=geo-csrf; path=/'; return new Response(null, { status: 204 }); })
+      .mockResolvedValueOnce(new Response(JSON.stringify({ feature }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ updated_feature_ids: ['91'] }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createDatasetPolygon(7, 'Zone', geometry)).resolves.toEqual(feature);
+    await expect(bulkSaveDatasetFeatureGeometries(7, [{ id: 91, geometry }])).resolves.toEqual(['91']);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/dataset-layers/7/features', expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'Zone', geometry, attributes: {}, source_srid: 4326 }) }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/dataset-layers/7/features', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ changes: [{ id: 91, geometry }], source_srid: 4326 }) }));
   });
 });

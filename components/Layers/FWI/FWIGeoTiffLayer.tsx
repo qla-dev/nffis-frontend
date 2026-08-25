@@ -18,13 +18,13 @@ interface FWIGeoTiffLayerProps<TPoint extends FwiRasterPoint> {
   displayMin: number;
   displayMax: number;
   colorScaleName?: string;
-  colorScaleImage?: HTMLCanvasElement | HTMLImageElement;
   rasterBounds?: {
     west: number;
     east: number;
     south: number;
     north: number;
   };
+  rasterMask?: GeoJSON.FeatureCollection;
   debugLabel?: string;
   opacity?: number;
   influenceRadius?: number;
@@ -36,6 +36,44 @@ const GRID_WIDTH = 160;
 const GRID_HEIGHT = 160;
 const DEFAULT_PADDING = 0.3;
 
+type PreparedMaskPolygon = {
+  rings: number[][][];
+  west: number;
+  east: number;
+  south: number;
+  north: number;
+};
+
+const prepareMaskPolygons = (mask?: GeoJSON.FeatureCollection): PreparedMaskPolygon[] => {
+  const polygons: number[][][][] = [];
+  mask?.features.forEach((feature) => {
+    if (feature.geometry?.type === 'Polygon') polygons.push(feature.geometry.coordinates);
+    if (feature.geometry?.type === 'MultiPolygon') polygons.push(...feature.geometry.coordinates);
+  });
+  return polygons.filter((rings) => rings[0]?.length >= 3).map((rings) => {
+    const longitudes = rings[0].map((position) => position[0]);
+    const latitudes = rings[0].map((position) => position[1]);
+    return { rings, west: Math.min(...longitudes), east: Math.max(...longitudes), south: Math.min(...latitudes), north: Math.max(...latitudes) };
+  });
+};
+
+const pointInRing = (lng: number, lat: number, ring: number[][]): boolean => {
+  let inside = false;
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index, index += 1) {
+    const [currentLng, currentLat] = ring[index];
+    const [previousLng, previousLat] = ring[previous];
+    if ((currentLat > lat) !== (previousLat > lat)
+      && lng < ((previousLng - currentLng) * (lat - currentLat)) / (previousLat - currentLat) + currentLng) inside = !inside;
+  }
+  return inside;
+};
+
+const pointInMask = (lng: number, lat: number, polygons: PreparedMaskPolygon[]): boolean => polygons.some((polygon) => (
+  lng >= polygon.west && lng <= polygon.east && lat >= polygon.south && lat <= polygon.north
+  && pointInRing(lng, lat, polygon.rings[0])
+  && !polygon.rings.slice(1).some((hole) => pointInRing(lng, lat, hole))
+));
+
 const createRasterSurface = <TPoint extends FwiRasterPoint>(
   points: TPoint[],
   valueAccessor: (point: TPoint) => number,
@@ -45,7 +83,8 @@ const createRasterSurface = <TPoint extends FwiRasterPoint>(
     east: number;
     south: number;
     north: number;
-  }
+  },
+  rasterMask?: GeoJSON.FeatureCollection,
 ) => {
   const latitudes = points.map((point) => point.lat);
   const longitudes = points.map((point) => point.lng);
@@ -56,6 +95,7 @@ const createRasterSurface = <TPoint extends FwiRasterPoint>(
   const latSpan = north - south;
   const lngSpan = east - west;
   const data = new Float32Array(GRID_WIDTH * GRID_HEIGHT);
+  const maskPolygons = prepareMaskPolygons(rasterMask);
 
   for (let y = 0; y < GRID_HEIGHT; y += 1) {
     const lat = north - ((y + 0.5) / GRID_HEIGHT) * latSpan;
@@ -63,6 +103,10 @@ const createRasterSurface = <TPoint extends FwiRasterPoint>(
 
     for (let x = 0; x < GRID_WIDTH; x += 1) {
       const lng = west + ((x + 0.5) / GRID_WIDTH) * lngSpan;
+      if (maskPolygons.length > 0 && !pointInMask(lng, lat, maskPolygons)) {
+        data[(y * GRID_WIDTH) + x] = NO_DATA_VALUE;
+        continue;
+      }
       let weightedValue = 0;
       let totalWeight = 0;
 
@@ -90,8 +134,8 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
   displayMin,
   displayMax,
   colorScaleName,
-  colorScaleImage,
   rasterBounds,
+  rasterMask,
   debugLabel = colorScaleName || 'CustomScale',
   opacity = 0.72,
   influenceRadius = 0.42,
@@ -165,7 +209,7 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
         mapSize: map.getSize(),
       });
 
-      const raster = createRasterSurface(points, valueAccessor, influenceRadius, rasterBounds);
+      const raster = createRasterSurface(points, valueAccessor, influenceRadius, rasterBounds, rasterMask);
       const validRasterValues = Array.from(raster.data).filter((value) => value !== NO_DATA_VALUE);
       console.info(logPrefix, 'raster surface ready', {
         bounds: {
@@ -214,7 +258,6 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
           clampLow: true,
           clampHigh: true,
           colorScale: colorScaleName,
-          colorScaleImage: colorScaleImage,
           displayMin,
           displayMax,
         }),
@@ -239,7 +282,6 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
     };
   }, [
     colorScaleName,
-    colorScaleImage,
     displayMax,
     displayMin,
     influenceRadius,
@@ -248,6 +290,7 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
     pane,
     points,
     rasterBounds,
+    rasterMask,
     serializedPoints,
     valueAccessor,
     visible,

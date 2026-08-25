@@ -58,9 +58,31 @@ export const VisibilityTab: React.FC<VisibilityTabProps> = ({
 
   const currentFilter = filter || {};
   const count = filterCount(currentFilter);
+  const selectableOptions = options.filter((option) => option.kind !== 'range');
+  const allValuesSelected = selectableOptions.length > 0 && selectableOptions.every((option) => {
+    const values = (option.values || []).map((entry) => String(entry.value ?? ''));
+    const selected = currentFilter.values?.[option.name] || [];
+    return values.length > 0 && values.every((value) => selected.includes(value));
+  });
 
   const updateFilter = (next: DatasetLayerFilterState) => {
     onUpdateFilter(layer.id, next);
+  };
+
+  const handleVisibilityClick = () => {
+    if (active && allValuesSelected) {
+      onClearFilter(layer.id);
+      onToggleLayer(layer.id);
+      return;
+    }
+
+    const values = selectableOptions.reduce<Record<string, string[]>>((selection, option) => {
+      selection[option.name] = (option.values || []).map((entry) => String(entry.value ?? ''));
+      return selection;
+    }, {});
+
+    updateFilter({ ...currentFilter, values });
+    if (!active) onToggleLayer(layer.id);
   };
 
   return (
@@ -72,7 +94,7 @@ export const VisibilityTab: React.FC<VisibilityTabProps> = ({
             ? 'border-blue-500/40 bg-blue-600/15 text-blue-100'
             : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
         }`}
-        onClick={() => onToggleLayer(layer.id)}
+        onClick={handleVisibilityClick}
       >
         {active ? <Eye size={16} /> : <EyeOff size={16} />}
         {active ? 'Visible' : 'Hidden'}

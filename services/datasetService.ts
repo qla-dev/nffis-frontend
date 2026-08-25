@@ -210,6 +210,44 @@ export async function updateDatasetFeatureAttributes(
   return data.feature;
 }
 
+export async function saveDatasetFeatureGeometry(
+  layerId: number,
+  featureId: string | number,
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon,
+  sourceSrid = 4326,
+): Promise<GeoJSON.Feature> {
+  const data = await requestJson<{ feature: GeoJSON.Feature }>(`/dataset-layers/${layerId}/features/${encodeURIComponent(String(featureId))}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ geometry, source_srid: sourceSrid }),
+  });
+  return data.feature;
+}
+
+export async function bulkSaveDatasetFeatureGeometries(
+  layerId: number,
+  changes: Array<{ id: string | number; geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon }>,
+  sourceSrid = 4326,
+): Promise<string[]> {
+  const data = await requestJson<{ updated_feature_ids: string[] }>(`/dataset-layers/${layerId}/features`, {
+    method: 'PATCH',
+    body: JSON.stringify({ changes, source_srid: sourceSrid }),
+  });
+  return data.updated_feature_ids;
+}
+
+export async function createDatasetPolygon(
+  layerId: number,
+  name: string,
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon,
+  attributes: Record<string, unknown> = {},
+): Promise<GeoJSON.Feature> {
+  const data = await requestJson<{ feature: GeoJSON.Feature }>(`/dataset-layers/${layerId}/features`, {
+    method: 'POST',
+    body: JSON.stringify({ name, geometry, attributes, source_srid: 4326 }),
+  });
+  return data.feature;
+}
+
 export async function saveDatasetLayerStyle(
   layerId: number,
   style: DatasetLayerStyle

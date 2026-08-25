@@ -1,5 +1,25 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback } from 'react';
+import * as plotty from 'plotty';
+// leaflet-geotiff 1.1.2 installs its own Plotty 0.2 instance. Registering the
+// scale only on the app's Plotty 0.4 instance leaves the renderer unaware of it.
+import * as leafletGeoTiffPlotty from '@qartlabs/leaflet-geotiff/node_modules/plotty';
 import { FWIGeoTiffLayer } from './FWIGeoTiffLayer';
+import {
+  BH_FWI_COLOR_SCALE_NAME,
+  BH_FWI_COLOR_STOPS,
+  BH_FWI_RASTER_BOUNDS,
+} from '../../../lib/fwi/bhFwiColorScale';
+
+plotty.addColorScale(
+  BH_FWI_COLOR_SCALE_NAME,
+  BH_FWI_COLOR_STOPS.map((stop) => stop.color),
+  BH_FWI_COLOR_STOPS.map((stop) => stop.position),
+);
+leafletGeoTiffPlotty.addColorScale(
+  BH_FWI_COLOR_SCALE_NAME,
+  BH_FWI_COLOR_STOPS.map((stop) => stop.color),
+  BH_FWI_COLOR_STOPS.map((stop) => stop.position),
+);
 
 interface BosnianFWIHeatLayerProps {
   points: Array<{
@@ -16,6 +36,7 @@ interface BosnianFWIHeatLayerProps {
   };
   pane?: string;
   visible: boolean;
+  rasterMask?: GeoJSON.FeatureCollection;
 }
 
 export const BosnianFWIHeatLayer: React.FC<BosnianFWIHeatLayerProps> = ({
@@ -23,27 +44,12 @@ export const BosnianFWIHeatLayer: React.FC<BosnianFWIHeatLayerProps> = ({
   rasterBounds,
   pane,
   visible,
+  rasterMask,
 }) => {
   const getFwiValue = useCallback(
     (point: BosnianFWIHeatLayerProps['points'][number]) => point.fwiBosnian,
     []
   );
-
-  const fwiColorScale = useMemo(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 1;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      const gradient = ctx.createLinearGradient(0, 0, 256, 0);
-      gradient.addColorStop(0, '#22c55e');   // Green
-      gradient.addColorStop(0.5, '#f97316'); // Orange
-      gradient.addColorStop(1, '#ef4444');   // Red
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 256, 1);
-    }
-    return canvas;
-  }, []);
 
   return (
     <FWIGeoTiffLayer
@@ -52,10 +58,11 @@ export const BosnianFWIHeatLayer: React.FC<BosnianFWIHeatLayerProps> = ({
       valueAccessor={getFwiValue}
       displayMin={0}
       displayMax={80}
-      colorScaleImage={fwiColorScale}
-      rasterBounds={rasterBounds}
+      colorScaleName={BH_FWI_COLOR_SCALE_NAME}
+      rasterBounds={rasterBounds ?? BH_FWI_RASTER_BOUNDS}
+      rasterMask={rasterMask}
       debugLabel="BosnianFWI"
-      opacity={0.55}
+      opacity={0.72}
       influenceRadius={0.65}
       pane={pane}
     />

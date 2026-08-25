@@ -6,6 +6,7 @@ import {
   Eye,
   Info,
   Paintbrush,
+  PenTool,
   PanelRightClose,
   TableProperties,
 } from 'lucide-react';
@@ -19,13 +20,16 @@ import { InformationTab } from './InformationTab';
 import { SourceTab } from './SourceTab';
 import { SymbologyTab } from './SymbologyTab';
 import { AttributesTab } from './AttributesTab';
+import { GeoEditorTab } from './GeoEditorTab';
+import type { GeoEditorMode, Position } from '../../../lib/gis/geoEditor';
 
 export type EditLayerSidebarTabId =
   | 'visibility'
   | 'information'
   | 'source'
   | 'symbology'
-  | 'attributes';
+  | 'attributes'
+  | 'geoeditor';
 
 interface EditLayerSidebarProps {
   layer: DatasetLayer | null;
@@ -36,6 +40,15 @@ interface EditLayerSidebarProps {
   isSavingFeature: boolean;
   saveError?: string | null;
   canUpdateLayer: boolean;
+  canCreateLayer: boolean;
+  geoEditorMode: GeoEditorMode;
+  geoEditorDrawing: Position[];
+  geoEditorSnappingEnabled: boolean;
+  geoEditorNewPolygonName: string;
+  geoEditorPendingChanges: number;
+  geoEditorSelectedFeatureId: string | null;
+  isSavingGeometry: boolean;
+  geometrySaveError?: string | null;
   onCollapse: () => void;
   onToggleLayer: (layerId: number) => void;
   onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
@@ -43,6 +56,14 @@ interface EditLayerSidebarProps {
   onUpdateLayerStyle: (layerId: number, style: DatasetLayerStyle) => void;
   onSaveLayerStyle: (layerId: number, style: DatasetLayerStyle) => Promise<void>;
   onSaveFeatureAttributes: (attributes: Record<string, unknown>) => Promise<void>;
+  onGeoEditorModeChange: (mode: GeoEditorMode) => void;
+  onGeoEditorSnappingChange: (enabled: boolean) => void;
+  onGeoEditorNewPolygonNameChange: (name: string) => void;
+  onGeoEditorUndoDrawing: () => void;
+  onGeoEditorClearDrawing: () => void;
+  onGeoEditorFinishDrawing: () => void;
+  onGeoEditorSave: () => Promise<void>;
+  onGeoEditorReset: () => void;
 }
 
 const TABS = [
@@ -51,6 +72,7 @@ const TABS = [
   { id: 'source', label: 'Source', icon: Database },
   { id: 'symbology', label: 'Symbology', icon: Paintbrush },
   { id: 'attributes', label: 'Attributes', icon: TableProperties },
+  { id: 'geoeditor', label: 'GeoEditor', icon: PenTool },
 ] satisfies Array<{ id: EditLayerSidebarTabId; label: string; icon: React.ElementType }>;
 
 export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
@@ -62,6 +84,15 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
   isSavingFeature,
   saveError,
   canUpdateLayer,
+  canCreateLayer,
+  geoEditorMode,
+  geoEditorDrawing,
+  geoEditorSnappingEnabled,
+  geoEditorNewPolygonName,
+  geoEditorPendingChanges,
+  geoEditorSelectedFeatureId,
+  isSavingGeometry,
+  geometrySaveError,
   onCollapse,
   onToggleLayer,
   onUpdateFilter,
@@ -69,6 +100,14 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
   onUpdateLayerStyle,
   onSaveLayerStyle,
   onSaveFeatureAttributes,
+  onGeoEditorModeChange,
+  onGeoEditorSnappingChange,
+  onGeoEditorNewPolygonNameChange,
+  onGeoEditorUndoDrawing,
+  onGeoEditorClearDrawing,
+  onGeoEditorFinishDrawing,
+  onGeoEditorSave,
+  onGeoEditorReset,
 }) => {
   const [activeTab, setActiveTab] = useState<EditLayerSidebarTabId>(initialTab);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -118,6 +157,10 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
           onSave={onSaveFeatureAttributes}
         />
       );
+    }
+
+    if (activeTab === 'geoeditor' && layer.geometry_family === 'polygon' && (canUpdateLayer || canCreateLayer)) {
+      return <GeoEditorTab mode={geoEditorMode} drawing={geoEditorDrawing} snappingEnabled={geoEditorSnappingEnabled} newPolygonName={geoEditorNewPolygonName} pendingChanges={geoEditorPendingChanges} selectedFeatureId={geoEditorSelectedFeatureId} isSaving={isSavingGeometry} error={geometrySaveError} onModeChange={onGeoEditorModeChange} onSnappingChange={onGeoEditorSnappingChange} onNewPolygonNameChange={onGeoEditorNewPolygonNameChange} onUndoDrawing={onGeoEditorUndoDrawing} onClearDrawing={onGeoEditorClearDrawing} onFinishDrawing={onGeoEditorFinishDrawing} onSave={onGeoEditorSave} onReset={onGeoEditorReset} />;
     }
 
     return (
@@ -173,7 +216,10 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
               }
             }}
           >
-            {TABS.filter((tab) => canUpdateLayer || (tab.id !== 'symbology' && tab.id !== 'attributes')).map((tab) => {
+            {TABS.filter((tab) => {
+              if (tab.id === 'geoeditor') return layer?.geometry_family === 'polygon' && (canUpdateLayer || canCreateLayer);
+              return canUpdateLayer || (tab.id !== 'symbology' && tab.id !== 'attributes');
+            }).map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
 
