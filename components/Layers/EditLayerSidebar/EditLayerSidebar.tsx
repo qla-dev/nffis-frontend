@@ -6,13 +6,11 @@ import {
   Eye,
   Info,
   Paintbrush,
-  PenTool,
   PanelRightClose,
   TableProperties,
 } from 'lucide-react';
 import type {
   DatasetLayer,
-  DatasetGeometryMetadata,
   DatasetLayerFilterState,
   DatasetLayerStyle,
 } from '../../../services/datasetService';
@@ -21,14 +19,12 @@ import { InformationTab } from './InformationTab';
 import { SourceTab } from './SourceTab';
 import { SymbologyTab } from './SymbologyTab';
 import { AttributesTab } from './AttributesTab';
-import { GeometryTab } from './GeometryTab';
 
 export type EditLayerSidebarTabId =
   | 'visibility'
   | 'information'
   | 'source'
   | 'symbology'
-  | 'geometry'
   | 'attributes';
 
 interface EditLayerSidebarProps {
@@ -39,8 +35,6 @@ interface EditLayerSidebarProps {
   initialTab: EditLayerSidebarTabId;
   isSavingFeature: boolean;
   saveError?: string | null;
-  geometryMetadata?: DatasetGeometryMetadata | null;
-  isEditingGeometry: boolean;
   canUpdateLayer: boolean;
   onCollapse: () => void;
   onToggleLayer: (layerId: number) => void;
@@ -49,11 +43,6 @@ interface EditLayerSidebarProps {
   onUpdateLayerStyle: (layerId: number, style: DatasetLayerStyle) => void;
   onSaveLayerStyle: (layerId: number, style: DatasetLayerStyle) => Promise<void>;
   onSaveFeatureAttributes: (attributes: Record<string, unknown>) => Promise<void>;
-  onSaveFeatureGeometry: (geometry: GeoJSON.Geometry, sourceSrid: number) => Promise<void>;
-  onStartGeometryEditing: () => void;
-  onStopGeometryEditing: () => void;
-  onUndoGeometryVertex: () => void;
-  onClearGeometryBoundary: () => void;
 }
 
 const TABS = [
@@ -62,7 +51,6 @@ const TABS = [
   { id: 'source', label: 'Source', icon: Database },
   { id: 'symbology', label: 'Symbology', icon: Paintbrush },
   { id: 'attributes', label: 'Attributes', icon: TableProperties },
-  { id: 'geometry', label: 'Geometry', icon: PenTool },
 ] satisfies Array<{ id: EditLayerSidebarTabId; label: string; icon: React.ElementType }>;
 
 export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
@@ -73,8 +61,6 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
   initialTab,
   isSavingFeature,
   saveError,
-  geometryMetadata,
-  isEditingGeometry,
   canUpdateLayer,
   onCollapse,
   onToggleLayer,
@@ -83,11 +69,6 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
   onUpdateLayerStyle,
   onSaveLayerStyle,
   onSaveFeatureAttributes,
-  onSaveFeatureGeometry,
-  onStartGeometryEditing,
-  onStopGeometryEditing,
-  onUndoGeometryVertex,
-  onClearGeometryBoundary,
 }) => {
   const [activeTab, setActiveTab] = useState<EditLayerSidebarTabId>(initialTab);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -137,10 +118,6 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
           onSave={onSaveFeatureAttributes}
         />
       );
-    }
-
-    if (activeTab === 'geometry' && canUpdateLayer) {
-      return <GeometryTab layer={layer} selectedFeature={selectedFeature} isSaving={isSavingFeature} saveError={saveError} geometryMetadata={geometryMetadata} isMapEditing={isEditingGeometry} onStartMapEditing={onStartGeometryEditing} onStopMapEditing={onStopGeometryEditing} onUndoVertex={onUndoGeometryVertex} onClearBoundary={onClearGeometryBoundary} onSave={onSaveFeatureGeometry} />;
     }
 
     return (
@@ -196,7 +173,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
               }
             }}
           >
-            {TABS.filter((tab) => canUpdateLayer || !['symbology', 'attributes', 'geometry'].includes(tab.id)).map((tab) => {
+            {TABS.filter((tab) => canUpdateLayer || (tab.id !== 'symbology' && tab.id !== 'attributes')).map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
 

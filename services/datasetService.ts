@@ -76,18 +76,6 @@ export interface DatasetLayer {
   style: DatasetLayerStyle;
   filter_fields: DatasetFilterField[];
   visible_by_default: boolean;
-  visibility_level?: number;
-}
-
-export interface DatasetGeometryMetadata {
-  srid: number;
-  is_valid: boolean;
-  validity_reason?: string | null;
-  area_square_metres?: number | null;
-  perimeter_metres?: number | null;
-  center?: GeoJSON.Geometry | null;
-  bbox_geometry?: GeoJSON.Geometry | null;
-  vertex_count: number;
 }
 
 export interface DatasetFilterValue {
@@ -220,23 +208,6 @@ export async function updateDatasetFeatureAttributes(
   );
 
   return data.feature;
-}
-
-export async function updateDatasetFeatureGeometry(
-  layerId: number,
-  featureId: string | number,
-  geometry: GeoJSON.Geometry,
-  sourceSrid = 4326
-): Promise<{ feature: GeoJSON.Feature; geometryMetadata: DatasetGeometryMetadata }> {
-  const data = await requestJson<{
-    feature: GeoJSON.Feature;
-    geometry_metadata: DatasetGeometryMetadata;
-  }>(`/dataset-layers/${layerId}/features/${encodeURIComponent(String(featureId))}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ geometry, source_srid: sourceSrid }),
-  });
-
-  return { feature: data.feature, geometryMetadata: data.geometry_metadata };
 }
 
 export async function saveDatasetLayerStyle(
