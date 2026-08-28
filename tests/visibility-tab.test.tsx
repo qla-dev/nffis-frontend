@@ -5,6 +5,17 @@ import { VisibilityTab } from '../components/Layers/EditLayerSidebar/VisibilityT
 import type { DatasetLayer } from '../services/datasetService';
 
 describe('VisibilityTab', () => {
+  it('shows a role loader while the visibility matrix is pending', () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      if (String(input).includes('/visibility')) return new Promise(() => undefined);
+      return Promise.resolve(new Response(JSON.stringify({ fields: [] }), { status: 200 }));
+    }));
+
+    render(<VisibilityTab layer={{ id: 20, display_name: 'Slow layer' } as DatasetLayer} active filter={{}} onToggleLayer={vi.fn()} onUpdateFilter={vi.fn()} onClearFilter={vi.fn()} isSuperAdmin />);
+    expect(screen.getByText('Loading role permissions...')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save role access' })).toBeDisabled();
+  });
+
   it('disables an active layer without changing its filters', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ fields: [
       { name: 'SHAPENAME', kind: 'values', values: [{ value: 'Novi Grad', count: 2 }, { value: 'Banovići', count: 1 }] },

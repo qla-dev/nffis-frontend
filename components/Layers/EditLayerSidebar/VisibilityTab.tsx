@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Check, Eye, EyeOff, Search, X } from 'lucide-react';
+import { Check, Eye, EyeOff, Loader2, Search, X } from 'lucide-react';
 import type {
   DatasetFilterOption,
   DatasetLayer,
@@ -42,6 +42,7 @@ export const VisibilityTab: React.FC<VisibilityTabProps> = ({
   const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
   const [isSavingAccess, setIsSavingAccess] = useState(false);
   const [roleLoadError, setRoleLoadError] = useState<string | null>(null);
+  const [isLoadingRoles, setIsLoadingRoles] = useState(false);
   const [roleSaveMessage, setRoleSaveMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -65,16 +66,31 @@ export const VisibilityTab: React.FC<VisibilityTabProps> = ({
   }, [layer.id]);
 
   useEffect(() => {
+    let isMounted = true;
+
     if (isSuperAdmin) {
       setRoleLoadError(null);
       setRoleSaveMessage(null);
+      setRoles([]);
+      setSelectedRoleIds([]);
+      setIsLoadingRoles(true);
       void fetchDatasetLayerVisibility(layer.id)
         .then(({ roles: loadedRoles, visibility }) => {
+          if (!isMounted) return;
           setRoles(loadedRoles);
           setSelectedRoleIds(loadedRoles.filter((role) => visibility[String(role.id)]).map((role) => role.id));
         })
-        .catch(() => { setRoles([]); setRoleLoadError('Roles could not be loaded from the backend.'); });
+        .catch(() => {
+          if (!isMounted) return;
+          setRoles([]);
+          setRoleLoadError('Roles could not be loaded from the backend.');
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingRoles(false);
+        });
     }
+
+    return () => { isMounted = false; };
   }, [isSuperAdmin, layer.id]);
 
   const currentFilter = filter || {};
@@ -121,8 +137,14 @@ export const VisibilityTab: React.FC<VisibilityTabProps> = ({
             <p className="mt-1 text-[11px] text-slate-500">Only selected roles can see this layer. Super Admin always has access.</p>
           </div>
           <div className="max-h-48 space-y-1 overflow-y-auto">
+            {isLoadingRoles && (
+              <div className="flex items-center justify-center gap-2 rounded-md border border-blue-500/20 bg-slate-950/60 px-3 py-5 text-xs font-bold text-slate-400">
+                <Loader2 size={16} className="animate-spin text-blue-400" />
+                Loading role permissions...
+              </div>
+            )}
             {roleLoadError && <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs font-bold text-red-200">{roleLoadError}</div>}
-            {roles.filter((role) => role.slug !== 'super-admin').map((role) => {
+            {!isLoadingRoles && roles.filter((role) => role.slug !== 'super-admin').map((role) => {
               const checked = selectedRoleIds.includes(role.id);
               return <button key={role.id} type="button" onClick={() => setSelectedRoleIds((ids) => checked ? ids.filter((id) => id !== role.id) : [...ids, role.id])} className={`flex w-full items-center gap-2 rounded-md border px-2 py-2 text-left text-xs font-bold ${checked ? 'border-blue-500/50 bg-blue-600/10 text-white' : 'border-slate-800 text-slate-400'}`}><span className={`flex h-4 w-4 items-center justify-center rounded border ${checked ? 'border-blue-500 bg-blue-600' : 'border-slate-700'}`}>{checked && <Check size={11} />}</span>{role.name}</button>;
             })}
@@ -130,7 +152,7 @@ export const VisibilityTab: React.FC<VisibilityTabProps> = ({
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              disabled={roles.length === 0 || isSavingAccess}
+              disabled={isLoadingRoles || roles.length === 0 || isSavingAccess}
               onClick={() => setSelectedRoleIds(roles.map((role) => role.id))}
               className="h-9 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-200 transition-colors hover:bg-emerald-500/20 disabled:opacity-40"
             >
@@ -138,14 +160,14 @@ export const VisibilityTab: React.FC<VisibilityTabProps> = ({
             </button>
             <button
               type="button"
-              disabled={roles.length === 0 || isSavingAccess}
+              disabled={isLoadingRoles || roles.length === 0 || isSavingAccess}
               onClick={() => setSelectedRoleIds(roles.filter((role) => role.slug === 'super-admin').map((role) => role.id))}
               className="h-9 rounded-md border border-red-500/40 bg-red-500/10 text-[10px] font-black uppercase tracking-[0.12em] text-red-200 transition-colors hover:bg-red-500/20 disabled:opacity-40"
             >
               Disable all
             </button>
           </div>
-          <button type="button" disabled={isSavingAccess || roles.length === 0} onClick={async () => {
+          <button type="button" disabled={isLoadingRoles || isSavingAccess || roles.length === 0} onClick={async () => {
             setIsSavingAccess(true);
             setRoleSaveMessage(null);
             try {

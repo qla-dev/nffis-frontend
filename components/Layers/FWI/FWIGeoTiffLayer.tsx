@@ -4,6 +4,7 @@ import L from 'leaflet';
 import { writeArrayBuffer } from 'geotiff';
 import '@qartlabs/leaflet-geotiff';
 import '@qartlabs/leaflet-geotiff/leaflet-geotiff-plotty.js';
+import { pointInPreparedMask, prepareMaskPolygons } from '../../../lib/gis/geoMask';
 
 export interface FwiRasterPoint {
   id: string;
@@ -36,44 +37,6 @@ const GRID_WIDTH = 160;
 const GRID_HEIGHT = 160;
 const DEFAULT_PADDING = 0.3;
 
-type PreparedMaskPolygon = {
-  rings: number[][][];
-  west: number;
-  east: number;
-  south: number;
-  north: number;
-};
-
-const prepareMaskPolygons = (mask?: GeoJSON.FeatureCollection): PreparedMaskPolygon[] => {
-  const polygons: number[][][][] = [];
-  mask?.features.forEach((feature) => {
-    if (feature.geometry?.type === 'Polygon') polygons.push(feature.geometry.coordinates);
-    if (feature.geometry?.type === 'MultiPolygon') polygons.push(...feature.geometry.coordinates);
-  });
-  return polygons.filter((rings) => rings[0]?.length >= 3).map((rings) => {
-    const longitudes = rings[0].map((position) => position[0]);
-    const latitudes = rings[0].map((position) => position[1]);
-    return { rings, west: Math.min(...longitudes), east: Math.max(...longitudes), south: Math.min(...latitudes), north: Math.max(...latitudes) };
-  });
-};
-
-const pointInRing = (lng: number, lat: number, ring: number[][]): boolean => {
-  let inside = false;
-  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index, index += 1) {
-    const [currentLng, currentLat] = ring[index];
-    const [previousLng, previousLat] = ring[previous];
-    if ((currentLat > lat) !== (previousLat > lat)
-      && lng < ((previousLng - currentLng) * (lat - currentLat)) / (previousLat - currentLat) + currentLng) inside = !inside;
-  }
-  return inside;
-};
-
-const pointInMask = (lng: number, lat: number, polygons: PreparedMaskPolygon[]): boolean => polygons.some((polygon) => (
-  lng >= polygon.west && lng <= polygon.east && lat >= polygon.south && lat <= polygon.north
-  && pointInRing(lng, lat, polygon.rings[0])
-  && !polygon.rings.slice(1).some((hole) => pointInRing(lng, lat, hole))
-));
-
 const createRasterSurface = <TPoint extends FwiRasterPoint>(
   points: TPoint[],
   valueAccessor: (point: TPoint) => number,
@@ -103,7 +66,7 @@ const createRasterSurface = <TPoint extends FwiRasterPoint>(
 
     for (let x = 0; x < GRID_WIDTH; x += 1) {
       const lng = west + ((x + 0.5) / GRID_WIDTH) * lngSpan;
-      if (maskPolygons.length > 0 && !pointInMask(lng, lat, maskPolygons)) {
+      if (maskPolygons.length > 0 && !pointInPreparedMask(lng, lat, maskPolygons)) {
         data[(y * GRID_WIDTH) + x] = NO_DATA_VALUE;
         continue;
       }

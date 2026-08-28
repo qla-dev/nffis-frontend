@@ -1336,7 +1336,10 @@ export const GISMap: React.FC<GISMapProps> = ({
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_BOSNIAN)}
         />}
-        {canViewMapLayers && <LiveWindVectorLayer visible={activeLayers.has(MapLayer.WIND_VECTOR)} />}
+        {canViewMapLayers && <LiveWindVectorLayer
+          visible={activeLayers.has(MapLayer.WIND_VECTOR)}
+          mask={bihBorderData as GeoJSON.FeatureCollection}
+        />}
         {/* AWS — FBiH and RS layers, filtered by the three typed sub-layers */}
         {canViewAws && (activeLayers.has('AWS Precipitation' as MapLayer) ||
           activeLayers.has('AWS Agro' as MapLayer) || 

@@ -25,6 +25,24 @@ describe('live wind service', () => {
     expect(u.data).toHaveLength(Number(u.header.nx) * Number(u.header.ny));
   });
 
+  it('nulls wind cells outside a supplied country mask', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (input: string | URL | Request) => {
+      const count = new URL(String(input)).searchParams.get('latitude')!.split(',').length;
+      return new Response(JSON.stringify(Array.from({ length: count }, () => ({
+        current: { time: '2026-08-24T12:00', wind_speed_10m: 8, wind_direction_10m: 180 },
+      }))), { status: 200 });
+    }));
+    const mask: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[17, 43], [18, 43], [18, 44], [17, 44], [17, 43]]] } }],
+    };
+
+    const [u, v] = await fetchWindGrid(mask);
+    expect(u.data.some((value) => value === null)).toBe(true);
+    expect(u.data.some((value) => typeof value === 'number')).toBe(true);
+    expect(v.data.map((value) => value === null)).toEqual(u.data.map((value) => value === null));
+  });
+
   it('rejects API errors and incomplete point grids', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('', { status: 503 })));
     await expect(fetchWindGrid()).rejects.toThrow('503');

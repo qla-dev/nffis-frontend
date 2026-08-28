@@ -3,7 +3,9 @@
 // sample a regular lat/lon lattice in a single batched request and assemble the grid
 // ourselves in the layout leaflet-velocity expects (row-major, first row = north edge).
 
-// Region covers BiH plus a margin so the animation does not stop at the border.
+import { pointInPreparedMask, prepareMaskPolygons } from '../lib/gis/geoMask';
+
+// Region covers BiH plus a margin; cells outside the supplied BiH mask are null.
 const LON_MIN = 15.4;
 const LON_MAX = 20.2;
 const LAT_MIN = 42.2;
@@ -14,7 +16,7 @@ export const WIND_REFRESH_MS = 10 * 60 * 1000; // Open-Meteo advances "current" 
 
 export interface VelocityRecord {
   header: Record<string, unknown>;
-  data: number[];
+  data: Array<number | null>;
 }
 
 function gridAxis(min: number, max: number): number[] {
@@ -31,7 +33,7 @@ interface OpenMeteoPoint {
   };
 }
 
-export async function fetchWindGrid(signal?: AbortSignal): Promise<VelocityRecord[]> {
+export async function fetchWindGrid(mask?: GeoJSON.FeatureCollection, signal?: AbortSignal): Promise<VelocityRecord[]> {
   const lons = gridAxis(LON_MIN, LON_MAX);
   // North to south: leaflet-velocity walks rows downward from la1.
   const lats = gridAxis(LAT_MIN, LAT_MAX).reverse();
@@ -66,10 +68,17 @@ export async function fetchWindGrid(signal?: AbortSignal): Promise<VelocityRecor
     throw new Error(`Open-Meteo returned ${points.length} points, expected ${latParam.length}`);
   }
 
-  const uData: number[] = [];
-  const vData: number[] = [];
+  const uData: Array<number | null> = [];
+  const vData: Array<number | null> = [];
+  const maskPolygons = prepareMaskPolygons(mask);
 
-  for (const point of points) {
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index];
+    if (maskPolygons.length > 0 && !pointInPreparedMask(lonParam[index], latParam[index], maskPolygons)) {
+      uData.push(null);
+      vData.push(null);
+      continue;
+    }
     const speed = point.current?.wind_speed_10m;
     const direction = point.current?.wind_direction_10m;
 

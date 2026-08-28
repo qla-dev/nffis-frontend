@@ -6,6 +6,7 @@ import { WIND_REFRESH_MS, fetchWindGrid, type VelocityRecord } from '../../../..
 
 interface LiveWindVectorLayerProps {
   visible: boolean;
+  mask?: GeoJSON.FeatureCollection;
 }
 
 // leaflet-velocity's dist bundle reads a global `L` at evaluation time and Leaflet's
@@ -58,7 +59,7 @@ const WIND_COLOR_SCALE = [
   'rgb(239,68,68)',
 ];
 
-export const LiveWindVectorLayer: React.FC<LiveWindVectorLayerProps> = ({ visible }) => {
+export const LiveWindVectorLayer: React.FC<LiveWindVectorLayerProps> = ({ visible, mask }) => {
   const map = useMap();
   const layerRef = useRef<L.Layer | null>(null);
   const [data, setData] = useState<VelocityRecord[] | null>(null);
@@ -73,7 +74,7 @@ export const LiveWindVectorLayer: React.FC<LiveWindVectorLayerProps> = ({ visibl
     const controller = new AbortController();
 
     const load = () => {
-      fetchWindGrid(controller.signal)
+      fetchWindGrid(mask, controller.signal)
         .then((grid) => {
           if (!cancelled) setData(grid);
         })
@@ -92,7 +93,7 @@ export const LiveWindVectorLayer: React.FC<LiveWindVectorLayerProps> = ({ visibl
       controller.abort();
       window.clearInterval(intervalId);
     };
-  }, [visible]);
+  }, [mask, visible]);
 
   // Create / update / tear down the velocity layer.
   useEffect(() => {
