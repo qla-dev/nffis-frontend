@@ -76,7 +76,11 @@ export interface DatasetLayer {
   style: DatasetLayerStyle;
   filter_fields: DatasetFilterField[];
   visible_by_default: boolean;
+  visibility?: Record<string, boolean>;
 }
+
+export interface DatasetAccessRole { id: number; name: string; slug: string; level: number }
+interface DatasetVisibilityMatrix { roles: DatasetAccessRole[]; layers: DatasetLayer[] }
 
 export interface DatasetFilterValue {
   value: string | number | null;
@@ -208,6 +212,35 @@ export async function updateDatasetFeatureAttributes(
   );
 
   return data.feature;
+}
+
+export async function saveActiveDatasetLayerIds(layerIds: number[]): Promise<number[]> {
+  const data = await requestJson<{ active_dataset_layer_ids: number[] }>('/me/layer-preferences', {
+    method: 'PATCH', body: JSON.stringify({ layer_ids: layerIds }),
+  });
+  return data.active_dataset_layer_ids;
+}
+
+export async function fetchDatasetAccessRoles(): Promise<DatasetAccessRole[]> {
+  const data = await requestJson<DatasetVisibilityMatrix>('/dataset-layers/visibility');
+  return data.roles;
+}
+
+export async function fetchDatasetLayerVisibility(layerId: number): Promise<{ roles: DatasetAccessRole[]; visibility: Record<string, boolean> }> {
+  const data = await requestJson<DatasetVisibilityMatrix>('/dataset-layers/visibility');
+  return { roles: data.roles, visibility: data.layers.find((layer) => layer.id === layerId)?.visibility || {} };
+}
+
+export async function saveDatasetLayerRoleAccess(layerId: number, roleIds: number[], roles: DatasetAccessRole[]): Promise<DatasetLayer> {
+  const selected = new Set(roleIds);
+  const visibility = roles.reduce<Record<string, boolean>>((map, role) => {
+    map[String(role.id)] = role.slug === 'super-admin' || selected.has(role.id);
+    return map;
+  }, {});
+  const data = await requestJson<{ layer: DatasetLayer }>(`/dataset-layers/${layerId}/visibility`, {
+    method: 'PATCH', body: JSON.stringify({ visibility }),
+  });
+  return data.layer;
 }
 
 export async function saveDatasetFeatureGeometry(

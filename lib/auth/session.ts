@@ -34,6 +34,7 @@ export interface AuthUser {
   username: string;
   email: string;
   role: AuthRole | null;
+  active_dataset_layer_ids?: number[] | null;
 }
 
 interface UserResponse {

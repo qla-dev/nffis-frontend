@@ -41,6 +41,7 @@ interface EditLayerSidebarProps {
   saveError?: string | null;
   canUpdateLayer: boolean;
   canCreateLayer: boolean;
+  isSuperAdmin: boolean;
   geoEditorMode: GeoEditorMode;
   geoEditorDrawing: Position[];
   geoEditorSnappingEnabled: boolean;
@@ -85,6 +86,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
   saveError,
   canUpdateLayer,
   canCreateLayer,
+  isSuperAdmin,
   geoEditorMode,
   geoEditorDrawing,
   geoEditorSnappingEnabled,
@@ -171,6 +173,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
         onToggleLayer={onToggleLayer}
         onUpdateFilter={onUpdateFilter}
         onClearFilter={onClearFilter}
+        isSuperAdmin={isSuperAdmin}
       />
     );
   };

@@ -36,6 +36,7 @@ interface DatasetLayerOverlayProps {
   errorMessage?: string | null;
   canUpdateLayer: boolean;
   canCreateLayer: boolean;
+  isSuperAdmin: boolean;
   geoEditorMode: GeoEditorMode;
   geoEditorDrawing: Position[];
   geoEditorSnappingEnabled: boolean;
@@ -76,10 +77,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 function Toggle({ checked }: { checked: boolean }) {
   return (
     <span
-      className={`relative h-5 w-9 rounded-full transition-colors ${checked ? 'bg-blue-600' : 'bg-slate-700'}`}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-all ${checked ? 'border-blue-400 bg-blue-600 shadow-sm shadow-blue-500/30' : 'border-slate-600 bg-slate-800'}`}
     >
       <span
-        className={`absolute top-1 h-3 w-3 rounded-full bg-white transition-all ${checked ? 'left-5' : 'left-1'}`}
+        className={`absolute h-4 w-4 rounded-full bg-white shadow transition-all ${checked ? 'translate-x-6' : 'translate-x-1'}`}
       />
     </span>
   );
@@ -122,6 +123,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   errorMessage,
   canUpdateLayer,
   canCreateLayer,
+  isSuperAdmin,
   geoEditorMode,
   geoEditorDrawing,
   geoEditorSnappingEnabled,
@@ -300,10 +302,9 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                                 const count = filterCount(filters[layer.id]);
 
                                 return (
-                                  <button
+                                  <div
                                     key={layer.id}
                                     type="button"
-                                    onClick={() => onSelectLayer(layer.id)}
                                     className={`group flex w-full items-center gap-3 rounded-md border px-2 py-2 text-left transition-all ${
                                       isSelected
                                         ? 'border-blue-500/60 bg-blue-600/10'
@@ -313,7 +314,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                                     }`}
                                   >
                                     <GeometryIcon family={layer.geometry_family} color={color} />
-                                    <div className="min-w-0 flex-1">
+                                    <button type="button" onClick={() => onSelectLayer(layer.id)} className="min-w-0 flex-1 text-left">
                                       <div className={`truncate text-xs font-bold ${isActive ? 'text-white' : 'text-slate-400'}`}>
                                         {layer.display_name}
                                       </div>
@@ -322,22 +323,15 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                                         <span>{layer.feature_count.toLocaleString()}</span>
                                         {count > 0 && <span className="text-blue-400">{count} filters</span>}
                                       </div>
-                                    </div>
-                                    <span
-                                      role="button"
-                                      tabIndex={0}
+                                    </button>
+                                    <button
+                                      type="button"
                                       onClick={(event) => {
                                         event.stopPropagation();
                                         if (!isLayerLoading) onToggleLayer(layer.id);
                                       }}
-                                      onKeyDown={(event) => {
-                                        if (event.key === 'Enter' || event.key === ' ') {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          if (!isLayerLoading) onToggleLayer(layer.id);
-                                        }
-                                      }}
-                                      aria-disabled={isLayerLoading}
+                                      disabled={isLayerLoading}
+                                      aria-pressed={isActive}
                                       aria-label={isLayerLoading ? `Loading ${layer.display_name}` : undefined}
                                       className={`shrink-0 ${isLayerLoading ? 'cursor-wait' : ''}`}
                                       title={isLayerLoading ? 'Loading layer data...' : isActive ? 'Hide layer' : 'Show layer'}
@@ -345,8 +339,8 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                                       {isLayerLoading
                                         ? <Loader2 size={18} className="animate-spin text-blue-400" />
                                         : <Toggle checked={isActive} />}
-                                    </span>
-                                  </button>
+                                    </button>
+                                  </div>
                                 );
                               })}
                             </div>
@@ -395,6 +389,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
               onClearFilter={onClearFilter}
               canUpdateLayer={canUpdateLayer}
               canCreateLayer={canCreateLayer}
+              isSuperAdmin={isSuperAdmin}
               geoEditorMode={geoEditorMode}
               geoEditorDrawing={geoEditorDrawing}
               geoEditorSnappingEnabled={geoEditorSnappingEnabled}

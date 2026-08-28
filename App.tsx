@@ -10,7 +10,7 @@ import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './ty
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
 import { Waves, Flame, Database } from 'lucide-react';
 import type { DatasetLayer, DatasetLayerFilterState, DatasetLayerStyle } from './services/datasetService';
-import { bulkSaveDatasetFeatureGeometries, createDatasetPolygon, fetchDatasetLayers, saveDatasetLayerStyle, updateDatasetFeatureAttributes } from './services/datasetService';
+import { bulkSaveDatasetFeatureGeometries, createDatasetPolygon, fetchDatasetLayers, saveActiveDatasetLayerIds, saveDatasetLayerStyle, updateDatasetFeatureAttributes } from './services/datasetService';
 import { createIncidentReport, type CreateReportPayload } from './services/reportStatisticsService';
 import type { EditLayerSidebarTabId } from './components/Layers/EditLayerSidebar/EditLayerSidebar';
 import {
@@ -151,7 +151,12 @@ const App: React.FC = () => {
         setDatasetLayersError(null);
 
         if (!appliedDefaultDatasetLayersRef.current) {
-          const defaults = layers.filter((layer) => layer.visible_by_default).map((layer) => layer.id);
+          const permitted = new Set(layers.map((layer) => layer.id));
+          const saved = authUser.active_dataset_layer_ids;
+          const preferredIds = Array.isArray(saved)
+            ? saved
+            : layers.filter((layer) => layer.visible_by_default).map((layer) => layer.id);
+          const defaults = preferredIds.filter((id) => permitted.has(id));
           setActiveDatasetLayerIds(new Set(defaults));
           setSelectedDatasetLayerId(defaults[0] ?? layers[0]?.id ?? null);
           appliedDefaultDatasetLayersRef.current = true;
@@ -371,6 +376,7 @@ const App: React.FC = () => {
       } else {
         next.add(layerId);
       }
+      void saveActiveDatasetLayerIds(Array.from(next)).catch(() => undefined);
       return next;
     });
     setLoadingDatasetLayerIds(previous => {
@@ -617,6 +623,7 @@ const App: React.FC = () => {
           onClearFilter={clearDatasetLayerFilter}
           canUpdateLayer={canUpdateDatasetLayers}
           canCreateLayer={canCreateDatasetLayers}
+          isSuperAdmin={authUser?.role?.slug === 'super-admin'}
           geoEditorMode={geoEditorMode}
           geoEditorDrawing={geoEditorDrawing}
           geoEditorSnappingEnabled={geoEditorSnappingEnabled}
