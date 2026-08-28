@@ -238,7 +238,7 @@ export async function saveDatasetLayerRoleAccess(layerId: number, roleIds: numbe
     return map;
   }, {});
   const data = await requestJson<{ layer: DatasetLayer }>(`/dataset-layers/${layerId}/visibility`, {
-    method: 'PATCH', body: JSON.stringify({ visibility }),
+    method: 'PUT', body: JSON.stringify({ visibility }),
   });
   return data.layer;
 }

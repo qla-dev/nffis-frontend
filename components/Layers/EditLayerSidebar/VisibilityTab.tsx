@@ -42,6 +42,7 @@ export const VisibilityTab: React.FC<VisibilityTabProps> = ({
   const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
   const [isSavingAccess, setIsSavingAccess] = useState(false);
   const [roleLoadError, setRoleLoadError] = useState<string | null>(null);
+  const [roleSaveMessage, setRoleSaveMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -66,6 +67,7 @@ export const VisibilityTab: React.FC<VisibilityTabProps> = ({
   useEffect(() => {
     if (isSuperAdmin) {
       setRoleLoadError(null);
+      setRoleSaveMessage(null);
       void fetchDatasetLayerVisibility(layer.id)
         .then(({ roles: loadedRoles, visibility }) => {
           setRoles(loadedRoles);
@@ -143,7 +145,23 @@ export const VisibilityTab: React.FC<VisibilityTabProps> = ({
               Disable all
             </button>
           </div>
-          <button type="button" disabled={isSavingAccess || roles.length === 0} onClick={async () => { setIsSavingAccess(true); try { await saveDatasetLayerRoleAccess(layer.id, selectedRoleIds, roles); } finally { setIsSavingAccess(false); } }} className="h-9 w-full rounded-md bg-blue-600 text-xs font-black uppercase tracking-[0.14em] text-white disabled:opacity-50">{isSavingAccess ? 'Saving...' : 'Save role access'}</button>
+          <button type="button" disabled={isSavingAccess || roles.length === 0} onClick={async () => {
+            setIsSavingAccess(true);
+            setRoleSaveMessage(null);
+            try {
+              await saveDatasetLayerRoleAccess(layer.id, selectedRoleIds, roles);
+              setRoleSaveMessage({ kind: 'success', text: 'Role access saved.' });
+            } catch {
+              setRoleSaveMessage({ kind: 'error', text: 'Role access could not be saved.' });
+            } finally {
+              setIsSavingAccess(false);
+            }
+          }} className="h-9 w-full rounded-md bg-blue-600 text-xs font-black uppercase tracking-[0.14em] text-white disabled:opacity-50">{isSavingAccess ? 'Saving...' : 'Save role access'}</button>
+          {roleSaveMessage && (
+            <div className={`rounded-md border p-2 text-center text-xs font-bold ${roleSaveMessage.kind === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-red-500/30 bg-red-500/10 text-red-200'}`}>
+              {roleSaveMessage.text}
+            </div>
+          )}
         </section>
       )}
 
