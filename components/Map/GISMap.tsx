@@ -155,6 +155,8 @@ interface GISMapProps {
   canViewMapLayers: boolean;
   canViewFwi: boolean;
   canViewAws: boolean;
+  canViewFbih: boolean;
+  canViewRs: boolean;
   canAdjustAws: boolean;
   geoEditorMode: GeoEditorMode;
   geoEditorFeatures: GeoJSON.Feature[];
@@ -217,6 +219,8 @@ export const GISMap: React.FC<GISMapProps> = ({
   canViewMapLayers,
   canViewFwi,
   canViewAws,
+  canViewFbih,
+  canViewRs,
   canAdjustAws,
   geoEditorMode,
   geoEditorFeatures,
@@ -1345,8 +1349,8 @@ export const GISMap: React.FC<GISMapProps> = ({
           activeLayers.has('AWS Agro' as MapLayer) || 
           activeLayers.has('AWS Meteo' as MapLayer)) && (
           <>
-            <AWSFBiHLayer activeTypes={activeLayers} canAdjust={canAdjustAws} />
-            <AWSRsLayer activeTypes={activeLayers} canAdjust={canAdjustAws} />
+            {canViewFbih && <AWSFBiHLayer activeTypes={activeLayers} canAdjust={canAdjustAws} />}
+            {canViewRs && <AWSRsLayer activeTypes={activeLayers} canAdjust={canAdjustAws} />}
           </>
         )}
         {datasetLayers

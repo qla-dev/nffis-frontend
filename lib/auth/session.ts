@@ -159,5 +159,5 @@ export function hasPermission(
 }
 
 export function canUploadAws(user: AuthUser | null): boolean {
-  return user?.role?.slug === 'super-admin' || user?.role?.level === 6;
+  return user?.role?.slug === 'super-admin' || user?.role?.slug === 'hydrometeorological-institute';
 }

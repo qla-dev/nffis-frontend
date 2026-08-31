@@ -100,6 +100,9 @@ const App: React.FC = () => {
   const canViewMapLayers = hasPermission(authUser, 'map-layers', 'view');
   const canViewFwi = hasPermission(authUser, 'fire-weather-indices', 'view');
   const canViewAws = hasPermission(authUser, 'aws-monitoring', 'view');
+  const hasEntityScope = hasPermission(authUser, 'fbih', 'view') || hasPermission(authUser, 'rs', 'view');
+  const canViewFbih = !hasEntityScope || hasPermission(authUser, 'fbih', 'view');
+  const canViewRs = !hasEntityScope || hasPermission(authUser, 'rs', 'view');
   const canAdjustAws = canUploadAws(authUser);
 
   useEffect(() => {
@@ -542,6 +545,8 @@ const App: React.FC = () => {
             canViewMapLayers={canViewMapLayers}
             canViewFwi={canViewFwi}
             canViewAws={canViewAws}
+            canViewFbih={canViewFbih}
+            canViewRs={canViewRs}
             canAdjustAws={canAdjustAws}
             geoEditorMode={geoEditorMode}
             geoEditorFeatures={geoEditorFeatures}

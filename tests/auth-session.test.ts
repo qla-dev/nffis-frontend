@@ -97,7 +97,7 @@ describe('role permissions', () => {
   });
 
   it('limits AWS uploads to Super Admin and Hydrometeorological Institute', () => {
-    expect(canUploadAws(authUser({ slug: 'hydromet', level: 6 }))).toBe(true);
+    expect(canUploadAws(authUser({ slug: 'hydrometeorological-institute', level: 8 }))).toBe(true);
     expect(canUploadAws(authUser({ slug: 'jica', level: 2 }))).toBe(false);
     expect(canUploadAws(null)).toBe(false);
     expect(hasPermission(null, 'reports', 'view')).toBe(false);
