@@ -1,21 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Check, Eye, EyeOff, Loader2, Search, X } from 'lucide-react';
+import { Check, Search, X } from 'lucide-react';
 import type {
   DatasetFilterOption,
   DatasetLayer,
   DatasetLayerFilterState,
 } from '../../../services/datasetService';
 import { fetchDatasetLayerFilterOptions } from '../../../services/datasetService';
-import { fetchDatasetLayerVisibility, saveDatasetLayerRoleAccess, type DatasetAccessRole } from '../../../services/datasetService';
 
-interface VisibilityTabProps {
+interface FiltersTabProps {
   layer: DatasetLayer;
-  active: boolean;
   filter?: DatasetLayerFilterState;
-  onToggleLayer: (layerId: number) => void;
   onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
   onClearFilter: (layerId: number) => void;
-  isSuperAdmin: boolean;
 }
 
 function filterCount(filter?: DatasetLayerFilterState): number {
@@ -27,23 +23,14 @@ function filterCount(filter?: DatasetLayerFilterState): number {
     + (filter.q?.trim() ? 1 : 0);
 }
 
-export const VisibilityTab: React.FC<VisibilityTabProps> = ({
+export const FiltersTab: React.FC<FiltersTabProps> = ({
   layer,
-  active,
   filter,
-  onToggleLayer,
   onUpdateFilter,
   onClearFilter,
-  isSuperAdmin,
 }) => {
   const [options, setOptions] = useState<DatasetFilterOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [roles, setRoles] = useState<DatasetAccessRole[]>([]);
-  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>([]);
-  const [isSavingAccess, setIsSavingAccess] = useState(false);
-  const [roleLoadError, setRoleLoadError] = useState<string | null>(null);
-  const [isLoadingRoles, setIsLoadingRoles] = useState(false);
-  const [roleSaveMessage, setRoleSaveMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -65,128 +52,14 @@ export const VisibilityTab: React.FC<VisibilityTabProps> = ({
     };
   }, [layer.id]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    if (isSuperAdmin) {
-      setRoleLoadError(null);
-      setRoleSaveMessage(null);
-      setRoles([]);
-      setSelectedRoleIds([]);
-      setIsLoadingRoles(true);
-      void fetchDatasetLayerVisibility(layer.id)
-        .then(({ roles: loadedRoles, visibility }) => {
-          if (!isMounted) return;
-          setRoles(loadedRoles);
-          setSelectedRoleIds(loadedRoles.filter((role) => visibility[String(role.id)]).map((role) => role.id));
-        })
-        .catch(() => {
-          if (!isMounted) return;
-          setRoles([]);
-          setRoleLoadError('Roles could not be loaded from the backend.');
-        })
-        .finally(() => {
-          if (isMounted) setIsLoadingRoles(false);
-        });
-    }
-
-    return () => { isMounted = false; };
-  }, [isSuperAdmin, layer.id]);
-
   const currentFilter = filter || {};
   const count = filterCount(currentFilter);
-  const selectableOptions = options.filter((option) => option.kind !== 'range');
   const updateFilter = (next: DatasetLayerFilterState) => {
     onUpdateFilter(layer.id, next);
   };
 
-  const handleVisibilityClick = () => {
-    if (active) {
-      onToggleLayer(layer.id);
-      return;
-    }
-
-    const values = selectableOptions.reduce<Record<string, string[]>>((selection, option) => {
-      selection[option.name] = (option.values || []).map((entry) => String(entry.value ?? ''));
-      return selection;
-    }, {});
-
-    updateFilter({ ...currentFilter, values });
-    if (!active) onToggleLayer(layer.id);
-  };
-
   return (
     <div className="space-y-5">
-      <button
-        type="button"
-        className={`flex h-10 w-full items-center justify-center gap-2 rounded-md border text-xs font-black uppercase tracking-[0.16em] transition-colors ${
-          active
-            ? 'border-blue-500/40 bg-blue-600/15 text-blue-100'
-            : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
-        }`}
-        onClick={handleVisibilityClick}
-      >
-        {active ? <Eye size={16} /> : <EyeOff size={16} />}
-        {active ? 'Visible' : 'Hidden'}
-      </button>
-
-      {isSuperAdmin && (
-        <section className="space-y-3 rounded-lg border border-blue-500/25 bg-blue-500/5 p-3">
-          <div>
-            <h4 className="text-xs font-black uppercase tracking-[0.14em] text-blue-200">Role access</h4>
-            <p className="mt-1 text-[11px] text-slate-500">Only selected roles can see this layer. Super Admin always has access.</p>
-          </div>
-          <div className="max-h-48 space-y-1 overflow-y-auto">
-            {isLoadingRoles && (
-              <div className="flex items-center justify-center gap-2 rounded-md border border-blue-500/20 bg-slate-950/60 px-3 py-5 text-xs font-bold text-slate-400">
-                <Loader2 size={16} className="animate-spin text-blue-400" />
-                Loading role permissions...
-              </div>
-            )}
-            {roleLoadError && <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs font-bold text-red-200">{roleLoadError}</div>}
-            {!isLoadingRoles && roles.filter((role) => role.slug !== 'super-admin').map((role) => {
-              const checked = selectedRoleIds.includes(role.id);
-              return <button key={role.id} type="button" onClick={() => setSelectedRoleIds((ids) => checked ? ids.filter((id) => id !== role.id) : [...ids, role.id])} className={`flex w-full items-center gap-2 rounded-md border px-2 py-2 text-left text-xs font-bold ${checked ? 'border-blue-500/50 bg-blue-600/10 text-white' : 'border-slate-800 text-slate-400'}`}><span className={`flex h-4 w-4 items-center justify-center rounded border ${checked ? 'border-blue-500 bg-blue-600' : 'border-slate-700'}`}>{checked && <Check size={11} />}</span>{role.name}</button>;
-            })}
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              disabled={isLoadingRoles || roles.length === 0 || isSavingAccess}
-              onClick={() => setSelectedRoleIds(roles.map((role) => role.id))}
-              className="h-9 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-200 transition-colors hover:bg-emerald-500/20 disabled:opacity-40"
-            >
-              Allow all
-            </button>
-            <button
-              type="button"
-              disabled={isLoadingRoles || roles.length === 0 || isSavingAccess}
-              onClick={() => setSelectedRoleIds(roles.filter((role) => role.slug === 'super-admin').map((role) => role.id))}
-              className="h-9 rounded-md border border-red-500/40 bg-red-500/10 text-[10px] font-black uppercase tracking-[0.12em] text-red-200 transition-colors hover:bg-red-500/20 disabled:opacity-40"
-            >
-              Disable all
-            </button>
-          </div>
-          <button type="button" disabled={isLoadingRoles || isSavingAccess || roles.length === 0} onClick={async () => {
-            setIsSavingAccess(true);
-            setRoleSaveMessage(null);
-            try {
-              await saveDatasetLayerRoleAccess(layer.id, selectedRoleIds, roles);
-              setRoleSaveMessage({ kind: 'success', text: 'Role access saved.' });
-            } catch {
-              setRoleSaveMessage({ kind: 'error', text: 'Role access could not be saved.' });
-            } finally {
-              setIsSavingAccess(false);
-            }
-          }} className="h-9 w-full rounded-md bg-blue-600 text-xs font-black uppercase tracking-[0.14em] text-white disabled:opacity-50">{isSavingAccess ? 'Saving...' : 'Save role access'}</button>
-          {roleSaveMessage && (
-            <div className={`rounded-md border p-2 text-center text-xs font-bold ${roleSaveMessage.kind === 'success' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200' : 'border-red-500/30 bg-red-500/10 text-red-200'}`}>
-              {roleSaveMessage.text}
-            </div>
-          )}
-        </section>
-      )}
-
       <div className="space-y-3">
         <div className="flex h-10 items-center gap-2 rounded-md border border-slate-800 bg-slate-950 px-3 text-slate-400 focus-within:border-blue-500/70">
           <Search size={16} />
@@ -273,16 +146,36 @@ const FilterField: React.FC<FilterFieldProps> = ({ option, filter, onChange }) =
     );
   }
 
+  const values = option.values || [];
+  const allSelected = values.length > 0 && selectedValues.length === values.length;
+
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <h4 className="truncate text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">
           {option.name}
         </h4>
-        <span className="text-[10px] font-bold text-slate-600">{selectedValues.length}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-[10px] font-bold text-slate-600">{selectedValues.length}</span>
+          {values.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange({
+                ...filter,
+                values: {
+                  ...(filter.values || {}),
+                  [option.name]: allSelected ? [] : values.map((entry) => String(entry.value ?? '')),
+                },
+              })}
+              className="text-[10px] font-black uppercase tracking-[0.1em] text-blue-400 transition-colors hover:text-blue-300"
+            >
+              {allSelected ? 'None' : 'All'}
+            </button>
+          )}
+        </div>
       </div>
       <div className="max-h-44 space-y-1 overflow-y-auto pr-1">
-        {(option.values || []).slice(0, 80).map((entry) => {
+        {values.slice(0, 80).map((entry) => {
           const value = String(entry.value ?? '');
           const checked = selectedValues.includes(value);
 

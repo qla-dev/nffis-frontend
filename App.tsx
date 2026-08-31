@@ -67,7 +67,7 @@ const App: React.FC = () => {
   const [isDatasetLayerPanelOpen, setIsDatasetLayerPanelOpen] = useState(false);
   const [isDatasetFilterPanelOpen, setIsDatasetFilterPanelOpen] = useState(false);
   const [selectedDatasetFeature, setSelectedDatasetFeature] = useState<GeoJSON.Feature | null>(null);
-  const [datasetEditorInitialTab, setDatasetEditorInitialTab] = useState<EditLayerSidebarTabId>('visibility');
+  const [datasetEditorInitialTab, setDatasetEditorInitialTab] = useState<EditLayerSidebarTabId>('filters');
   const [isSavingDatasetFeature, setIsSavingDatasetFeature] = useState(false);
   const [datasetFeatureSaveError, setDatasetFeatureSaveError] = useState<string | null>(null);
   const [datasetLayerRefreshKey, setDatasetLayerRefreshKey] = useState(0);
@@ -230,7 +230,7 @@ const App: React.FC = () => {
       setGeoEditorSelectedFeatureId(String(featureId));
       setDatasetEditorInitialTab('geoeditor');
     } else {
-      setDatasetEditorInitialTab(feature && canUpdateDatasetLayers ? 'attributes' : feature ? 'information' : 'visibility');
+      setDatasetEditorInitialTab(feature && canUpdateDatasetLayers ? 'attributes' : feature ? 'information' : 'filters');
     }
     setDatasetFeatureSaveError(null);
     setIsDatasetLayerPanelOpen(true);
@@ -240,7 +240,7 @@ const App: React.FC = () => {
   const selectDatasetLayer = useCallback((layerId: number) => {
     setSelectedDatasetLayerId(layerId);
     setSelectedDatasetFeature(null);
-    setDatasetEditorInitialTab('visibility');
+    setDatasetEditorInitialTab('filters');
     setDatasetFeatureSaveError(null);
     setGeoEditorMode('view');
     setGeoEditorDrawing([]);
@@ -249,6 +249,14 @@ const App: React.FC = () => {
     setGeoEditorFeatures([]);
     geoEditorLayerIdRef.current = null;
     setIsDatasetFilterPanelOpen(true);
+  }, []);
+
+  // Name/category/subcategory are edited in the Information tab; fold the saved
+  // layer back into the catalog so the list and headers pick it up immediately.
+  const handleDatasetLayerUpdated = useCallback((updated: DatasetLayer) => {
+    setDatasetLayers(prev => prev.map(layer => (
+      layer.id === updated.id ? { ...layer, ...updated } : layer
+    )));
   }, []);
 
   const updateDatasetLayerStyle = useCallback((layerId: number, style: DatasetLayerStyle) => {
@@ -621,6 +629,7 @@ const App: React.FC = () => {
           onToggleLayer={toggleDatasetLayer}
           onSelectLayer={selectDatasetLayer}
           onFilterPanelOpenChange={setIsDatasetFilterPanelOpen}
+          onLayerUpdated={handleDatasetLayerUpdated}
           onUpdateLayerStyle={updateDatasetLayerStyle}
           onSaveLayerStyle={persistDatasetLayerStyle}
           onSaveFeatureAttributes={saveDatasetFeatureAttributes}

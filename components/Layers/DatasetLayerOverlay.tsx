@@ -47,6 +47,7 @@ interface DatasetLayerOverlayProps {
   geometrySaveError?: string | null;
   onClose: () => void;
   onToggleLayer: (layerId: number) => void;
+  onLayerUpdated?: (layer: DatasetLayer) => void;
   onSelectLayer: (layerId: number) => void;
   onFilterPanelOpenChange: (isOpen: boolean) => void;
   onUpdateLayerStyle: (layerId: number, style: DatasetLayerStyle) => void;
@@ -73,6 +74,50 @@ const CATEGORY_LABELS: Record<string, string> = {
   cadastral: 'Cadastral',
   information: 'Information',
 };
+
+const SHAPE_ORDER = ['point', 'line', 'polygon', 'mixed'] as const;
+
+const SHAPE_LABELS: Record<string, string> = {
+  point: 'Point',
+  line: 'Line',
+  polygon: 'Polygon',
+  mixed: 'Mixed',
+};
+
+function toggleInSet(previous: Set<string>, value: string): Set<string> {
+  const next = new Set(previous);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
+}
+
+function FacetChip({
+  label,
+  count,
+  checked,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  checked: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={checked}
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-[0.1em] transition-colors ${
+        checked
+          ? 'border-blue-500/60 bg-blue-600/15 text-blue-100'
+          : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700 hover:text-white'
+      }`}
+    >
+      {label}
+      <span className={checked ? 'text-blue-300' : 'text-slate-600'}>{count}</span>
+    </button>
+  );
+}
 
 function Toggle({ checked }: { checked: boolean }) {
   return (
@@ -134,6 +179,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   geometrySaveError,
   onClose,
   onToggleLayer,
+  onLayerUpdated,
   onSelectLayer,
   onFilterPanelOpenChange,
   onUpdateLayerStyle,
@@ -153,6 +199,8 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   const [search, setSearch] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [showCatalog, setShowCatalog] = useState(true);
+  const [shapeTypes, setShapeTypes] = useState<Set<string>>(new Set());
+  const [subcategories, setSubcategories] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (isOpen) {
@@ -165,7 +213,9 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
     [layers, selectedLayerId]
   );
 
-  const visibleLayers = useMemo(() => {
+  // Text search first; the facet counts below are derived from this set so they stay
+  // stable while shape/subcategory chips are toggled.
+  const searchedLayers = useMemo(() => {
     const term = search.trim().toLowerCase();
 
     return layers.filter((layer) => {
@@ -180,6 +230,39 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
       ].some((value) => value.toLowerCase().includes(term));
     });
   }, [layers, search]);
+
+  const shapeFacets = useMemo(() => {
+    const counts = new Map<string, number>();
+    searchedLayers.forEach((layer) => {
+      const family = layer.geometry_family || 'mixed';
+      counts.set(family, (counts.get(family) || 0) + 1);
+    });
+
+    return SHAPE_ORDER
+      .filter((family) => counts.has(family))
+      .map((family) => ({ value: family, count: counts.get(family) || 0 }));
+  }, [searchedLayers]);
+
+  const subcategoryFacets = useMemo(() => {
+    const counts = new Map<string, number>();
+    searchedLayers.forEach((layer) => {
+      const name = (layer.subcategory || '').trim();
+      if (!name) return;
+      counts.set(name, (counts.get(name) || 0) + 1);
+    });
+
+    return Array.from(counts.entries())
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => a.value.localeCompare(b.value));
+  }, [searchedLayers]);
+
+  const visibleLayers = useMemo(() => searchedLayers.filter((layer) => {
+    if (shapeTypes.size > 0 && !shapeTypes.has(layer.geometry_family || 'mixed')) return false;
+    if (subcategories.size > 0 && !subcategories.has((layer.subcategory || '').trim())) return false;
+    return true;
+  }), [searchedLayers, shapeTypes, subcategories]);
+
+  const activeFacetCount = shapeTypes.size + subcategories.size;
 
   const layersByCategory = useMemo(() => {
     return visibleLayers.reduce<Record<string, DatasetLayer[]>>((groups, layer) => {
@@ -256,6 +339,68 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                     placeholder="Search layers"
                   />
                 </div>
+
+                {(shapeFacets.length > 0 || subcategoryFacets.length > 0) && (
+                  <div className="mt-3 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                        Layer filters
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-600">
+                          {visibleLayers.length} {visibleLayers.length === 1 ? 'match' : 'matches'}
+                        </span>
+                        {activeFacetCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => { setShapeTypes(new Set()); setSubcategories(new Set()); }}
+                            className="text-[10px] font-black uppercase tracking-[0.1em] text-blue-400 transition-colors hover:text-blue-300"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {shapeFacets.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-600">
+                          Shape type
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {shapeFacets.map((facet) => (
+                            <FacetChip
+                              key={facet.value}
+                              label={SHAPE_LABELS[facet.value] || facet.value}
+                              count={facet.count}
+                              checked={shapeTypes.has(facet.value)}
+                              onClick={() => setShapeTypes((prev) => toggleInSet(prev, facet.value))}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {subcategoryFacets.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-600">
+                          Subcategory
+                        </span>
+                        <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto pr-1">
+                          {subcategoryFacets.map((facet) => (
+                            <FacetChip
+                              key={facet.value}
+                              label={facet.value}
+                              count={facet.count}
+                              checked={subcategories.has(facet.value)}
+                              onClick={() => setSubcategories((prev) => toggleInSet(prev, facet.value))}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -304,7 +449,6 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                                 return (
                                   <div
                                     key={layer.id}
-                                    type="button"
                                     className={`group flex w-full items-center gap-3 rounded-md border px-2 py-2 text-left transition-all ${
                                       isSelected
                                         ? 'border-blue-500/60 bg-blue-600/10'
@@ -374,14 +518,13 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
           <div className="hidden h-full w-[380px] border-l border-slate-800 bg-slate-900 text-slate-100 shadow-2xl shadow-black/50 transition-all duration-200 pointer-events-auto md:flex">
             <EditLayerSidebar
               layer={selectedLayer}
-              active={selectedLayer ? activeLayerIds.has(selectedLayer.id) : false}
               filter={selectedLayer ? filters[selectedLayer.id] : undefined}
               selectedFeature={selectedFeature}
               initialTab={editorInitialTab}
               isSavingFeature={isSavingFeature}
               saveError={saveError}
               onCollapse={() => onFilterPanelOpenChange(false)}
-              onToggleLayer={onToggleLayer}
+              onLayerUpdated={onLayerUpdated}
               onUpdateLayerStyle={onUpdateLayerStyle}
               onSaveLayerStyle={onSaveLayerStyle}
               onSaveFeatureAttributes={onSaveFeatureAttributes}

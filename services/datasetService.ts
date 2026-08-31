@@ -76,11 +76,24 @@ export interface DatasetLayer {
   style: DatasetLayerStyle;
   filter_fields: DatasetFilterField[];
   visible_by_default: boolean;
+  // `accessibility` decides whether a role may see the layer at all; `role_visibility`
+  // only decides whether it starts switched on for that role. The backend keeps them
+  // in separate columns (visibility_level / role_visibility) — `visibility` is the
+  // legacy alias of accessibility and is kept so older callers keep working.
   visibility?: Record<string, boolean>;
+  accessibility?: Record<string, boolean>;
+  role_visibility?: Record<string, boolean>;
 }
 
 export interface DatasetAccessRole { id: number; name: string; slug: string; level: number }
-interface DatasetVisibilityMatrix { roles: DatasetAccessRole[]; layers: DatasetLayer[] }
+
+export type DatasetRoleMap = Record<string, boolean>;
+
+export interface DatasetLayerRoleAccess {
+  roles: DatasetAccessRole[];
+  accessibility: DatasetRoleMap;
+  visibility: DatasetRoleMap;
+}
 
 export interface DatasetFilterValue {
   value: string | number | null;
@@ -221,24 +234,30 @@ export async function saveActiveDatasetLayerIds(layerIds: number[]): Promise<num
   return data.active_dataset_layer_ids;
 }
 
-export async function fetchDatasetAccessRoles(): Promise<DatasetAccessRole[]> {
-  const data = await requestJson<DatasetVisibilityMatrix>('/dataset-layers/visibility');
-  return data.roles;
+// Reads one layer's role maps. The legacy `/dataset-layers/visibility` endpoint
+// returned the whole matrix for every layer just to answer this; the per-layer
+// endpoint also separates accessibility from default visibility.
+export async function fetchDatasetLayerRoleAccess(layerId: number): Promise<DatasetLayerRoleAccess> {
+  return requestJson<DatasetLayerRoleAccess>(`/dataset-layers/${layerId}/role-access`);
 }
 
-export async function fetchDatasetLayerVisibility(layerId: number): Promise<{ roles: DatasetAccessRole[]; visibility: Record<string, boolean> }> {
-  const data = await requestJson<DatasetVisibilityMatrix>('/dataset-layers/visibility');
-  return { roles: data.roles, visibility: data.layers.find((layer) => layer.id === layerId)?.visibility || {} };
+export async function saveDatasetLayerRoleAccess(
+  layerId: number,
+  maps: { accessibility: DatasetRoleMap; visibility: DatasetRoleMap }
+): Promise<DatasetLayerRoleAccess> {
+  return requestJson<DatasetLayerRoleAccess>(`/dataset-layers/${layerId}/role-access`, {
+    method: 'PUT',
+    body: JSON.stringify(maps),
+  });
 }
 
-export async function saveDatasetLayerRoleAccess(layerId: number, roleIds: number[], roles: DatasetAccessRole[]): Promise<DatasetLayer> {
-  const selected = new Set(roleIds);
-  const visibility = roles.reduce<Record<string, boolean>>((map, role) => {
-    map[String(role.id)] = role.slug === 'super-admin' || selected.has(role.id);
-    return map;
-  }, {});
-  const data = await requestJson<{ layer: DatasetLayer }>(`/dataset-layers/${layerId}/visibility`, {
-    method: 'PUT', body: JSON.stringify({ visibility }),
+export async function updateDatasetLayerMetadata(
+  layerId: number,
+  metadata: { display_name: string; category: string; subcategory: string | null }
+): Promise<DatasetLayer> {
+  const data = await requestJson<{ layer: DatasetLayer }>(`/dataset-layers/${layerId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(metadata),
   });
   return data.layer;
 }

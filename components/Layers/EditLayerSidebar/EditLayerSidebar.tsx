@@ -3,10 +3,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
-  Eye,
+  Filter,
   Info,
   Paintbrush,
   PenTool,
+  ShieldCheck,
   PanelRightClose,
   TableProperties,
 } from 'lucide-react';
@@ -15,7 +16,8 @@ import type {
   DatasetLayerFilterState,
   DatasetLayerStyle,
 } from '../../../services/datasetService';
-import { VisibilityTab } from './VisibilityTab';
+import { FiltersTab } from './FiltersTab';
+import { RoleAccessTab } from './RoleAccessTab';
 import { InformationTab } from './InformationTab';
 import { SourceTab } from './SourceTab';
 import { SymbologyTab } from './SymbologyTab';
@@ -24,16 +26,16 @@ import { GeoEditorTab } from './GeoEditorTab';
 import type { GeoEditorMode, Position } from '../../../lib/gis/geoEditor';
 
 export type EditLayerSidebarTabId =
-  | 'visibility'
+  | 'filters'
   | 'information'
   | 'source'
   | 'symbology'
   | 'attributes'
-  | 'geoeditor';
+  | 'geoeditor'
+  | 'roleaccess';
 
 interface EditLayerSidebarProps {
   layer: DatasetLayer | null;
-  active: boolean;
   filter?: DatasetLayerFilterState;
   selectedFeature?: GeoJSON.Feature | null;
   initialTab: EditLayerSidebarTabId;
@@ -51,7 +53,7 @@ interface EditLayerSidebarProps {
   isSavingGeometry: boolean;
   geometrySaveError?: string | null;
   onCollapse: () => void;
-  onToggleLayer: (layerId: number) => void;
+  onLayerUpdated?: (layer: DatasetLayer) => void;
   onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
   onClearFilter: (layerId: number) => void;
   onUpdateLayerStyle: (layerId: number, style: DatasetLayerStyle) => void;
@@ -68,17 +70,17 @@ interface EditLayerSidebarProps {
 }
 
 const TABS = [
-  { id: 'visibility', label: 'Visibility', icon: Eye },
+  { id: 'filters', label: 'Filters', icon: Filter },
   { id: 'information', label: 'Information', icon: Info },
   { id: 'source', label: 'Source', icon: Database },
   { id: 'symbology', label: 'Symbology', icon: Paintbrush },
   { id: 'attributes', label: 'Attributes', icon: TableProperties },
   { id: 'geoeditor', label: 'GeoEditor', icon: PenTool },
+  { id: 'roleaccess', label: 'Role access', icon: ShieldCheck },
 ] satisfies Array<{ id: EditLayerSidebarTabId; label: string; icon: React.ElementType }>;
 
 export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
   layer,
-  active,
   filter,
   selectedFeature,
   initialTab,
@@ -96,7 +98,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
   isSavingGeometry,
   geometrySaveError,
   onCollapse,
-  onToggleLayer,
+  onLayerUpdated,
   onUpdateFilter,
   onClearFilter,
   onUpdateLayerStyle,
@@ -132,7 +134,11 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
     }
 
     if (activeTab === 'information') {
-      return <InformationTab layer={layer} />;
+      return <InformationTab layer={layer} canEdit={canUpdateLayer} onLayerUpdated={onLayerUpdated} />;
+    }
+
+    if (activeTab === 'roleaccess' && isSuperAdmin) {
+      return <RoleAccessTab layer={layer} />;
     }
 
     if (activeTab === 'source') {
@@ -166,14 +172,11 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
     }
 
     return (
-      <VisibilityTab
+      <FiltersTab
         layer={layer}
-        active={active}
         filter={filter}
-        onToggleLayer={onToggleLayer}
         onUpdateFilter={onUpdateFilter}
         onClearFilter={onClearFilter}
-        isSuperAdmin={isSuperAdmin}
       />
     );
   };
@@ -221,6 +224,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
           >
             {TABS.filter((tab) => {
               if (tab.id === 'geoeditor') return layer?.geometry_family === 'polygon' && (canUpdateLayer || canCreateLayer);
+              if (tab.id === 'roleaccess') return isSuperAdmin;
               return canUpdateLayer || (tab.id !== 'symbology' && tab.id !== 'attributes');
             }).map((tab) => {
               const Icon = tab.icon;
