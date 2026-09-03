@@ -5,6 +5,7 @@ import { writeArrayBuffer } from 'geotiff';
 import '@qartlabs/leaflet-geotiff';
 import '@qartlabs/leaflet-geotiff/leaflet-geotiff-plotty.js';
 import { pointInPreparedMask, prepareMaskPolygons } from '../../../lib/gis/geoMask';
+import { validateGeneratedRaster } from '../../../lib/gis/rasterValidation';
 
 export interface FwiRasterPoint {
   id: string;
@@ -173,6 +174,15 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
       });
 
       const raster = createRasterSurface(points, valueAccessor, influenceRadius, rasterBounds, rasterMask);
+      const rasterValidation = validateGeneratedRaster(
+        raster.data,
+        NO_DATA_VALUE,
+        raster,
+        [displayMin, displayMax],
+      );
+      if (!rasterValidation.valid) {
+        throw new Error(`Generated raster validation failed: ${rasterValidation.errors.join(' ')}`);
+      }
       const validRasterValues = Array.from(raster.data).filter((value) => value !== NO_DATA_VALUE);
       console.info(logPrefix, 'raster surface ready', {
         bounds: {
@@ -190,6 +200,7 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
       const pixelHeight = (raster.north - raster.south) / GRID_HEIGHT;
       const arrayBuffer = await writeArrayBuffer(raster.data, {
         GeographicTypeGeoKey: 4326,
+        GDAL_NODATA: String(NO_DATA_VALUE),
         height: GRID_HEIGHT,
         width: GRID_WIDTH,
         ModelPixelScale: [pixelWidth, pixelHeight, 0],

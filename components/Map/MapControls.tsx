@@ -4,6 +4,7 @@ import { Sun, Moon, LandPlot, Wind, Thermometer, Trees, Settings2, Info, Satelli
 import { MapLayer, Language, RegionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import type { CantonCode, CantonDefinition } from '../../bihData';
+import { FOREST_RASTER_LAYERS, FOREST_WMS_URL } from '../../lib/gis/forestRasterLayers';
 
 const FirefighterIcon = ({ size = 24, className = '', color = 'currentColor' }: { size?: number | string; className?: string; color?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 512 512" fill={color} className={className}>
@@ -603,6 +604,45 @@ export const MapControls: React.FC<MapControlsProps> = ({
                   {activeLayers.has(layer.id) && <ShieldCheck size={12} className="text-blue-500" />}
                 </button>
               ))}
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-800">
+              <div className="mb-2 text-[9px] font-black uppercase tracking-[0.18em] text-emerald-500">
+                {language === Language.BS ? 'Šume / Vrste drveća' : language === Language.JA ? '森林 / 樹種' : 'Forest / Tree species'}
+              </div>
+              <div className="space-y-1">
+                {FOREST_RASTER_LAYERS.filter((layer) => layer.dataType === 'forest_type').map((layer) => {
+                  const configured = Boolean((layer.wmsUrl || FOREST_WMS_URL) && layer.wmsLayerName);
+                  return (
+                    <button
+                      key={layer.id}
+                      type="button"
+                      disabled={!configured}
+                      title={configured ? `${layer.dataset}; ${layer.resolution}; ${layer.unit}` : 'Raster is unavailable until a verified COG and WMS layer are configured.'}
+                      onClick={() => onToggleLayer(layer.id)}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
+                        !configured
+                          ? 'opacity-45 cursor-not-allowed border-transparent bg-slate-900/30'
+                          : activeLayers.has(layer.id)
+                            ? 'bg-emerald-600/10 border-emerald-600/50'
+                            : 'bg-slate-900/50 border-transparent hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="min-w-0 flex items-center gap-2 text-left">
+                        <Trees size={14} className={activeLayers.has(layer.id) ? 'text-emerald-400 shrink-0' : 'text-slate-600 shrink-0'} />
+                        <span className={`truncate text-[10px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>
+                          {layer.label[language]}
+                        </span>
+                      </div>
+                      {activeLayers.has(layer.id) && <ShieldCheck size={12} className="text-emerald-500 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[9px] leading-relaxed text-slate-600">
+                {language === Language.BS
+                  ? 'Tip šume: 100 m pregled pri udaljenom pogledu; 20 m detalj pri približavanju. Zeleno = listopadna, plavo = četinarska; 100 m sloj uključuje i mješovitu šumu.'
+                  : 'Modelled suitability is not forest-stand inventory.'}
+              </p>
             </div>
           </div>
         )}

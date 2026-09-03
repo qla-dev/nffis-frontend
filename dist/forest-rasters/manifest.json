@@ -1,0 +1,256 @@
+{
+  "layers": [
+    {
+      "id": "Abies alba suitability",
+      "format": "COG",
+      "crs": "EPSG:4326",
+      "width": 48,
+      "height": 34,
+      "pixelSize": [
+        0.0833333333333333,
+        0.0833333333333333
+      ],
+      "extentWgs84": [
+        15.6666667,
+        42.5,
+        19.6666667,
+        45.3333333
+      ],
+      "bands": [
+        {
+          "band": 1,
+          "dataType": "Int16",
+          "noData": -32768,
+          "minimum": 8,
+          "maximum": 974
+        }
+      ],
+      "hasOverviews": false,
+      "verifiedAt": "2026-09-03T12:05:07.618Z"
+    },
+    {
+      "id": "Castanea sativa suitability",
+      "format": "COG",
+      "crs": "EPSG:4326",
+      "width": 48,
+      "height": 34,
+      "pixelSize": [
+        0.0833333333333333,
+        0.0833333333333333
+      ],
+      "extentWgs84": [
+        15.6666667,
+        42.5,
+        19.6666667,
+        45.3333333
+      ],
+      "bands": [
+        {
+          "band": 1,
+          "dataType": "Int16",
+          "noData": -32768,
+          "minimum": 9,
+          "maximum": 982
+        }
+      ],
+      "hasOverviews": false,
+      "verifiedAt": "2026-09-03T12:05:08.868Z"
+    },
+    {
+      "id": "Fagus sylvatica suitability",
+      "format": "COG",
+      "crs": "EPSG:4326",
+      "width": 48,
+      "height": 34,
+      "pixelSize": [
+        0.0833333333333333,
+        0.0833333333333333
+      ],
+      "extentWgs84": [
+        15.6666667,
+        42.5,
+        19.6666667,
+        45.3333333
+      ],
+      "bands": [
+        {
+          "band": 1,
+          "dataType": "Int16",
+          "noData": -32768,
+          "minimum": 12,
+          "maximum": 974
+        }
+      ],
+      "hasOverviews": false,
+      "verifiedAt": "2026-09-03T12:05:10.269Z"
+    },
+    {
+      "id": "Picea abies suitability",
+      "format": "COG",
+      "crs": "EPSG:4326",
+      "width": 48,
+      "height": 34,
+      "pixelSize": [
+        0.0833333333333333,
+        0.0833333333333333
+      ],
+      "extentWgs84": [
+        15.6666667,
+        42.5,
+        19.6666667,
+        45.3333333
+      ],
+      "bands": [
+        {
+          "band": 1,
+          "dataType": "Int16",
+          "noData": -32768,
+          "minimum": 9,
+          "maximum": 948
+        }
+      ],
+      "hasOverviews": false,
+      "verifiedAt": "2026-09-03T12:05:11.621Z"
+    },
+    {
+      "id": "Pinus nigra suitability",
+      "format": "COG",
+      "crs": "EPSG:4326",
+      "width": 48,
+      "height": 34,
+      "pixelSize": [
+        0.0833333333333333,
+        0.0833333333333333
+      ],
+      "extentWgs84": [
+        15.6666667,
+        42.5,
+        19.6666667,
+        45.3333333
+      ],
+      "bands": [
+        {
+          "band": 1,
+          "dataType": "Int16",
+          "noData": -32768,
+          "minimum": 14,
+          "maximum": 945
+        }
+      ],
+      "hasOverviews": false,
+      "verifiedAt": "2026-09-03T12:05:12.920Z"
+    },
+    {
+      "id": "Pinus sylvestris suitability",
+      "format": "COG",
+      "crs": "EPSG:4326",
+      "width": 48,
+      "height": 34,
+      "pixelSize": [
+        0.0833333333333333,
+        0.0833333333333333
+      ],
+      "extentWgs84": [
+        15.6666667,
+        42.5,
+        19.6666667,
+        45.3333333
+      ],
+      "bands": [
+        {
+          "band": 1,
+          "dataType": "Int16",
+          "noData": -32768,
+          "minimum": 17,
+          "maximum": 930
+        }
+      ],
+      "hasOverviews": false,
+      "verifiedAt": "2026-09-03T12:05:14.109Z"
+    },
+    {
+      "id": "Quercus cerris suitability",
+      "format": "COG",
+      "crs": "EPSG:4326",
+      "width": 48,
+      "height": 34,
+      "pixelSize": [
+        0.0833333333333333,
+        0.0833333333333333
+      ],
+      "extentWgs84": [
+        15.6666667,
+        42.5,
+        19.6666667,
+        45.3333333
+      ],
+      "bands": [
+        {
+          "band": 1,
+          "dataType": "Int16",
+          "noData": -32768,
+          "minimum": 12,
+          "maximum": 971
+        }
+      ],
+      "hasOverviews": false,
+      "verifiedAt": "2026-09-03T12:05:15.440Z"
+    },
+    {
+      "id": "Quercus petraea suitability",
+      "format": "COG",
+      "crs": "EPSG:4326",
+      "width": 48,
+      "height": 34,
+      "pixelSize": [
+        0.0833333333333333,
+        0.0833333333333333
+      ],
+      "extentWgs84": [
+        15.6666667,
+        42.5,
+        19.6666667,
+        45.3333333
+      ],
+      "bands": [
+        {
+          "band": 1,
+          "dataType": "Int16",
+          "noData": -32768,
+          "minimum": 19,
+          "maximum": 960
+        }
+      ],
+      "hasOverviews": false,
+      "verifiedAt": "2026-09-03T12:05:16.773Z"
+    },
+    {
+      "id": "Quercus robur suitability",
+      "format": "COG",
+      "crs": "EPSG:4326",
+      "width": 48,
+      "height": 34,
+      "pixelSize": [
+        0.0833333333333333,
+        0.0833333333333333
+      ],
+      "extentWgs84": [
+        15.6666667,
+        42.5,
+        19.6666667,
+        45.3333333
+      ],
+      "bands": [
+        {
+          "band": 1,
+          "dataType": "Int16",
+          "noData": -32768,
+          "minimum": 48,
+          "maximum": 948
+        }
+      ],
+      "hasOverviews": false,
+      "verifiedAt": "2026-09-03T12:05:18.174Z"
+    }
+  ]
+}

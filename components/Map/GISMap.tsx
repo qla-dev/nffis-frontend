@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, WMSTileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
 import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar, MapPin } from 'lucide-react';
@@ -34,6 +34,8 @@ import { LiveWindVectorLayer } from './layers/Wind/LiveWindVectorLayer';
 import type { DatasetLayer, DatasetLayerFilterState } from '../../services/datasetService';
 import type { GeoEditorMode, Position } from '../../lib/gis/geoEditor';
 import { BH_FWI_CSS_GRADIENT, BH_FWI_RASTER_BOUNDS } from '../../lib/fwi/bhFwiColorScale';
+import { FOREST_RASTER_LAYERS } from '../../lib/gis/forestRasterLayers';
+import { ValidatedForestWmsLayer } from '../Layers/Forest/ValidatedForestWmsLayer';
 
 const GlobalLeaflet = (L as any).default || L;
 const FIRE_HEAT_GRADIENT = {
@@ -51,6 +53,7 @@ const FLOOD_HEAT_GRADIENT = {
 const FWI_OVERLAY_PANE = 'fwi-overlay-pane';
 const METEOBLUE_OVERLAY_PANE = 'meteoblue-overlay-pane';
 const DATASET_LAYER_PANE = 'dataset-layer-pane';
+const FOREST_RASTER_PANE = 'forest-raster-pane';
 const FIREFIGHTER_DENSITY_FILLS: Record<FirefighterDensityBucket, string> = {
   'no-data': '#cbd5e1',
   '1-500': '#34d399',
@@ -767,6 +770,7 @@ export const GISMap: React.FC<GISMapProps> = ({
     };
 
     ensurePane(DATASET_LAYER_PANE, 345, 'auto');
+    ensurePane(FOREST_RASTER_PANE, 350);
     ensurePane(FWI_OVERLAY_PANE, 360);
     ensurePane(METEOBLUE_OVERLAY_PANE, 380);
   }, [map]);
@@ -1276,7 +1280,7 @@ export const GISMap: React.FC<GISMapProps> = ({
     <div ref={mapContainerRef} className="w-full h-full min-h-0 relative">
       
       {/* MAP CONTAINER */}
-      <MapContainer center={BIH_CENTER} zoom={8} className="w-full h-full" ref={setMap} zoomControl={false}>
+      <MapContainer center={BIH_CENTER} zoom={8} crs={L.CRS.EPSG3857} className="w-full h-full" ref={setMap} zoomControl={false}>
         <ReportLocationPicker />
         <CustomLocationPicker />
         {!shouldRenderStandaloneMeteoblue && (
@@ -1367,6 +1371,14 @@ export const GISMap: React.FC<GISMapProps> = ({
               onFeaturesLoaded={onDatasetFeaturesLoaded}
             />
           ))}
+        {canViewMapLayers && FOREST_RASTER_LAYERS.map((layer) => (
+          <ValidatedForestWmsLayer
+            key={layer.id}
+            layerId={layer.id}
+            visible={activeLayers.has(layer.id)}
+            pane={FOREST_RASTER_PANE}
+          />
+        ))}
         <DatasetGeoEditorLayer
           mode={geoEditorMode}
           features={geoEditorFeatures}
