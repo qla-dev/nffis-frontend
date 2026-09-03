@@ -399,6 +399,28 @@ const App: React.FC = () => {
     setSelectedDatasetLayerId(layerId);
   }, [activeDatasetLayerIds, loadingDatasetLayerIds]);
 
+  const setCategoryDatasetLayersActive = useCallback((layerIds: number[], active: boolean) => {
+    const idsToChange = layerIds.filter((layerId) => (
+      !loadingDatasetLayerIds.has(layerId)
+      && (active ? !activeDatasetLayerIds.has(layerId) : activeDatasetLayerIds.has(layerId))
+    ));
+
+    if (idsToChange.length === 0) return;
+
+    setActiveDatasetLayerIds((previous) => {
+      const next = new Set(previous);
+      idsToChange.forEach((layerId) => active ? next.add(layerId) : next.delete(layerId));
+      void saveActiveDatasetLayerIds(Array.from(next)).catch(() => undefined);
+      return next;
+    });
+
+    setLoadingDatasetLayerIds((previous) => {
+      const next = new Set(previous);
+      idsToChange.forEach((layerId) => active ? next.add(layerId) : next.delete(layerId));
+      return next;
+    });
+  }, [activeDatasetLayerIds, loadingDatasetLayerIds]);
+
   const handleDatasetLayerLoadingChange = useCallback((layerId: number, isLoading: boolean) => {
     setLoadingDatasetLayerIds(previous => {
       const next = new Set(previous);
@@ -627,6 +649,7 @@ const App: React.FC = () => {
           errorMessage={datasetLayersError}
           onClose={closeDatasetLayersPanel}
           onToggleLayer={toggleDatasetLayer}
+          onSetCategoryLayersActive={setCategoryDatasetLayersActive}
           onSelectLayer={selectDatasetLayer}
           onFilterPanelOpenChange={setIsDatasetFilterPanelOpen}
           onLayerUpdated={handleDatasetLayerUpdated}
