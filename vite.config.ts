@@ -50,13 +50,6 @@ export default defineConfig(({ mode }) => {
             target: env.VITE_GEOSERVER_ORIGIN || 'http://localhost:8600',
             changeOrigin: true,
           },
-          // EEA's public WMS does not expose CORS headers. Keep its
-          // capabilities validation and image tiles same-origin in development.
-          '/eea-forest-wms': {
-            target: 'https://image.discomap.eea.europa.eu',
-            changeOrigin: true,
-            rewrite: (path) => path.replace(/^\/eea-forest-wms/, '/arcgis/services/GioLandPublic/HRL_ForestType_2015/MapServer/WMSServer'),
-          },
         },
       },
       plugins: [react()],
