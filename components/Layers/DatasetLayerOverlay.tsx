@@ -47,6 +47,7 @@ interface DatasetLayerOverlayProps {
   geometrySaveError?: string | null;
   onClose: () => void;
   onToggleLayer: (layerId: number) => void;
+  onSetCategoryLayersActive: (layerIds: number[], active: boolean) => void;
   onLayerUpdated?: (layer: DatasetLayer) => void;
   onSelectLayer: (layerId: number) => void;
   onFilterPanelOpenChange: (isOpen: boolean) => void;
@@ -179,6 +180,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   geometrySaveError,
   onClose,
   onToggleLayer,
+  onSetCategoryLayersActive,
   onLayerUpdated,
   onSelectLayer,
   onFilterPanelOpenChange,
@@ -201,6 +203,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   const [showCatalog, setShowCatalog] = useState(true);
   const [shapeTypes, setShapeTypes] = useState<Set<string>>(new Set());
   const [subcategories, setSubcategories] = useState<Set<string>>(new Set());
+  const [activeOnly, setActiveOnly] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -259,10 +262,15 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   const visibleLayers = useMemo(() => searchedLayers.filter((layer) => {
     if (shapeTypes.size > 0 && !shapeTypes.has(layer.geometry_family || 'mixed')) return false;
     if (subcategories.size > 0 && !subcategories.has((layer.subcategory || '').trim())) return false;
+    if (activeOnly && !activeLayerIds.has(layer.id)) return false;
     return true;
-  }), [searchedLayers, shapeTypes, subcategories]);
+  }), [activeLayerIds, activeOnly, searchedLayers, shapeTypes, subcategories]);
 
-  const activeFacetCount = shapeTypes.size + subcategories.size;
+  const activeFacetCount = shapeTypes.size + subcategories.size + Number(activeOnly);
+  const activeFacet = useMemo(
+    () => searchedLayers.filter((layer) => activeLayerIds.has(layer.id)).length,
+    [activeLayerIds, searchedLayers]
+  );
 
   const layersByCategory = useMemo(() => {
     return visibleLayers.reduce<Record<string, DatasetLayer[]>>((groups, layer) => {
@@ -340,7 +348,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                   />
                 </div>
 
-                {(shapeFacets.length > 0 || subcategoryFacets.length > 0) && (
+                {(shapeFacets.length > 0 || subcategoryFacets.length > 0 || searchedLayers.length > 0) && (
                   <div className="mt-3 space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
@@ -353,12 +361,26 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                         {activeFacetCount > 0 && (
                           <button
                             type="button"
-                            onClick={() => { setShapeTypes(new Set()); setSubcategories(new Set()); }}
+                            onClick={() => { setShapeTypes(new Set()); setSubcategories(new Set()); setActiveOnly(false); }}
                             className="text-[10px] font-black uppercase tracking-[0.1em] text-blue-400 transition-colors hover:text-blue-300"
                           >
                             Reset
                           </button>
                         )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-600">
+                        Visibility
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        <FacetChip
+                          label="Active"
+                          count={activeFacet}
+                          checked={activeOnly}
+                          onClick={() => setActiveOnly((previous) => !previous)}
+                        />
                       </div>
                     </div>
 
@@ -415,27 +437,41 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                     {sortedCategories.map((category) => {
                       const isCollapsed = collapsedCategories.has(category);
                       const categoryLayers = layersByCategory[category];
+                      const allCategoryLayers = layers.filter((layer) => (layer.category || 'information') === category);
+                      const allCategoryLayersActive = allCategoryLayers.every((layer) => activeLayerIds.has(layer.id));
+                      const categoryHasLoadingLayer = allCategoryLayers.some((layer) => loadingLayerIds.has(layer.id));
 
                       return (
                         <section key={category} className="border-b border-slate-900 pb-2">
-                          <button
-                            type="button"
-                            className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left transition-colors hover:bg-slate-900"
-                            onClick={() => {
-                              setCollapsedCategories((previous) => {
-                                const next = new Set(previous);
-                                if (next.has(category)) next.delete(category);
-                                else next.add(category);
-                                return next;
-                              });
-                            }}
-                          >
-                            <span className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
-                              {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                              {CATEGORY_LABELS[category] || category}
-                            </span>
-                            <span className="text-[10px] font-bold text-slate-600">{categoryLayers.length}</span>
-                          </button>
+                          <div className="flex items-center gap-1 px-2 py-2">
+                            <button
+                              type="button"
+                              className="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left transition-colors hover:bg-slate-900"
+                              onClick={() => {
+                                setCollapsedCategories((previous) => {
+                                  const next = new Set(previous);
+                                  if (next.has(category)) next.delete(category);
+                                  else next.add(category);
+                                  return next;
+                                });
+                              }}
+                            >
+                              <span className="flex min-w-0 items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+                                {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                                <span className="truncate">{CATEGORY_LABELS[category] || category}</span>
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-600">{categoryLayers.length}</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={categoryHasLoadingLayer}
+                              onClick={() => onSetCategoryLayersActive(allCategoryLayers.map((layer) => layer.id), !allCategoryLayersActive)}
+                              className="shrink-0 rounded-md border border-slate-800 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-blue-400 transition-colors hover:border-blue-500/50 hover:bg-blue-600/10 disabled:cursor-wait disabled:opacity-50"
+                              title={allCategoryLayersActive ? `Hide all ${CATEGORY_LABELS[category] || category} layers` : `Show all ${CATEGORY_LABELS[category] || category} layers`}
+                            >
+                              {allCategoryLayersActive ? 'All off' : 'All on'}
+                            </button>
+                          </div>
 
                           {!isCollapsed && (
                             <div className="space-y-1">
