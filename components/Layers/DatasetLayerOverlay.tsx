@@ -446,9 +446,8 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                     {sortedCategories.map((category) => {
                       const isCollapsed = collapsedCategories.has(category);
                       const categoryLayers = layersByCategory[category];
-                      const allCategoryLayers = layers.filter((layer) => (layer.category || 'information') === category);
-                      const allCategoryLayersActive = allCategoryLayers.every((layer) => activeLayerIds.has(layer.id));
-                      const categoryHasLoadingLayer = allCategoryLayers.some((layer) => loadingLayerIds.has(layer.id));
+                      const allCategoryLayersActive = categoryLayers.every((layer) => activeLayerIds.has(layer.id));
+                      const categoryHasLoadingLayer = categoryLayers.some((layer) => loadingLayerIds.has(layer.id));
 
                       return (
                         <section key={category} className="border-b border-slate-900 pb-2">
@@ -474,7 +473,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                             <button
                               type="button"
                               disabled={categoryHasLoadingLayer}
-                              onClick={() => onSetCategoryLayersActive(allCategoryLayers.map((layer) => layer.id), !allCategoryLayersActive)}
+                              onClick={() => onSetCategoryLayersActive(categoryLayers.map((layer) => layer.id), !allCategoryLayersActive)}
                               className="shrink-0 rounded-md border border-slate-800 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-blue-400 transition-colors hover:border-blue-500/50 hover:bg-blue-600/10 disabled:cursor-wait disabled:opacity-50"
                               title={allCategoryLayersActive ? `Hide all ${CATEGORY_LABELS[category] || category} layers` : `Show all ${CATEGORY_LABELS[category] || category} layers`}
                             >
