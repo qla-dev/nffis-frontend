@@ -320,6 +320,15 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
+                    disabled={activeCount === 0 || loadingLayerIds.size > 0}
+                    onClick={() => onSetCategoryLayersActive(Array.from(activeLayerIds), false)}
+                    className="rounded-md border border-slate-800 px-2 py-1.5 text-[9px] font-black uppercase tracking-[0.08em] text-blue-400 transition-colors hover:border-blue-500/50 hover:bg-blue-600/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="Hide all active layers and clear the map view"
+                  >
+                    Clear view
+                  </button>
+                  <button
+                    type="button"
                     className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-900 hover:text-white"
                     onClick={() => setShowCatalog(false)}
                     title="Collapse layers"
