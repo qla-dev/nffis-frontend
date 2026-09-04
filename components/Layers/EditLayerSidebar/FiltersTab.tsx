@@ -205,7 +205,7 @@ const FilterField: React.FC<FilterFieldProps> = ({ option, filter, onChange }) =
               <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${checked ? 'border-blue-500 bg-blue-600 text-white' : 'border-slate-700'}`}>
                 {checked && <Check size={11} />}
               </span>
-              <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-300">{value || 'Blank'}</span>
+              <span className="min-w-0 flex-1 truncate text-xs font-bold text-slate-300">{entry.label || value || 'Blank'}</span>
               <span className="text-[10px] font-bold text-slate-600">{entry.count}</span>
             </button>
           );

@@ -97,6 +97,8 @@ const App: React.FC = () => {
   const canViewDatasetLayers = hasPermission(authUser, 'dataset-layers', 'view');
   const canUpdateDatasetLayers = hasPermission(authUser, 'dataset-layers', 'update');
   const canCreateDatasetLayers = hasPermission(authUser, 'dataset-layers', 'create');
+  const canManageLayerRoleAccess = hasPermission(authUser, 'layer-visibility', 'update');
+  const isSuperAdmin = authUser?.role?.slug === 'super-admin';
   const canViewMapLayers = hasPermission(authUser, 'map-layers', 'view');
   const canViewFwi = hasPermission(authUser, 'fire-weather-indices', 'view');
   const canViewAws = hasPermission(authUser, 'aws-monitoring', 'view');
@@ -660,7 +662,8 @@ const App: React.FC = () => {
           onClearFilter={clearDatasetLayerFilter}
           canUpdateLayer={canUpdateDatasetLayers}
           canCreateLayer={canCreateDatasetLayers}
-          isSuperAdmin={authUser?.role?.slug === 'super-admin'}
+          canManageRoleAccess={canManageLayerRoleAccess}
+          isSuperAdmin={isSuperAdmin}
           geoEditorMode={geoEditorMode}
           geoEditorDrawing={geoEditorDrawing}
           geoEditorSnappingEnabled={geoEditorSnappingEnabled}

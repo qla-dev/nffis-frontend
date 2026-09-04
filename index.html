@@ -57,6 +57,12 @@
             height: 100%;
             background-color: #f8fafc !important;
         }
+
+        /* A key-free, Positron-like treatment for detailed OSM raster tiles. */
+        .nffis-positron-basemap .leaflet-tile {
+          filter: grayscale(72%) saturate(32%) brightness(1.1) contrast(84%);
+          opacity: 0.94;
+        }
         .leaflet-popup-content-wrapper, .leaflet-popup-tip {
             background: #0f172a !important;
             color: white !important;

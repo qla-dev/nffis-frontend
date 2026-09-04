@@ -29,6 +29,22 @@ function bboxForMap(map: L.Map): string {
   ].map((value) => value.toFixed(6)).join(',');
 }
 
+function viewportIntersectsLayer(map: L.Map, layer: DatasetLayer): boolean {
+  const layerBounds = layer.bounds;
+  if (!layerBounds) return true;
+
+  const values = [layerBounds.minx, layerBounds.miny, layerBounds.maxx, layerBounds.maxy];
+  if (!values.every(Number.isFinite)) return true;
+
+  const viewport = map.getBounds();
+  return !(
+    viewport.getEast() < layerBounds.minx
+    || viewport.getWest() > layerBounds.maxx
+    || viewport.getNorth() < layerBounds.miny
+    || viewport.getSouth() > layerBounds.maxy
+  );
+}
+
 function toleranceForZoom(zoom: number): number {
   if (zoom <= 7) return 0.003;
   if (zoom <= 9) return 0.0012;
@@ -132,6 +148,7 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
 }) => {
   const map = useMap();
   const [bbox, setBbox] = useState(() => bboxForMap(map));
+  const [zoom, setZoom] = useState(() => map.getZoom());
   const [featureCollection, setFeatureCollection] = useState<GeoJSON.FeatureCollection | null>(null);
   const requestSequence = useRef(0);
   const filterKey = useMemo(() => JSON.stringify(filters || {}), [filters]);
@@ -139,10 +156,20 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
 
   useMapEvents({
     moveend: () => setBbox(bboxForMap(map)),
-    zoomend: () => setBbox(bboxForMap(map)),
+    zoomend: () => {
+      setZoom(map.getZoom());
+      setBbox(bboxForMap(map));
+    },
   });
 
   useEffect(() => {
+    if ((layer.min_zoom != null && zoom < layer.min_zoom) || !viewportIntersectsLayer(map, layer)) {
+      setFeatureCollection(null);
+      onFeaturesLoaded?.(layer.id, null);
+      onLoadingChange?.(layer.id, false);
+      return;
+    }
+
     const controller = new AbortController();
     const requestId = ++requestSequence.current;
     onLoadingChange?.(layer.id, true);
@@ -179,7 +206,7 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [bbox, filterKey, layer.id, map, filters, refreshKey, onLoadingChange, onFeaturesLoaded]);
+  }, [bbox, filterKey, layer, map, filters, refreshKey, zoom, onLoadingChange, onFeaturesLoaded]);
 
   if (!featureCollection || featureCollection.features.length === 0) {
     return null;
