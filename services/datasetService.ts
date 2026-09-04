@@ -61,6 +61,7 @@ export interface DatasetLayer {
   display_name: string;
   source_path?: string | null;
   source_driver?: string | null;
+  jurisdiction: 'fbih' | 'rs' | 'shared';
   category: string;
   subcategory?: string | null;
   geometry_type?: string | null;
@@ -76,6 +77,8 @@ export interface DatasetLayer {
   style: DatasetLayerStyle;
   filter_fields: DatasetFilterField[];
   visible_by_default: boolean;
+  min_zoom?: number | null;
+  data_delivery?: 'geojson' | 'vector_tile';
   // `accessibility` decides whether a role may see the layer at all; `role_visibility`
   // only decides whether it starts switched on for that role. The backend keeps them
   // in separate columns (visibility_level / role_visibility) — `visibility` is the
@@ -98,6 +101,8 @@ export interface DatasetLayerRoleAccess {
 export interface DatasetFilterValue {
   value: string | number | null;
   count: number;
+  /** Human-readable catalogue name; `value` remains the value sent to the API. */
+  label?: string;
 }
 
 export interface DatasetFilterOption extends DatasetFilterField {
@@ -258,6 +263,17 @@ export async function updateDatasetLayerMetadata(
   const data = await requestJson<{ layer: DatasetLayer }>(`/dataset-layers/${layerId}`, {
     method: 'PATCH',
     body: JSON.stringify(metadata),
+  });
+  return data.layer;
+}
+
+export async function updateDatasetLayerDataDelivery(
+  layerId: number,
+  dataDelivery: NonNullable<DatasetLayer['data_delivery']>,
+): Promise<DatasetLayer> {
+  const data = await requestJson<{ layer: DatasetLayer }>(`/dataset-layers/${layerId}/data-delivery`, {
+    method: 'PATCH',
+    body: JSON.stringify({ data_delivery: dataDelivery }),
   });
   return data.layer;
 }

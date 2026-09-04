@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, LayerGroup, GeoJSON, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, WMSTileLayer, Marker, LayerGroup, GeoJSON, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
 import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar, MapPin } from 'lucide-react';
@@ -29,6 +29,7 @@ import { BosnianFWIHeatLayer } from '../Layers/FWI/BosnianFWIHeatLayer';
 import { AWSFBiHLayer } from './layers/AWS/AWSFBiHLayer';
 import { AWSRsLayer } from './layers/AWS/AWSRsLayer';
 import { DatasetGeoJsonLayer } from './layers/Datasets/DatasetGeoJsonLayer';
+import { DatasetVectorTileLayer } from './layers/Datasets/DatasetVectorTileLayer';
 import { DatasetGeoEditorLayer } from './layers/Datasets/DatasetGeoEditorLayer';
 import { LiveWindVectorLayer } from './layers/Wind/LiveWindVectorLayer';
 import type { DatasetLayer, DatasetLayerFilterState } from '../../services/datasetService';
@@ -36,6 +37,15 @@ import type { GeoEditorMode, Position } from '../../lib/gis/geoEditor';
 import { BH_FWI_CSS_GRADIENT, BH_FWI_RASTER_BOUNDS } from '../../lib/fwi/bhFwiColorScale';
 import { FOREST_RASTER_LAYERS } from '../../lib/gis/forestRasterLayers';
 import { ValidatedForestWmsLayer } from '../Layers/Forest/ValidatedForestWmsLayer';
+import {
+  EXTERNAL_BASE_LAYERS,
+  NASA_FIRMS_LAYER,
+  NASA_GIBS_WMS_URL,
+  NASA_LAND_SURFACE_TEMPERATURE_LAYER,
+  OPENSTREETMAP_BASE_LAYER,
+  gibsObservationDate,
+  usesPlainBaseLayer,
+} from '../../lib/gis/externalMapLayers';
 
 const GlobalLeaflet = (L as any).default || L;
 const FIRE_HEAT_GRADIENT = {
@@ -54,6 +64,7 @@ const FWI_OVERLAY_PANE = 'fwi-overlay-pane';
 const METEOBLUE_OVERLAY_PANE = 'meteoblue-overlay-pane';
 const DATASET_LAYER_PANE = 'dataset-layer-pane';
 const FOREST_RASTER_PANE = 'forest-raster-pane';
+const WORLD_COUNTRIES_SERVICE_URL = 'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Countries/FeatureServer/0/query';
 const FIREFIGHTER_DENSITY_FILLS: Record<FirefighterDensityBucket, string> = {
   'no-data': '#cbd5e1',
   '1-500': '#34d399',
@@ -70,6 +81,76 @@ const toRasterBounds = (bounds: L.LatLngBounds) => {
     south: paddedBounds.getSouth(),
     north: paddedBounds.getNorth(),
   };
+};
+
+const CountryBorderReference: React.FC<{ visible: boolean }> = ({ visible }) => {
+  const map = useMap();
+  const [countries, setCountries] = useState<GeoJSON.FeatureCollection | null>(null);
+
+  useEffect(() => {
+    if (!visible) {
+      setCountries(null);
+      return;
+    }
+
+    let controller: AbortController | null = null;
+    let requestTimer: number | null = null;
+
+    const loadCountries = () => {
+      controller?.abort();
+      controller = new AbortController();
+
+      const bounds = map.getBounds();
+      const longitudePerPixel = 360 / (256 * 2 ** map.getZoom());
+      const params = new URLSearchParams({
+        where: '1=1',
+        geometry: `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`,
+        geometryType: 'esriGeometryEnvelope',
+        inSR: '4326',
+        spatialRel: 'esriSpatialRelIntersects',
+        outFields: 'COUNTRY,ISO_CC',
+        returnGeometry: 'true',
+        outSR: '4326',
+        maxAllowableOffset: String(Math.max(0.0001, longitudePerPixel * 0.5)),
+        f: 'geojson',
+      });
+
+      fetch(`${WORLD_COUNTRIES_SERVICE_URL}?${params.toString()}`, { signal: controller.signal })
+        .then((response) => {
+          if (!response.ok) throw new Error(`Country border request failed (${response.status})`);
+          return response.json() as Promise<GeoJSON.FeatureCollection>;
+        })
+        .then((data) => setCountries(data))
+        .catch((error) => {
+          if (error instanceof DOMException && error.name === 'AbortError') return;
+          console.warn('Unable to load country border reference.', error);
+        });
+    };
+
+    const queueLoad = () => {
+      if (requestTimer !== null) window.clearTimeout(requestTimer);
+      requestTimer = window.setTimeout(loadCountries, 150);
+    };
+
+    loadCountries();
+    map.on('moveend', queueLoad);
+
+    return () => {
+      controller?.abort();
+      if (requestTimer !== null) window.clearTimeout(requestTimer);
+      map.off('moveend', queueLoad);
+    };
+  }, [map, visible]);
+
+  if (!countries?.features.length) return null;
+
+  return (
+    <GeoJSON
+      key={`country-borders-${countries.features.map((feature) => feature.properties?.ISO_CC).join('|')}`}
+      data={countries as any}
+      style={{ color: '#64748b', fillOpacity: 0, opacity: 0.9, weight: 1.25 }}
+    />
+  );
 };
 
 // --- ICONS & STYLES ---
@@ -120,20 +201,6 @@ const FIREFIGHTER_STATION_ICONS = Object.fromEntries(
     ];
   })
 ) as Record<FirefighterStationType, L.DivIcon>;
-
-// --- BASE LAYER CONFIGURATION ---
-const BASE_LAYER_CONFIG: Record<string, { url: string; attribution: string }> = {
-  [MapLayer.SATELLITE]: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Esri' },
-  [MapLayer.SATELLITE_CLARITY]: { url: 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Esri Clarity' },
-  [MapLayer.SATELLITE_GOOGLE]: { url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', attribution: 'Google' },
-  [MapLayer.TERRAIN]: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: 'OpenTopoMap' },
-  [MapLayer.SENTINEL]: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Sentinel2/Scientific/ImageServer/tile/{z}/{y}/{x}', attribution: 'Sentinel' },
-  [MapLayer.INFRARED]: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', attribution: 'NatGeo (Sim)' },
-  // METEOBLUE is handled dynamically
-  [MapLayer.NASA_FIRMS]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'NASA FIRMS Base' },
-  [MapLayer.THERMAL]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'Thermal Base' },
-  [MapLayer.WINDY]: { url: 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png', attribution: 'Windy Base' },
-};
 
 // --- COMPONENTS ---
 
@@ -636,21 +703,23 @@ export const GISMap: React.FC<GISMapProps> = ({
   };
 
   const isMeteoblueActive = activeLayers.has(MapLayer.METEOBLUE);
+  const gibsDate = useMemo(() => gibsObservationDate(), []);
 
   // Derive Active Base Layer Object
   const activeBaseLayerId = useMemo(() => {
     return Object.values(MapLayer).find(
-      (layer) => layer !== MapLayer.METEOBLUE && activeLayers.has(layer) && BASE_LAYER_CONFIG[layer]
+      (layer) => layer !== MapLayer.METEOBLUE && activeLayers.has(layer) && EXTERNAL_BASE_LAYERS[layer]
     );
   }, [activeLayers]);
   
   const activeBaseLayer = useMemo(() => {
       if (activeBaseLayerId) {
-          return BASE_LAYER_CONFIG[activeBaseLayerId];
+          return EXTERNAL_BASE_LAYERS[activeBaseLayerId] ?? null;
       }
       return null;
   }, [activeBaseLayerId]);
   const activeBaseLayerKey = activeBaseLayerId ?? (isDarkMode ? 'dark' : 'light');
+  const hasPlainBaseLayer = usesPlainBaseLayer(activeBaseLayerId);
   const shouldRenderStandaloneMeteoblue = isMeteoblueActive && !isMeteoblueUnavailable;
   const fireIncidents = useMemo(
     () => incidents.filter(incident => incident.type === IncidentType.FIRE),
@@ -1280,14 +1349,25 @@ export const GISMap: React.FC<GISMapProps> = ({
     <div ref={mapContainerRef} className="w-full h-full min-h-0 relative">
       
       {/* MAP CONTAINER */}
-      <MapContainer center={BIH_CENTER} zoom={8} crs={L.CRS.EPSG3857} className="w-full h-full" ref={setMap} zoomControl={false}>
+      <MapContainer
+        center={BIH_CENTER}
+        zoom={8}
+        crs={L.CRS.EPSG3857}
+        className="w-full h-full"
+        style={{ background: isDarkMode ? '#0f172a' : '#f8fafc' }}
+        ref={setMap}
+        zoomControl={false}
+      >
         <ReportLocationPicker />
         <CustomLocationPicker />
-        {!shouldRenderStandaloneMeteoblue && (
+        {!shouldRenderStandaloneMeteoblue && !hasPlainBaseLayer && (
           <TileLayer
               key={activeBaseLayerKey}
-              url={activeBaseLayer ? activeBaseLayer.url : (isDarkMode ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png")}
-              attribution={activeBaseLayer?.attribution}
+              url={activeBaseLayer?.url ?? OPENSTREETMAP_BASE_LAYER.url}
+              attribution={activeBaseLayer?.attribution ?? OPENSTREETMAP_BASE_LAYER.attribution}
+              className={activeBaseLayer?.className ?? OPENSTREETMAP_BASE_LAYER.className}
+              maxNativeZoom={activeBaseLayer?.maxNativeZoom ?? OPENSTREETMAP_BASE_LAYER.maxNativeZoom}
+              maxZoom={activeBaseLayer?.maxZoom ?? OPENSTREETMAP_BASE_LAYER.maxZoom}
           />
         )}
         {shouldRenderStandaloneMeteoblue && meteoblueUrl && (
@@ -1302,6 +1382,38 @@ export const GISMap: React.FC<GISMapProps> = ({
             updateWhenIdle={true}
             updateWhenZooming={false}
             eventHandlers={{ tileerror: handleMeteoblueTileError }}
+          />
+        )}
+        {activeLayers.has(MapLayer.NASA_FIRMS) && (
+          <WMSTileLayer
+            key={`nasa-firms-${gibsDate}`}
+            url={NASA_GIBS_WMS_URL}
+            params={{
+              layers: NASA_FIRMS_LAYER,
+              styles: 'default',
+              format: 'image/png',
+              transparent: true,
+              version: '1.3.0',
+              time: gibsDate,
+            } as L.WMSParams}
+            attribution={`NASA EOSDIS GIBS / FIRMS (${gibsDate})`}
+            opacity={0.95}
+          />
+        )}
+        {activeLayers.has(MapLayer.THERMAL) && (
+          <WMSTileLayer
+            key={`nasa-lst-${gibsDate}`}
+            url={NASA_GIBS_WMS_URL}
+            params={{
+              layers: NASA_LAND_SURFACE_TEMPERATURE_LAYER,
+              styles: 'default',
+              format: 'image/png',
+              transparent: true,
+              version: '1.3.0',
+              time: gibsDate,
+            } as L.WMSParams}
+            attribution={`NASA EOSDIS GIBS — Terra/MODIS land-surface temperature (${gibsDate})`}
+            opacity={0.72}
           />
         )}
         <ThreatHeatmapLayer
@@ -1345,7 +1457,7 @@ export const GISMap: React.FC<GISMapProps> = ({
           visible={activeLayers.has(MapLayer.FWI_BOSNIAN)}
         />}
         {canViewMapLayers && <LiveWindVectorLayer
-          visible={activeLayers.has(MapLayer.WIND_VECTOR)}
+          visible={activeLayers.has(MapLayer.WIND_VECTOR) || activeLayers.has(MapLayer.WINDY)}
           mask={bihBorderData as GeoJSON.FeatureCollection}
         />}
         {/* AWS — FBiH and RS layers, filtered by the three typed sub-layers */}
@@ -1360,7 +1472,13 @@ export const GISMap: React.FC<GISMapProps> = ({
         {datasetLayers
           .filter((layer) => activeDatasetLayerIds.has(layer.id))
           .map((layer) => (
-            <DatasetGeoJsonLayer
+            layer.data_delivery === 'vector_tile' ? <DatasetVectorTileLayer
+              key={layer.id}
+              layer={layer}
+              pane={DATASET_LAYER_PANE}
+              onPolygonClick={!isReporting && !isPickingLocation && geoEditorMode !== 'draw' && geoEditorMode !== 'edit-shared' ? onDatasetPolygonClick : undefined}
+              onLoadingChange={onDatasetLayerLoadingChange}
+            /> : <DatasetGeoJsonLayer
               key={layer.id}
               layer={layer}
               filters={datasetLayerFilters[layer.id]}
@@ -1398,7 +1516,8 @@ export const GISMap: React.FC<GISMapProps> = ({
               onEachFeature={handleFirefighterDensityFeature}
             />
           )}
-        {borderLayerVisible && visibleBihCantonData.features.length > 0 && (
+        <CountryBorderReference visible={hasPlainBaseLayer} />
+        {borderLayerVisible && !hasPlainBaseLayer && visibleBihCantonData.features.length > 0 && (
           <GeoJSON
             key={borderLayerDataKey}
             data={visibleBihCantonData as any}

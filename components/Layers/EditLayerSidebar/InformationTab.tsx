@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Pencil, X } from 'lucide-react';
 import type { DatasetLayer } from '../../../services/datasetService';
-import { updateDatasetLayerMetadata } from '../../../services/datasetService';
+import { updateDatasetLayerDataDelivery, updateDatasetLayerMetadata } from '../../../services/datasetService';
 
 interface InformationTabProps {
   layer: DatasetLayer;
   canEdit: boolean;
+  canManageDataDelivery: boolean;
   onLayerUpdated?: (layer: DatasetLayer) => void;
 }
 
-export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, onLayerUpdated }) => {
+export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, canManageDataDelivery, onLayerUpdated }) => {
   const bounds = layer.bounds;
   const [isEditing, setIsEditing] = useState(false);
   const [displayName, setDisplayName] = useState(layer.display_name);
@@ -17,6 +18,7 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
   const [subcategory, setSubcategory] = useState(layer.subcategory || '');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSavingDelivery, setIsSavingDelivery] = useState(false);
 
   // Drop any half-finished edit when the sidebar switches to another layer.
   useEffect(() => {
@@ -56,6 +58,19 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
     setSubcategory(layer.subcategory || '');
     setError(null);
     setIsEditing(false);
+  };
+
+  const handleDataDeliveryChange = async (dataDelivery: NonNullable<DatasetLayer['data_delivery']>) => {
+    if (dataDelivery === (layer.data_delivery || 'geojson')) return;
+
+    setIsSavingDelivery(true);
+    try {
+      onLayerUpdated?.(await updateDatasetLayerDataDelivery(layer.id, dataDelivery));
+    } catch {
+      setError('Layer delivery mode could not be saved.');
+    } finally {
+      setIsSavingDelivery(false);
+    }
   };
 
   return (
@@ -127,6 +142,26 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
         <InfoRow label="Type" value={layer.geometry_type || 'Unknown'} />
         <InfoRow label="SRID" value={String(layer.srid)} />
       </Section>
+
+      {canManageDataDelivery && (
+        <Section title="Data delivery">
+          <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-400">
+            Renderer input
+            <select
+              value={layer.data_delivery || 'geojson'}
+              disabled={isSavingDelivery}
+              onChange={(event) => void handleDataDeliveryChange(event.target.value as NonNullable<DatasetLayer['data_delivery']>)}
+              className="h-9 rounded-md border border-slate-800 bg-slate-950 px-2 text-xs font-bold text-white outline-none focus:border-blue-500/70 disabled:opacity-50"
+            >
+              <option value="geojson">GeoJSON (standard)</option>
+              <option value="vector_tile">Vector tiles (experimental)</option>
+            </select>
+          </label>
+          <p className="text-[11px] font-medium leading-5 text-slate-500">
+            Vector tiles load the visible map tiles only. Use them for large layers with id and geometry columns.
+          </p>
+        </Section>
+      )}
 
       <Section title="Bounds">
         {bounds ? (

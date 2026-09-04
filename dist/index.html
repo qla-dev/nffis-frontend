@@ -14,12 +14,12 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
-        
+
         html {
             background-color: #020617;
             color-scheme: dark;
         }
-        
+
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
             margin: 0;
@@ -62,7 +62,14 @@
             height: 100%;
             background-color: #f8fafc !important;
         }
+
+        /* A key-free, Positron-like treatment for detailed OSM raster tiles. */
         
+        .nffis-positron-basemap .leaflet-tile {
+          filter: grayscale(72%) saturate(32%) brightness(1.1) contrast(84%);
+          opacity: 0.94;
+        }
+
         .leaflet-popup-content-wrapper, .leaflet-popup-tip {
             background: #0f172a !important;
             color: white !important;
@@ -140,7 +147,7 @@
           padding: 0 !important;
         }
     </style>
-  <script type="module" crossorigin src="/dist/assets/index-D09TbT6W.js"></script>
+  <script type="module" crossorigin src="/dist/assets/index-BmSRy2Ee.js"></script>
   <link rel="stylesheet" crossorigin href="/dist/assets/index-BrmD0One.css">
 </head>
 <body class="bg-slate-950 text-slate-900">

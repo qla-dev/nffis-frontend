@@ -43,6 +43,7 @@ interface EditLayerSidebarProps {
   saveError?: string | null;
   canUpdateLayer: boolean;
   canCreateLayer: boolean;
+  canManageRoleAccess: boolean;
   isSuperAdmin: boolean;
   geoEditorMode: GeoEditorMode;
   geoEditorDrawing: Position[];
@@ -88,6 +89,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
   saveError,
   canUpdateLayer,
   canCreateLayer,
+  canManageRoleAccess,
   isSuperAdmin,
   geoEditorMode,
   geoEditorDrawing,
@@ -134,10 +136,10 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
     }
 
     if (activeTab === 'information') {
-      return <InformationTab layer={layer} canEdit={canUpdateLayer} onLayerUpdated={onLayerUpdated} />;
+      return <InformationTab layer={layer} canEdit={canUpdateLayer} canManageDataDelivery={isSuperAdmin} onLayerUpdated={onLayerUpdated} />;
     }
 
-    if (activeTab === 'roleaccess' && isSuperAdmin) {
+    if (activeTab === 'roleaccess' && canManageRoleAccess) {
       return <RoleAccessTab layer={layer} />;
     }
 
@@ -224,7 +226,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
           >
             {TABS.filter((tab) => {
               if (tab.id === 'geoeditor') return layer?.geometry_family === 'polygon' && (canUpdateLayer || canCreateLayer);
-              if (tab.id === 'roleaccess') return isSuperAdmin;
+              if (tab.id === 'roleaccess') return canManageRoleAccess;
               return canUpdateLayer || (tab.id !== 'symbology' && tab.id !== 'attributes');
             }).map((tab) => {
               const Icon = tab.icon;

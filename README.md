@@ -20,6 +20,15 @@ View your app in AI Studio: https://ai.studio/apps/drive/1m4-tsfYsevdEMjjAU6gq3F
 4. Run the app:
    `npm run dev`
 
+## External map layers
+
+The default vector-style background uses OpenStreetMap raster tiles. Sentinel-2
+cloudless imagery is served by EOX. NASA FIRMS fire detections and MODIS
+land-surface temperature are served as WMS overlays by NASA EOSDIS GIBS. The
+Windy-labelled view uses the application's Open-Meteo wind-vector renderer.
+These integrations do not require browser API keys. Provider attribution must
+remain visible.
+
 ## cPanel frontend redeploy
 
 `redeploy.php` updates a cPanel checkout from Git, installs the locked dependencies,

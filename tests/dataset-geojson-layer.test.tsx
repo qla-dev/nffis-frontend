@@ -7,6 +7,7 @@ const { fetchDatasetLayerFeatures, leafletState } = vi.hoisted(() => ({
   fetchDatasetLayerFeatures: vi.fn(),
   leafletState: {
     west: 15,
+    zoom: 8,
     handlers: {} as Record<string, () => void>,
     map: null as unknown as {
       getBounds: () => { getWest: () => number; getSouth: () => number; getEast: () => number; getNorth: () => number };
@@ -22,7 +23,7 @@ leafletState.map = {
     getEast: () => 20,
     getNorth: () => 46,
   }),
-  getZoom: () => 8,
+  getZoom: () => leafletState.zoom,
 };
 
 vi.mock('../services/datasetService', async (importOriginal) => ({
@@ -48,6 +49,7 @@ const layer: DatasetLayer = {
   table_schema: 'public',
   table_name: 'cantons',
   display_name: 'Cantons',
+  jurisdiction: 'shared',
   category: 'administrative',
   geometry_family: 'polygon',
   srid: 4326,
@@ -66,10 +68,52 @@ function deferred<T>() {
 afterEach(() => {
   vi.useRealTimers();
   leafletState.west = 15;
+  leafletState.zoom = 8;
   leafletState.handlers = {};
 });
 
 describe('DatasetGeoJsonLayer request lifecycle', () => {
+  it('does not request a layer until its minimum zoom is reached', async () => {
+    vi.useFakeTimers();
+    fetchDatasetLayerFeatures.mockResolvedValue({ type: 'FeatureCollection', features: [] });
+    const onLoadingChange = vi.fn();
+
+    render(
+      <DatasetGeoJsonLayer
+        layer={{ ...layer, min_zoom: 15 }}
+        pane="datasets"
+        onLoadingChange={onLoadingChange}
+      />,
+    );
+
+    await act(async () => { vi.advanceTimersByTime(200); });
+    expect(fetchDatasetLayerFeatures).not.toHaveBeenCalled();
+    expect(onLoadingChange).toHaveBeenLastCalledWith(7, false);
+
+    leafletState.zoom = 15;
+    act(() => leafletState.handlers.zoomend());
+    await act(async () => { vi.advanceTimersByTime(140); });
+
+    expect(fetchDatasetLayerFeatures).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not request a layer outside its catalogue bounds', async () => {
+    vi.useFakeTimers();
+
+    render(
+      <DatasetGeoJsonLayer
+        layer={{
+          ...layer,
+          bounds: { minx: 10, miny: 40, maxx: 14, maxy: 41 },
+        }}
+        pane="datasets"
+      />,
+    );
+
+    await act(async () => { vi.advanceTimersByTime(200); });
+    expect(fetchDatasetLayerFeatures).not.toHaveBeenCalled();
+  });
+
   it('keeps the loader active and ignores an older response after the viewport changes', async () => {
     vi.useFakeTimers();
     const first = deferred<GeoJSON.FeatureCollection>();

@@ -31,7 +31,8 @@ export interface ForestRasterLayerDefinition {
 const env = (import.meta as ImportMeta & { env: Record<string, string | undefined> }).env;
 
 export const FOREST_WMS_URL = (env.VITE_FOREST_WMS_URL || '').trim();
-export const PUBLIC_FOREST_TYPE_WMS_URL = (env.VITE_FOREST_TYPE_WMS_URL || '/eea-forest-wms').trim();
+// Served by our backend in production because the official EEA WMS has no CORS headers.
+export const PUBLIC_FOREST_TYPE_WMS_URL = (env.VITE_FOREST_TYPE_WMS_URL || '/api/forest-type-wms').trim();
 export const FOREST_RASTER_MANIFEST_URL = (env.VITE_FOREST_RASTER_MANIFEST_URL || '/forest-rasters/manifest.json').trim();
 
 const species = (
