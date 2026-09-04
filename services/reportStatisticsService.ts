@@ -1,4 +1,5 @@
 import { csrfHeaders } from '../lib/auth/session';
+import { API_BASE_URL } from './api';
 
 export interface StatisticsCountItem {
   label: string;
@@ -47,7 +48,7 @@ export interface CreatedReport extends CreateReportPayload {
 
 export async function createIncidentReport(payload: CreateReportPayload): Promise<CreatedReport> {
   const csrf = await csrfHeaders();
-  const response = await fetch('/api/reports', {
+  const response = await fetch(`${API_BASE_URL}/reports`, {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -77,7 +78,7 @@ export async function fetchReportStatistics(
   if (filters.to) params.set('to', filters.to);
 
   const query = params.toString();
-  const response = await fetch(`/api/reports/statistics${query ? `?${query}` : ''}`, {
+  const response = await fetch(`${API_BASE_URL}/reports/statistics${query ? `?${query}` : ''}`, {
     credentials: 'include',
     headers: { Accept: 'application/json' },
     signal,
