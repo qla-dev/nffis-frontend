@@ -84,6 +84,10 @@ const BiHClippedWmsLayer: React.FC<ClippedWmsProps> = ({ url, layerName, overvie
 
     const layer = new ClippedWms(url, {
       layers: renderedLayerName,
+      // ArcGIS' public Forest Type WMS rejects an empty STYLES parameter
+      // (Leaflet's default), returning a ServiceException XML instead of a
+      // PNG tile. Its advertised default style must be named explicitly.
+      styles: 'default',
       format: 'image/png',
       transparent: true,
       version: '1.3.0',
