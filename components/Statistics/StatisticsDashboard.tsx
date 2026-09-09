@@ -14,6 +14,7 @@ import {
   type ReportStatistics,
   type StatisticsCountItem,
 } from '../../services/reportStatisticsService';
+import { fetchFireStatistics, type FireStatistics } from '../../services/fireMonitoringService';
 
 interface StatisticsDashboardProps {
   language: Language;
@@ -55,6 +56,7 @@ function countFor(items: StatisticsCountItem[], aliases: string[]): number {
 const StatisticsDashboard: React.FC<StatisticsDashboardProps> = ({ language, isDarkMode }) => {
   const copy = COPY[language];
   const [statistics, setStatistics] = useState<ReportStatistics | null>(null);
+  const [firewatchStatistics, setFirewatchStatistics] = useState<FireStatistics | null>(null);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [appliedFilters, setAppliedFilters] = useState({ from: '', to: '' });
@@ -67,8 +69,16 @@ const StatisticsDashboard: React.FC<StatisticsDashboardProps> = ({ language, isD
     setIsLoading(true);
     setError(null);
 
-    fetchReportStatistics(appliedFilters, controller.signal)
-      .then(setStatistics)
+    Promise.all([
+      fetchReportStatistics(appliedFilters, controller.signal),
+      // FireWatch is live data. It remains separate from submitted incident
+      // reports so matching/linked reports are never double-counted.
+      fetchFireStatistics(controller.signal).catch(() => null),
+    ])
+      .then(([nextStatistics, nextFirewatchStatistics]) => {
+        setStatistics(nextStatistics);
+        setFirewatchStatistics(nextFirewatchStatistics);
+      })
       .catch((requestError: unknown) => {
         if (requestError instanceof DOMException && requestError.name === 'AbortError') return;
         setError(requestError instanceof Error ? requestError.message : 'Report statistics are unavailable.');
@@ -157,6 +167,18 @@ const StatisticsDashboard: React.FC<StatisticsDashboardProps> = ({ language, isD
         <MetricCard icon={<Waves size={20} />} label={copy.flood} value={floodCount} color="cyan" isDarkMode={isDarkMode} />
         <MetricCard icon={<CalendarDays size={20} />} label={copy.activeDays} value={data.daily.length} color="violet" isDarkMode={isDarkMode} />
       </div>
+
+      <section className={`${cardClass} p-5`}>
+        <SectionHeading title="FireWatch live monitoring" hint="Satellite fire events are shown separately from incident reports; linked reports are not added to these counts." icon={<Flame size={18} />} isDarkMode={isDarkMode} />
+        {firewatchStatistics ? (
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <MetricCard icon={<Flame size={20} />} label="Active FireWatch events" value={firewatchStatistics.active_events} color="red" isDarkMode={isDarkMode} />
+            <MetricCard icon={<AlertCircle size={20} />} label="High-priority events" value={firewatchStatistics.high_priority} color="violet" isDarkMode={isDarkMode} />
+            <MetricCard icon={<CalendarDays size={20} />} label="New in 24 hours" value={firewatchStatistics.new_last_24h} color="blue" isDarkMode={isDarkMode} />
+            <MetricCard icon={<BarChart3 size={20} />} label="Highest current FRP (MW)" value={firewatchStatistics.highest_current_frp} color="cyan" isDarkMode={isDarkMode} />
+          </div>
+        ) : <p className={`text-sm ${mutedText}`}>FireWatch statistics are currently unavailable.</p>}
+      </section>
 
       {data.total === 0 ? (
         <div className={`${cardClass} flex min-h-64 flex-col items-center justify-center p-8 text-center`}>

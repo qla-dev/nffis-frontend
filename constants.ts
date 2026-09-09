@@ -147,10 +147,12 @@ export const TRANSLATIONS = {
         territorial: 'Territorial fire unit',
         volunteer: 'Volunteer fire unit',
         industrial: 'Industrial fire unit',
+        unknown: 'Type not verified',
       },
       capacitySources: {
         reported: 'Reported',
         estimated: 'Estimated',
+        unknown: 'Unknown',
       },
       locationPrecisions: {
         exact: 'Exact coordinates',
@@ -328,10 +330,12 @@ export const TRANSLATIONS = {
         territorial: 'Teritorijalna vatrogasna jedinica',
         volunteer: 'Dobrovoljna vatrogasna jedinica',
         industrial: 'Privredna vatrogasna stanica',
+        unknown: 'Tip nije potvrđen',
       },
       capacitySources: {
         reported: 'Prijavljeno',
         estimated: 'Procijenjeno',
+        unknown: 'Nepoznato',
       },
       locationPrecisions: {
         exact: 'Tacne koordinate',
@@ -508,10 +512,12 @@ export const TRANSLATIONS = {
         territorial: '地域消防隊',
         volunteer: '志願消防隊',
         industrial: '事業所消防隊',
+        unknown: '種別未確認',
       },
       capacitySources: {
         reported: '報告値',
         estimated: '推定値',
+        unknown: '不明',
       },
       locationPrecisions: {
         exact: '正確な座標',

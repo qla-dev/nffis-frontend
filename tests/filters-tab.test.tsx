@@ -47,7 +47,8 @@ describe('FiltersTab', () => {
     await waitFor(() => expect(screen.queryByText('Loading filters...')).not.toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'All' }));
-    expect(onUpdateFilter).toHaveBeenCalledWith(5, { values: { TYPE: ['A', 'B'] } });
+    expect(onUpdateFilter).toHaveBeenCalledWith(5, expect.any(Function));
+    expect(onUpdateFilter.mock.calls[0][1]({})).toEqual({ values: { TYPE: ['A', 'B'] } });
   });
 
   it('toggles a single value on', async () => {
@@ -60,7 +61,29 @@ describe('FiltersTab', () => {
     await waitFor(() => expect(screen.queryByText('Loading filters...')).not.toBeInTheDocument());
 
     fireEvent.click(screen.getByText('A').closest('button')!);
-    expect(onUpdateFilter).toHaveBeenCalledWith(5, { values: { TYPE: ['A'] } });
+    expect(onUpdateFilter).toHaveBeenCalledWith(5, expect.any(Function));
+    expect(onUpdateFilter.mock.calls[0][1]({})).toEqual({ values: { TYPE: ['A'] } });
+  });
+
+  it('preserves a previous selection when another filter is changed', async () => {
+    stubFilterOptions([
+      { name: 'TYPE', kind: 'values', values: [{ value: 'A', count: 2 }] },
+      { name: 'MUNICIPALITY', kind: 'values', values: [{ value: 'Zenica', count: 1 }] },
+    ]);
+    const onUpdateFilter = vi.fn();
+
+    render(<FiltersTab layer={layer} filter={{}} onUpdateFilter={onUpdateFilter} onClearFilter={vi.fn()} />);
+    await waitFor(() => expect(screen.queryByText('Loading filters...')).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('A').closest('button')!);
+    const firstUpdate = onUpdateFilter.mock.calls[0][1];
+    const firstFilter = firstUpdate({});
+
+    fireEvent.click(screen.getByText('Zenica').closest('button')!);
+    const secondUpdate = onUpdateFilter.mock.calls[1][1];
+    expect(secondUpdate(firstFilter)).toEqual({
+      values: { TYPE: ['A'], MUNICIPALITY: ['Zenica'] },
+    });
   });
 
   it('disables the clear button when nothing is filtered', async () => {

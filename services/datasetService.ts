@@ -65,7 +65,18 @@ export interface DatasetLayer {
   category: string;
   subcategory?: string | null;
   geometry_type?: string | null;
-  geometry_family: 'point' | 'line' | 'polygon' | 'mixed';
+  geometry_family: 'point' | 'line' | 'polygon' | 'mixed' | 'raster';
+  layer_kind: 'vector' | 'raster';
+  nearest_road_enabled: boolean;
+  road_status?: 'existing' | 'planned' | 'reconstruction' | 'unknown' | null;
+  latest_scene?: {
+    id: number;
+    name: string;
+    provider: string;
+    acquired_at: string;
+    resolution_m?: number | null;
+    cloud_cover?: number | null;
+  } | null;
   srid: number;
   feature_count: number;
   bounds?: {
@@ -258,7 +269,13 @@ export async function saveDatasetLayerRoleAccess(
 
 export async function updateDatasetLayerMetadata(
   layerId: number,
-  metadata: { display_name: string; category: string; subcategory: string | null }
+  metadata: {
+    display_name: string;
+    category: string;
+    subcategory: string | null;
+    nearest_road_enabled?: boolean;
+    road_status?: DatasetLayer['road_status'];
+  }
 ): Promise<DatasetLayer> {
   const data = await requestJson<{ layer: DatasetLayer }>(`/dataset-layers/${layerId}`, {
     method: 'PATCH',

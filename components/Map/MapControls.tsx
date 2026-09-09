@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Sun, Moon, LandPlot, Wind, Thermometer, Trees, Settings2, Info, Satellite, X, Map as MapIcon, Globe2, ShieldCheck, Trash2, Flame, Waves, Eye, Cloud, Radar, Mountain, ThermometerSun, Check, MapPin, Users } from 'lucide-react';
+import { Sun, Moon, Wind, Thermometer, Trees, Settings2, Info, Satellite, X, Map as MapIcon, Globe2, ShieldCheck, Trash2, Flame, Waves, Eye, Cloud, Radar, Mountain, ThermometerSun, MapPin, Maximize } from 'lucide-react';
 import { MapLayer, Language, RegionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
-import type { CantonCode, CantonDefinition } from '../../bihData';
 import { FOREST_RASTER_LAYERS, FOREST_WMS_URL } from '../../lib/gis/forestRasterLayers';
 
 const FirefighterIcon = ({ size = 24, className = '', color = 'currentColor' }: { size?: number | string; className?: string; color?: string }) => (
@@ -21,21 +20,12 @@ interface MapControlsProps {
   showLegend: boolean;
   onToggleLegend: () => void;
   language: Language;
-  borderLayerVisible: boolean;
-  cantons: readonly CantonDefinition[];
-  selectedCantonCodes: Set<CantonCode>;
-  federationSelected: boolean;
-  republicSrpskaSelected: boolean;
-  brckoDistrictSelected: boolean;
-  onToggleBorderLayer: () => void;
-  onToggleFederation: () => void;
-  onToggleRepublicSrpska: () => void;
-  onToggleBrckoDistrict: () => void;
-  onToggleCanton: (code: CantonCode) => void;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   onStartPickingLocation?: () => void;
+  onFitBosnia: () => void;
   canViewMapLayers: boolean;
   canViewFwi: boolean;
+  canViewFireMonitoring: boolean;
   canViewAws: boolean;
 }
 
@@ -48,29 +38,20 @@ export const MapControls: React.FC<MapControlsProps> = ({
   showLegend,
   onToggleLegend,
   language,
-  borderLayerVisible,
-  cantons,
-  selectedCantonCodes,
-  federationSelected,
-  republicSrpskaSelected,
-  brckoDistrictSelected,
-  onToggleBorderLayer,
-  onToggleFederation,
-  onToggleRepublicSrpska,
-  onToggleBrckoDistrict,
-  onToggleCanton,
   containerRef,
   onStartPickingLocation,
+  onFitBosnia,
   canViewMapLayers,
   canViewFwi,
+  canViewFireMonitoring,
   canViewAws,
 }) => {
-  const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | 'fwi' | 'borders' | 'aws' | null>(null);
+  const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | 'fwi' | 'aws' | null>(null);
   const localRef = useRef<HTMLDivElement>(null);
   const effectiveRef = containerRef || localRef;
   const t = TRANSLATIONS[language];
 
-  const togglePanel = (panel: 'assets' | 'layers' | 'satellite' | 'fwi' | 'borders' | 'aws') => {
+  const togglePanel = (panel: 'assets' | 'layers' | 'satellite' | 'fwi' | 'aws') => {
     setActivePanel(activePanel === panel ? null : panel);
   };
 
@@ -89,22 +70,6 @@ export const MapControls: React.FC<MapControlsProps> = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [activePanel, containerRef]);
-
-  const handleBordersButtonClick = () => {
-    if (!borderLayerVisible) {
-      onToggleBorderLayer();
-      setActivePanel('borders');
-      return;
-    }
-
-    if (activePanel === 'borders') {
-      onToggleBorderLayer();
-      setActivePanel(null);
-      return;
-    }
-
-    setActivePanel('borders');
-  };
 
   const isBaseLayerActive = (layer: MapLayer) => activeLayers.has(layer);
   
@@ -139,44 +104,6 @@ export const MapControls: React.FC<MapControlsProps> = ({
             
             <div className="w-px h-6 bg-slate-800 mx-1" />
 
-            {/* BiH Cantons */}
-            <button 
-              hidden={!canViewMapLayers}
-              onClick={handleBordersButtonClick} 
-              className={`p-2.5 rounded-lg transition-colors ${borderLayerVisible ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
-              title="BiH Cantons"
-            >
-              <LandPlot size={18} />
-            </button>
-
-            <button
-              hidden={!canViewMapLayers}
-              onClick={() => onToggleLayer(MapLayer.FIREFIGHTER_STATIONS)}
-              className={`p-2.5 rounded-lg transition-colors ${
-                activeLayers.has(MapLayer.FIREFIGHTER_STATIONS)
-                  ? 'text-orange-300 bg-orange-950/40 shadow-[0_0_10px_rgba(251,146,60,0.25)]'
-                  : 'text-slate-400 hover:bg-slate-800'
-              }`}
-              title={t.firefighterStations}
-            >
-              <FirefighterIcon size={22} />
-            </button>
-
-            <button
-              hidden={!canViewMapLayers}
-              onClick={() => onToggleLayer(MapLayer.RS_FIREFIGHTER_DENSITY)}
-              className={`p-2.5 rounded-lg transition-colors ${
-                activeLayers.has(MapLayer.RS_FIREFIGHTER_DENSITY)
-                  ? 'text-emerald-300 bg-emerald-950/40 shadow-[0_0_10px_rgba(16,185,129,0.25)]'
-                  : 'text-slate-400 hover:bg-slate-800'
-              }`}
-              title={t.firefighterDensity}
-            >
-              <Users size={18} />
-            </button>
-
-            <div className="w-px h-6 bg-slate-800 mx-1" />
-
             {/* Wind */}
             <button
               hidden={!canViewMapLayers}
@@ -195,6 +122,16 @@ export const MapControls: React.FC<MapControlsProps> = ({
               title="Meteoblue Temperature"
             >
               <ThermometerSun size={18} className={activeLayers.has(MapLayer.METEOBLUE) ? 'animate-pulse' : ''} />
+            </button>
+
+            {/* FWI */}
+            <button
+              hidden={!canViewFireMonitoring}
+              onClick={() => onToggleLayer(MapLayer.ACTIVE_FIRES)}
+              className={`p-2.5 rounded-lg transition-colors ${activeLayers.has(MapLayer.ACTIVE_FIRES) ? 'text-orange-400 bg-orange-950/30 shadow-[0_0_10px_rgba(249,115,22,0.25)]' : 'text-slate-400 hover:bg-slate-800'}`}
+              title={language === Language.BS ? 'Aktivni požari / termalne anomalije' : 'Active fires / thermal anomalies'}
+            >
+              <Flame size={18} className={activeLayers.has(MapLayer.ACTIVE_FIRES) ? 'animate-pulse' : ''} />
             </button>
 
             {/* FWI */}
@@ -257,6 +194,17 @@ export const MapControls: React.FC<MapControlsProps> = ({
               <Info size={18} />
             </button>
 
+            <button
+              type="button"
+              hidden={!canViewMapLayers}
+              onClick={onFitBosnia}
+              className="hidden p-2.5 text-slate-400 transition-colors hover:bg-slate-800 md:block rounded-lg"
+              title="Fit Bosnia and Herzegovina"
+              aria-label="Fit Bosnia and Herzegovina"
+            >
+              <Maximize size={18} />
+            </button>
+
             <div className="w-px h-6 bg-slate-800 mx-1" />
 
             {/* Imagery Source (Satellite Icon) */}
@@ -274,89 +222,39 @@ export const MapControls: React.FC<MapControlsProps> = ({
 
       {/* Dropdown Panels Container */}
       <div className="relative w-64 mr-4 md:mr-0 pointer-events-auto">
-        {canViewMapLayers && activePanel === 'borders' && (
+        {canViewMapLayers && activePanel === 'layers' && (
           <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-72 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">
-              BiH Cantons
+              {t.dataOverlays}
               <button onClick={() => setActivePanel(null)} className="hover:text-white transition-colors">
                 <X size={14} />
               </button>
             </h4>
 
-            <div className="space-y-2 mb-4">
-              <button
-                onClick={onToggleFederation}
-                className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-all ${
-                  federationSelected
-                    ? 'border-blue-600/40 bg-blue-600/10'
-                    : 'border-slate-800 bg-slate-900/50 hover:border-slate-700'
-                }`}
-              >
-                <div>
-                  <div className={`text-[11px] font-bold ${federationSelected ? 'text-white' : 'text-slate-300'}`}>Federation of BiH</div>
-                  <div className="text-[10px] text-blue-200/80">{selectedCantonCodes.size}/{cantons.length} cantons selected</div>
-                </div>
-                {federationSelected && <Check size={12} className="text-blue-500 shrink-0" />}
-              </button>
-              <button
-                onClick={onToggleRepublicSrpska}
-                className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-all ${
-                  republicSrpskaSelected
-                    ? 'border-blue-600/40 bg-blue-600/10'
-                    : 'border-slate-800 bg-slate-900/50 hover:border-slate-700'
-                }`}
-              >
-                <div className={`text-[11px] font-bold ${republicSrpskaSelected ? 'text-white' : 'text-slate-300'}`}>Republic of Srpska</div>
-                {republicSrpskaSelected && <Check size={12} className="text-blue-500 shrink-0" />}
-              </button>
-              <button
-                onClick={onToggleBrckoDistrict}
-                className={`w-full flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-all ${
-                  brckoDistrictSelected
-                    ? 'border-blue-600/40 bg-blue-600/10'
-                    : 'border-slate-800 bg-slate-900/50 hover:border-slate-700'
-                }`}
-              >
-                <div className={`text-[11px] font-bold ${brckoDistrictSelected ? 'text-white' : 'text-slate-300'}`}>Brčko distrikt</div>
-                {brckoDistrictSelected && <Check size={12} className="text-blue-500 shrink-0" />}
-              </button>
-            </div>
-
-            <div className="pt-3 border-t border-slate-800 space-y-1">
-              {cantons.map((canton) => {
-                const isSelected = selectedCantonCodes.has(canton.code);
-
-                return (
+            <div className="mt-4 border-t border-slate-800 pt-3">
+              <div className="mb-2 text-[9px] font-black uppercase tracking-[0.18em] text-red-400">Hazards</div>
+              <div className="space-y-1">
+                {[
+                  { id: MapLayer.FIRE_RISK, label: t.fireThreats, icon: Flame, color: 'text-red-500' },
+                  { id: MapLayer.FLOOD_RISK, label: t.hydrological, icon: Waves, color: 'text-blue-500' },
+                ].map((layer) => (
                   <button
-                    key={canton.code}
-                    onClick={() => onToggleCanton(canton.code)}
+                    key={layer.id}
+                    onClick={() => onToggleLayer(layer.id)}
                     className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
-                      isSelected
+                      activeLayers.has(layer.id)
                         ? 'bg-blue-600/10 border-blue-600/50'
                         : 'bg-slate-900/50 border-transparent hover:border-slate-700'
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shadow-[0_0_0_1px_rgba(15,23,42,0.8)]"
-                        style={{ backgroundColor: canton.color }}
-                      />
-                      <span className={`text-[10px] font-black tracking-[0.16em] ${isSelected ? 'text-white' : 'text-slate-500'}`}>
-                        {canton.code}
-                      </span>
-                      <div className="min-w-0 text-left">
-                        <div className={`text-[11px] font-bold truncate ${isSelected ? 'text-white' : 'text-slate-500'}`}>
-                          {canton.name}
-                        </div>
-                        <div className="text-[10px] text-slate-500 truncate">
-                          {canton.seat}
-                        </div>
-                      </div>
+                    <div className="flex items-center gap-3">
+                      <layer.icon size={16} className={activeLayers.has(layer.id) ? layer.color : 'text-slate-600'} />
+                      <span className={`text-[11px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>{layer.label}</span>
                     </div>
-                    {isSelected && <Check size={12} className="text-blue-500 shrink-0" />}
+                    {activeLayers.has(layer.id) && <ShieldCheck size={12} className="text-blue-500" />}
                   </button>
-                );
-              })}
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -586,7 +484,6 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 { id: MapLayer.FORESTS, label: t.forestInventory, icon: Trees, color: 'text-emerald-500' },
                 { id: MapLayer.LANDFILLS, label: t.activeLandfills, icon: Trash2, color: 'text-red-500' },
                 { id: MapLayer.PROTECTED_AREAS, label: t.protectedAreas, icon: ShieldCheck, color: 'text-yellow-400' },
-                { id: MapLayer.FIREFIGHTER_STATIONS, label: t.firefighterStations, icon: FirefighterIcon, color: 'text-orange-400' },
               ].map(layer => (
                 <button
                   key={layer.id}
@@ -647,43 +544,6 @@ export const MapControls: React.FC<MapControlsProps> = ({
           </div>
         )}
 
-        {/* Layer Quick Panel (Data Overlays) */}
-        {canViewMapLayers && activePanel === 'layers' && (
-          <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
-            <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">
-              {t.dataOverlays}
-              <button onClick={() => setActivePanel(null)} className="hover:text-white transition-colors">
-                <X size={14} />
-              </button>
-            </h4>
-            
-            <div className="space-y-4">
-              <div className="space-y-1">
-                {[
-                  { id: MapLayer.FIRE_RISK, label: t.fireThreats, icon: Flame, color: 'text-red-500' },
-                  { id: MapLayer.FLOOD_RISK, label: t.hydrological, icon: Waves, color: 'text-blue-500' },
-                  { id: MapLayer.RS_FIREFIGHTER_DENSITY, label: t.firefighterDensity, icon: Users, color: 'text-emerald-400' },
-                ].map(layer => (
-                  <button 
-                    key={layer.id}
-                    onClick={() => onToggleLayer(layer.id)}
-                    className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
-                      activeLayers.has(layer.id) 
-                        ? 'bg-blue-600/10 border-blue-600/50' 
-                        : 'bg-slate-900/50 border-transparent hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <layer.icon size={16} className={activeLayers.has(layer.id) ? layer.color : 'text-slate-600'} />
-                      <span className={`text-[11px] font-bold ${activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500'}`}>{layer.label}</span>
-                    </div>
-                    {activeLayers.has(layer.id) && <ShieldCheck size={12} className="text-blue-500" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

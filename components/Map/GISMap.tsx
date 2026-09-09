@@ -6,21 +6,10 @@ import 'leaflet.heat';
 import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar, MapPin } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteoResponse, ForestRegion } from '../../types';
-import {
-  ALL_CANTON_CODES,
-  BIH_CANTONS,
-  BIH_FLAG_BLUE,
-  bihBorderData,
-  type BorderRegionKey,
-  type CantonCode,
-  type FirefighterDensityBucket,
-} from '../../bihData';
-import { FIREFIGHTER_STATIONS, type FirefighterStation, type FirefighterStationType } from '../../firefighterData';
+import type { FirefighterStationType } from '../../firefighterData';
 import { MapControls } from './MapControls';
 import { MapScaleControl } from './MapScaleControl';
 import { ForestHoverCard } from './ForestHoverCard';
-import { FirefighterHoverCard } from './FirefighterHoverCard';
-import { FirefighterStationModal } from './FirefighterStationModal';
 import { FIREFIGHTER_STATION_STYLE } from './firefighterStationUi';
 import { AngstromHeatLayer } from '../Layers/FWI/AngstromHeatLayer';
 import { GFIHeatLayer } from '../Layers/FWI/GFIHeatLayer';
@@ -30,9 +19,11 @@ import { AWSFBiHLayer } from './layers/AWS/AWSFBiHLayer';
 import { AWSRsLayer } from './layers/AWS/AWSRsLayer';
 import { DatasetGeoJsonLayer } from './layers/Datasets/DatasetGeoJsonLayer';
 import { DatasetVectorTileLayer } from './layers/Datasets/DatasetVectorTileLayer';
+import { DatasetRasterLayer } from './layers/Datasets/DatasetRasterLayer';
 import { DatasetGeoEditorLayer } from './layers/Datasets/DatasetGeoEditorLayer';
 import { LiveWindVectorLayer } from './layers/Wind/LiveWindVectorLayer';
-import type { DatasetLayer, DatasetLayerFilterState } from '../../services/datasetService';
+import { FireMonitoringLayer } from '../Layers/Incidents/FireMonitoringLayer';
+import { fetchDatasetLayerFeatures, type DatasetLayer, type DatasetLayerFilterState } from '../../services/datasetService';
 import type { GeoEditorMode, Position } from '../../lib/gis/geoEditor';
 import { BH_FWI_CSS_GRADIENT, BH_FWI_RASTER_BOUNDS } from '../../lib/fwi/bhFwiColorScale';
 import { FOREST_RASTER_LAYERS } from '../../lib/gis/forestRasterLayers';
@@ -65,14 +56,6 @@ const METEOBLUE_OVERLAY_PANE = 'meteoblue-overlay-pane';
 const DATASET_LAYER_PANE = 'dataset-layer-pane';
 const FOREST_RASTER_PANE = 'forest-raster-pane';
 const WORLD_COUNTRIES_SERVICE_URL = 'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Countries/FeatureServer/0/query';
-const FIREFIGHTER_DENSITY_FILLS: Record<FirefighterDensityBucket, string> = {
-  'no-data': '#cbd5e1',
-  '1-500': '#34d399',
-  '501-1000': '#22c55e',
-  '1001-1500': '#f59e0b',
-  '1501-2000': '#f97316',
-  '2000-plus': '#dc2626',
-};
 const toRasterBounds = (bounds: L.LatLngBounds) => {
   const paddedBounds = bounds.pad(0.12);
   return {
@@ -224,6 +207,7 @@ interface GISMapProps {
   onSetLanguage: (lang: Language) => void;
   canViewMapLayers: boolean;
   canViewFwi: boolean;
+  canViewFireMonitoring: boolean;
   canViewAws: boolean;
   canViewFbih: boolean;
   canViewRs: boolean;
@@ -288,6 +272,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   onSetLanguage,
   canViewMapLayers,
   canViewFwi,
+  canViewFireMonitoring,
   canViewAws,
   canViewFbih,
   canViewRs,
@@ -437,8 +422,18 @@ export const GISMap: React.FC<GISMapProps> = ({
   };
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const initialViewportLayoutKeyRef = useRef<string | null>(null);
-  const bihBounds = useMemo(() => GlobalLeaflet.geoJSON(bihBorderData as any).getBounds(), []);
+  const hasAppliedInitialViewportRef = useRef(false);
+  const administrativeLayer = useMemo(
+    () => datasetLayers.find((layer) => layer.table_name === 'bih_administrative_boundaries') ?? null,
+    [datasetLayers]
+  );
+  const [administrativeBoundaryData, setAdministrativeBoundaryData] = useState<GeoJSON.FeatureCollection | null>(null);
+  const bihBounds = useMemo(
+    () => administrativeBoundaryData?.features.length
+      ? GlobalLeaflet.geoJSON(administrativeBoundaryData as any).getBounds()
+      : GlobalLeaflet.latLngBounds([[42.5, 15.7], [45.4, 19.7]]),
+    [administrativeBoundaryData]
+  );
   const statusPanelRef = useRef<HTMLDivElement | null>(null);
   const mapControlsRef = useRef<HTMLDivElement | null>(null);
   const legendPanelRef = useRef<HTMLDivElement | null>(null);
@@ -447,15 +442,28 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [showLegend, setShowLegend] = useState(true);
-  const [selectedCantonCodes, setSelectedCantonCodes] = useState<Set<CantonCode>>(
-    () => new Set(ALL_CANTON_CODES)
-  );
-  const [republicSrpskaSelected, setRepublicSrpskaSelected] = useState(true);
-  const [brckoDistrictSelected, setBrckoDistrictSelected] = useState(true);
+
+  useEffect(() => {
+    if (!administrativeLayer) {
+      setAdministrativeBoundaryData(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    fetchDatasetLayerFeatures(administrativeLayer.id, { limit: 500, signal: controller.signal })
+      .then(setAdministrativeBoundaryData)
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          console.error('Unable to load the PostGIS administrative boundary layer.', error);
+          setAdministrativeBoundaryData(null);
+        }
+      });
+
+    return () => controller.abort();
+  }, [administrativeLayer]);
 
   // -- NEW DASHBOARD STATE --
   const [selectedForest, setSelectedForest] = useState<ForestRegion | null>(null);
-  const [selectedStation, setSelectedStation] = useState<FirefighterStation | null>(null);
   const [forestWeather, setForestWeather] = useState<OpenMeteoResponse | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [forecastMode, setForecastMode] = useState<'hourly' | 'daily'>('hourly');
@@ -472,216 +480,6 @@ export const GISMap: React.FC<GISMapProps> = ({
 
   // -- METEOBLUE DYNAMIC STATE --
   const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
-
-  const federationSelected = selectedCantonCodes.size > 0;
-  const allCantonsSelected = selectedCantonCodes.size === ALL_CANTON_CODES.length;
-  const borderLayerVisible = activeLayers.has(MapLayer.BIH_BORDERS);
-  const allBorderRegionsSelected =
-    allCantonsSelected && republicSrpskaSelected && brckoDistrictSelected;
-  const hasAnyBorderSelection =
-    federationSelected || republicSrpskaSelected || brckoDistrictSelected;
-
-  const bihCantonFeatures = useMemo(() => bihBorderData.features as Array<any>, []);
-  const visibleBihCantonData = useMemo(
-    () => ({
-      ...bihBorderData,
-      features: bihCantonFeatures.filter((feature) => {
-        const borderRegionKey = feature.properties?.borderRegionKey as BorderRegionKey | undefined;
-
-        if (borderRegionKey === 'federation') {
-          return selectedCantonCodes.has(feature.properties.cantonCode as CantonCode);
-        }
-
-        if (borderRegionKey === 'republicSrpska') {
-          return republicSrpskaSelected;
-        }
-
-        if (borderRegionKey === 'brckoDistrict') {
-          return brckoDistrictSelected;
-        }
-
-        return false;
-      }),
-    }),
-    [bihCantonFeatures, brckoDistrictSelected, republicSrpskaSelected, selectedCantonCodes]
-  );
-  const firefighterDensityData = useMemo(
-    () => ({
-      ...bihBorderData,
-      features: bihCantonFeatures.filter(
-        (feature) => feature.properties?.borderRegionKey === 'republicSrpska'
-      ),
-    }),
-    [bihCantonFeatures]
-  );
-  const borderLayerDataKey = useMemo(
-    () =>
-      [
-        republicSrpskaSelected ? 'rs-on' : 'rs-off',
-        brckoDistrictSelected ? 'brcko-on' : 'brcko-off',
-        ...Array.from(selectedCantonCodes).sort(),
-      ].join('|'),
-    [brckoDistrictSelected, republicSrpskaSelected, selectedCantonCodes]
-  );
-  const firefighterDensityLayerKey = useMemo(
-    () =>
-      firefighterDensityData.features
-        .map(
-          (feature) =>
-            `${feature.properties?.shapeID}:${feature.properties?.firefighterDensityBucket ?? 'none'}`
-        )
-        .join('|'),
-    [firefighterDensityData]
-  );
-  const cantonBorderStyle = useCallback(
-    (feature?: any): L.PathOptions => {
-      const featureColor =
-        allBorderRegionsSelected
-          ? BIH_FLAG_BLUE
-          : feature?.properties?.borderColor ?? BIH_FLAG_BLUE;
-
-      return {
-        color: featureColor,
-        fillColor: featureColor,
-        fillOpacity: allBorderRegionsSelected ? 0.04 : 0.12,
-        opacity: allBorderRegionsSelected ? 0.82 : 0.94,
-        weight: allBorderRegionsSelected ? 2 : 2.2,
-      };
-    },
-    [allBorderRegionsSelected]
-  );
-  const firefighterDensityStyle = useCallback((feature?: any): L.PathOptions => {
-    const bucket = (feature?.properties?.firefighterDensityBucket ?? 'no-data') as FirefighterDensityBucket;
-    const fillColor = FIREFIGHTER_DENSITY_FILLS[bucket] ?? FIREFIGHTER_DENSITY_FILLS['no-data'];
-
-    return {
-      color: '#0f172a',
-      fillColor,
-      fillOpacity: bucket === 'no-data' ? 0.2 : 0.42,
-      opacity: 0.72,
-      weight: 1,
-      dashArray: bucket === 'no-data' ? '4 3' : undefined,
-    };
-  }, []);
-  const handleFirefighterDensityFeature = useCallback((feature: any, layer: L.Layer) => {
-    const shapeName = feature?.properties?.shapeName ?? 'RS municipality';
-    const bucketLabel = feature?.properties?.firefighterDensityLabel ?? 'No data';
-    const sourceLabel = feature?.properties?.firefighterDensitySource ?? 'User map';
-    const leafletLayer = layer as L.Path;
-
-    leafletLayer.bindTooltip(
-      `<div style="min-width: 180px"><div style="font-weight: 700; margin-bottom: 4px;">${shapeName}</div><div style="font-size: 12px; opacity: 0.9;">${bucketLabel}</div><div style="font-size: 11px; opacity: 0.7; margin-top: 4px;">${sourceLabel}</div></div>`,
-      { sticky: true, direction: 'top', opacity: 0.95 }
-    );
-  }, []);
-
-  const handleToggleBorderLayer = useCallback(() => {
-    if (!borderLayerVisible && !hasAnyBorderSelection) {
-      setSelectedCantonCodes(new Set(ALL_CANTON_CODES));
-      setRepublicSrpskaSelected(true);
-      setBrckoDistrictSelected(true);
-    }
-
-    onToggleLayer(MapLayer.BIH_BORDERS);
-  }, [borderLayerVisible, hasAnyBorderSelection, onToggleLayer]);
-
-  const handleToggleFederation = useCallback(() => {
-    const nextSelection = federationSelected ? new Set<CantonCode>() : new Set(ALL_CANTON_CODES);
-    setSelectedCantonCodes(nextSelection);
-
-    const hasNextSelection =
-      nextSelection.size > 0 || republicSrpskaSelected || brckoDistrictSelected;
-
-    if (!hasNextSelection && borderLayerVisible) {
-      onToggleLayer(MapLayer.BIH_BORDERS);
-    }
-
-    if (hasNextSelection && !borderLayerVisible) {
-      onToggleLayer(MapLayer.BIH_BORDERS);
-    }
-  }, [
-    borderLayerVisible,
-    brckoDistrictSelected,
-    federationSelected,
-    onToggleLayer,
-    republicSrpskaSelected,
-  ]);
-
-  const handleToggleRepublicSrpska = useCallback(() => {
-    const nextValue = !republicSrpskaSelected;
-    setRepublicSrpskaSelected(nextValue);
-
-    const hasNextSelection =
-      selectedCantonCodes.size > 0 || nextValue || brckoDistrictSelected;
-
-    if (!hasNextSelection && borderLayerVisible) {
-      onToggleLayer(MapLayer.BIH_BORDERS);
-    }
-
-    if (hasNextSelection && !borderLayerVisible) {
-      onToggleLayer(MapLayer.BIH_BORDERS);
-    }
-  }, [
-    borderLayerVisible,
-    brckoDistrictSelected,
-    onToggleLayer,
-    republicSrpskaSelected,
-    selectedCantonCodes,
-  ]);
-
-  const handleToggleBrckoDistrict = useCallback(() => {
-    const nextValue = !brckoDistrictSelected;
-    setBrckoDistrictSelected(nextValue);
-
-    const hasNextSelection =
-      selectedCantonCodes.size > 0 || republicSrpskaSelected || nextValue;
-
-    if (!hasNextSelection && borderLayerVisible) {
-      onToggleLayer(MapLayer.BIH_BORDERS);
-    }
-
-    if (hasNextSelection && !borderLayerVisible) {
-      onToggleLayer(MapLayer.BIH_BORDERS);
-    }
-  }, [
-    borderLayerVisible,
-    brckoDistrictSelected,
-    onToggleLayer,
-    republicSrpskaSelected,
-    selectedCantonCodes,
-  ]);
-
-  const handleToggleCanton = useCallback(
-    (code: CantonCode) => {
-      const nextSelection = new Set(selectedCantonCodes);
-
-      if (nextSelection.has(code)) {
-        nextSelection.delete(code);
-      } else {
-        nextSelection.add(code);
-      }
-
-      setSelectedCantonCodes(nextSelection);
-
-      const hasNextSelection =
-        nextSelection.size > 0 || republicSrpskaSelected || brckoDistrictSelected;
-
-      if (!hasNextSelection && borderLayerVisible) {
-        onToggleLayer(MapLayer.BIH_BORDERS);
-      }
-
-      if (hasNextSelection && !borderLayerVisible) {
-        onToggleLayer(MapLayer.BIH_BORDERS);
-      }
-    },
-    [
-      borderLayerVisible,
-      brckoDistrictSelected,
-      onToggleLayer,
-      republicSrpskaSelected,
-      selectedCantonCodes,
-    ]
-  );
 
   // Helper to get translated weather info
   const getWeatherInfo = (code: number) => {
@@ -838,7 +636,10 @@ export const GISMap: React.FC<GISMapProps> = ({
       pane.style.pointerEvents = pointerEvents;
     };
 
-    ensurePane(DATASET_LAYER_PANE, 345, 'auto');
+    // Interactive database vectors must remain above analytical heat/raster panes.
+    // The former firefighter-density GeoJSON used Leaflet's overlay pane (z-index
+    // 400); placing migrated dataset polygons below FWI made them appear missing.
+    ensurePane(DATASET_LAYER_PANE, 410, 'auto');
     ensurePane(FOREST_RASTER_PANE, 350);
     ensurePane(FWI_OVERLAY_PANE, 360);
     ensurePane(METEOBLUE_OVERLAY_PANE, 380);
@@ -919,6 +720,19 @@ export const GISMap: React.FC<GISMapProps> = ({
     );
   }, [map]);
 
+  const fitBosnia = useCallback(() => {
+    if (!map) return;
+
+    map.invalidateSize({ animate: false });
+    map.fitBounds(bihBounds, {
+      padding: [36, 36],
+      // Zoom 8 is approximately the requested 20–50 km scale on a desktop map
+      // while always keeping the complete national border in view.
+      maxZoom: 8,
+      animate: true,
+    });
+  }, [bihBounds, map]);
+
   useEffect(() => {
     if (!map) return;
 
@@ -927,6 +741,7 @@ export const GISMap: React.FC<GISMapProps> = ({
     };
 
     const applyInitialViewport = () => {
+      if (hasAppliedInitialViewportRef.current) return;
       if (!mapContainerRef.current) return;
 
       const containerRect = mapContainerRef.current.getBoundingClientRect();
@@ -979,21 +794,6 @@ export const GISMap: React.FC<GISMapProps> = ({
       }
       applyOverlayPadding(reportingBannerRef.current, ['top']);
 
-      const layoutKey = [
-        Math.round(containerRect.width),
-        Math.round(containerRect.height),
-        isMobile ? 'mobile' : 'desktop',
-        showLegend ? 'legend' : 'no-legend',
-        isReporting ? 'reporting' : 'idle',
-        Math.round(mapControlsRef.current?.getBoundingClientRect().height ?? 0),
-        Math.round(legendPanelRef.current?.getBoundingClientRect().height ?? 0),
-        Math.round(statusPanelRef.current?.getBoundingClientRect().height ?? 0),
-      ].join(':');
-
-      if (initialViewportLayoutKeyRef.current === layoutKey) {
-        return;
-      }
-
       map.fitBounds(bihBounds, {
         paddingTopLeft: [padding.left, padding.top],
         paddingBottomRight: [padding.right, padding.bottom],
@@ -1007,7 +807,7 @@ export const GISMap: React.FC<GISMapProps> = ({
         map.setView(map.getCenter(), Math.min(map.getZoom() + 1, 10), { animate: false });
       }
 
-      initialViewportLayoutKeyRef.current = layoutKey;
+      hasAppliedInitialViewportRef.current = true;
     };
 
     let scheduledFrame = 0;
@@ -1057,7 +857,7 @@ export const GISMap: React.FC<GISMapProps> = ({
       window.removeEventListener('resize', scheduleInitialViewport);
       resizeObserver?.disconnect();
     };
-  }, [bihBounds, isReporting, map, showLegend]);
+  }, [bihBounds, map]);
 
   const activeFwiLayers = useMemo(
     () => [MapLayer.FWI_BOSNIAN].filter((layer) => activeLayers.has(layer)),
@@ -1416,6 +1216,7 @@ export const GISMap: React.FC<GISMapProps> = ({
             opacity={0.72}
           />
         )}
+        <FireMonitoringLayer visible={canViewFireMonitoring && activeLayers.has(MapLayer.ACTIVE_FIRES)} />
         <ThreatHeatmapLayer
           data={fireIncidents}
           gradient={FIRE_HEAT_GRADIENT}
@@ -1449,16 +1250,16 @@ export const GISMap: React.FC<GISMapProps> = ({
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_KBDI)}
         />
-        {canViewFwi && <BosnianFWIHeatLayer
+        {canViewFwi && administrativeBoundaryData && <BosnianFWIHeatLayer
           points={forestFwiData}
           rasterBounds={BH_FWI_RASTER_BOUNDS}
-          rasterMask={bihBorderData as GeoJSON.FeatureCollection}
+          rasterMask={administrativeBoundaryData}
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_BOSNIAN)}
         />}
-        {canViewMapLayers && <LiveWindVectorLayer
+        {canViewMapLayers && administrativeBoundaryData && <LiveWindVectorLayer
           visible={activeLayers.has(MapLayer.WIND_VECTOR) || activeLayers.has(MapLayer.WINDY)}
-          mask={bihBorderData as GeoJSON.FeatureCollection}
+          mask={administrativeBoundaryData}
         />}
         {/* AWS — FBiH and RS layers, filtered by the three typed sub-layers */}
         {canViewAws && (activeLayers.has('AWS Precipitation' as MapLayer) ||
@@ -1472,7 +1273,12 @@ export const GISMap: React.FC<GISMapProps> = ({
         {datasetLayers
           .filter((layer) => activeDatasetLayerIds.has(layer.id))
           .map((layer) => (
-            layer.data_delivery === 'vector_tile' ? <DatasetVectorTileLayer
+            layer.layer_kind === 'raster' ? <DatasetRasterLayer
+              key={layer.id}
+              layer={layer}
+              pane={DATASET_LAYER_PANE}
+              onLoadingChange={onDatasetLayerLoadingChange}
+            /> : layer.data_delivery === 'vector_tile' ? <DatasetVectorTileLayer
               key={layer.id}
               layer={layer}
               pane={DATASET_LAYER_PANE}
@@ -1495,6 +1301,7 @@ export const GISMap: React.FC<GISMapProps> = ({
             layerId={layer.id}
             visible={activeLayers.has(layer.id)}
             pane={FOREST_RASTER_PANE}
+            boundary={administrativeBoundaryData}
           />
         ))}
         <DatasetGeoEditorLayer
@@ -1507,57 +1314,8 @@ export const GISMap: React.FC<GISMapProps> = ({
           onDrawingChange={onGeoEditorDrawingChange}
           onFeaturesChange={onGeoEditorFeaturesChange}
         />
-        {activeLayers.has(MapLayer.RS_FIREFIGHTER_DENSITY) &&
-          firefighterDensityData.features.length > 0 && (
-            <GeoJSON
-              key={firefighterDensityLayerKey}
-              data={firefighterDensityData as any}
-              style={firefighterDensityStyle}
-              onEachFeature={handleFirefighterDensityFeature}
-            />
-          )}
         <CountryBorderReference visible={hasPlainBaseLayer} />
-        {borderLayerVisible && !hasPlainBaseLayer && visibleBihCantonData.features.length > 0 && (
-          <GeoJSON
-            key={borderLayerDataKey}
-            data={visibleBihCantonData as any}
-            style={cantonBorderStyle}
-          />
-        )}
 
-        {activeLayers.has(MapLayer.FIREFIGHTER_STATIONS) && (
-          <LayerGroup>
-            {FIREFIGHTER_STATIONS.map((station) => (
-              <Marker
-                key={station.id}
-                position={station.coordinates}
-                icon={FIREFIGHTER_STATION_ICONS[station.stationType]}
-                eventHandlers={{
-                  click: () => {
-                    if (isReporting) {
-                      onReportClick(station.coordinates[0], station.coordinates[1]);
-                      return;
-                    }
-                    setSelectedStation(station);
-                  },
-                }}
-              >
-                <Tooltip direction="top" offset={[0, -20]} opacity={1} interactive>
-                  <FirefighterHoverCard
-                    station={station}
-                    language={language}
-                    onOpenDetails={() => {
-                      if (!isReporting) {
-                        setSelectedStation(station);
-                      }
-                    }}
-                  />
-                </Tooltip>
-              </Marker>
-            ))}
-          </LayerGroup>
-        )}
-        
         {/* FOREST MARKERS - Hover triggers Tooltip card, Button in Tooltip triggers Full Screen */}
         <LayerGroup>
           {MOCK_FORESTS.map(forest => {
@@ -1588,14 +1346,6 @@ export const GISMap: React.FC<GISMapProps> = ({
 
         {userPos && <Marker position={userPos} icon={UserIcon} />}
       </MapContainer>
-
-      {selectedStation && (
-        <FirefighterStationModal
-          station={selectedStation}
-          language={language}
-          onClose={() => setSelectedStation(null)}
-        />
-      )}
 
       {/* --- FULL SCREEN WEATHER DASHBOARD OVERLAY --- */}
       {selectedForest && (
@@ -2112,20 +1862,11 @@ export const GISMap: React.FC<GISMapProps> = ({
         showLegend={showLegend}
         onToggleLegend={() => setShowLegend(!showLegend)}
         language={language}
-        borderLayerVisible={borderLayerVisible}
-        cantons={BIH_CANTONS}
-        selectedCantonCodes={selectedCantonCodes}
-        federationSelected={federationSelected}
-        republicSrpskaSelected={republicSrpskaSelected}
-        brckoDistrictSelected={brckoDistrictSelected}
-        onToggleBorderLayer={handleToggleBorderLayer}
-        onToggleFederation={handleToggleFederation}
-        onToggleRepublicSrpska={handleToggleRepublicSrpska}
-        onToggleBrckoDistrict={handleToggleBrckoDistrict}
-        onToggleCanton={handleToggleCanton}
         onStartPickingLocation={() => setIsPickingLocation(true)}
+        onFitBosnia={fitBosnia}
         canViewMapLayers={canViewMapLayers}
         canViewFwi={canViewFwi}
+        canViewFireMonitoring={canViewFireMonitoring}
         canViewAws={canViewAws}
       />
 

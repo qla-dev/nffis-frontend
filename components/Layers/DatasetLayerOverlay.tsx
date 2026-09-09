@@ -9,6 +9,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Pentagon,
+  Image as ImageIcon,
   Search,
   X,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ import type {
   DatasetLayerStyle,
 } from '../../services/datasetService';
 import { EditLayerSidebar, type EditLayerSidebarTabId } from './EditLayerSidebar/EditLayerSidebar';
+import type { FilterUpdate } from './EditLayerSidebar/FiltersTab';
 import type { GeoEditorMode, Position } from '../../lib/gis/geoEditor';
 
 interface DatasetLayerOverlayProps {
@@ -55,7 +57,7 @@ interface DatasetLayerOverlayProps {
   onUpdateLayerStyle: (layerId: number, style: DatasetLayerStyle) => void;
   onSaveLayerStyle: (layerId: number, style: DatasetLayerStyle) => Promise<void>;
   onSaveFeatureAttributes: (attributes: Record<string, unknown>) => Promise<void>;
-  onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
+  onUpdateFilter: (layerId: number, filter: FilterUpdate) => void;
   onClearFilter: (layerId: number) => void;
   onGeoEditorModeChange: (mode: GeoEditorMode) => void;
   onGeoEditorSnappingChange: (enabled: boolean) => void;
@@ -77,22 +79,43 @@ const CATEGORY_LABELS: Record<string, string> = {
   information: 'Information',
 };
 
-const SHAPE_ORDER = ['point', 'line', 'polygon', 'mixed'] as const;
+const SHAPE_ORDER = ['point', 'line', 'polygon', 'mixed', 'raster'] as const;
 
 const SHAPE_LABELS: Record<string, string> = {
   point: 'Point',
   line: 'Line',
   polygon: 'Polygon',
   mixed: 'Mixed',
+  raster: 'Raster',
 };
 
-const SOURCE_ORDER = ['fbih', 'rs', 'shared'] as const;
+const SOURCE_ORDER = ['fbih', 'rs', 'cantons', 'shared'] as const;
 
 const SOURCE_LABELS: Record<string, string> = {
   fbih: 'Federacija',
   rs: 'RS',
+  cantons: 'Cantons',
   shared: 'Shared',
 };
+
+/**
+ * Dataset jurisdiction is used for access control, whereas the source filter
+ * reflects the directory the data was imported from. Canton data lives below
+ * FBiH in the source tree, so it must be detected before the entity folders.
+ */
+function sourceGroups(layer: DatasetLayer): string[] {
+  const sourcePath = layer.source_path?.toLocaleLowerCase() || '';
+
+  if (/(^|[\\/])\d{1,2}[ _-]*(?:kanton|canton)\b|(^|[\\/])cantons?([\\/]|$)/iu.test(sourcePath)) {
+    return ['cantons'];
+  }
+
+  const groups: string[] = [];
+  if (/(^|[\\/])\d*[ _-]*fbih\b|federacij|federation/iu.test(sourcePath)) groups.push('fbih');
+  if (/(^|[\\/])\d*[ _-]*rs\b|republi(?:c|ka)(?:[ _-]*of)?[ _-]*srpska/iu.test(sourcePath)) groups.push('rs');
+
+  return groups.length > 0 ? groups : [layer.jurisdiction || 'shared'];
+}
 
 function toggleInSet(previous: Set<string>, value: string): Set<string> {
   const next = new Set(previous);
@@ -142,6 +165,9 @@ function Toggle({ checked }: { checked: boolean }) {
 }
 
 function GeometryIcon({ family, color }: { family: DatasetLayer['geometry_family']; color: string }) {
+  if (family === 'raster') {
+    return <ImageIcon size={15} style={{ color }} />;
+  }
   if (family === 'point') {
     return <Circle size={14} style={{ color }} fill={color} />;
   }
@@ -151,6 +177,66 @@ function GeometryIcon({ family, color }: { family: DatasetLayer['geometry_family
   }
 
   return <Pentagon size={15} style={{ color }} fill={`${color}33`} />;
+}
+
+function LayerCatalogRow({
+  layer,
+  active,
+  loading,
+  selected,
+  appliedFilterCount,
+  onSelect,
+  onToggle,
+}: {
+  layer: DatasetLayer;
+  active: boolean;
+  loading: boolean;
+  selected: boolean;
+  appliedFilterCount: number;
+  onSelect: () => void;
+  onToggle: () => void;
+}) {
+  const color = layer.style.markerColor || layer.style.color || layer.style.fillColor || '#60a5fa';
+
+  return (
+    <div
+      className={`group flex w-full items-center gap-3 rounded-md border px-2 py-2 text-left transition-all ${
+        selected
+          ? 'border-blue-500/60 bg-blue-600/10'
+          : active
+            ? 'border-slate-700 bg-slate-900/80'
+            : 'border-transparent bg-transparent hover:border-slate-800 hover:bg-slate-900/70'
+      }`}
+    >
+      <GeometryIcon family={layer.geometry_family} color={color} />
+      <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
+        <div className={`truncate text-xs font-bold ${active ? 'text-white' : 'text-slate-400'}`}>
+          {layer.display_name}
+        </div>
+        <div className="flex min-w-0 items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600">
+          <span>{layer.geometry_family}</span>
+          <span>{layer.feature_count.toLocaleString()}</span>
+          {appliedFilterCount > 0 && <span className="text-blue-400">{appliedFilterCount} filters</span>}
+        </div>
+      </button>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          if (!loading) onToggle();
+        }}
+        disabled={loading}
+        aria-pressed={active}
+        aria-label={loading ? `Loading ${layer.display_name}` : undefined}
+        className={`shrink-0 ${loading ? 'cursor-wait' : ''}`}
+        title={loading ? 'Loading layer data...' : active ? 'Hide layer' : 'Show layer'}
+      >
+        {loading
+          ? <Loader2 size={18} className="animate-spin text-blue-400" />
+          : <Toggle checked={active} />}
+      </button>
+    </div>
+  );
 }
 
 function filterCount(filter?: DatasetLayerFilterState): number {
@@ -211,6 +297,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   const [search, setSearch] = useState('');
   const [showLayerFilters, setShowLayerFilters] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+  const [collapsedSubcategories, setCollapsedSubcategories] = useState<Set<string>>(new Set());
   const [showCatalog, setShowCatalog] = useState(true);
   const [shapeTypes, setShapeTypes] = useState<Set<string>>(new Set());
   const [subcategories, setSubcategories] = useState<Set<string>>(new Set());
@@ -241,7 +328,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
         layer.table_name,
         layer.category,
         layer.subcategory || '',
-        SOURCE_LABELS[layer.jurisdiction] || layer.jurisdiction || 'shared',
+        sourceGroups(layer).map((source) => SOURCE_LABELS[source] || source).join(' '),
         layer.geometry_type || '',
       ].some((value) => value.toLowerCase().includes(term));
     });
@@ -275,8 +362,9 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   const sourceFacets = useMemo(() => {
     const counts = new Map<string, number>();
     searchedLayers.forEach((layer) => {
-      const source = layer.jurisdiction || 'shared';
-      counts.set(source, (counts.get(source) || 0) + 1);
+      sourceGroups(layer).forEach((source) => {
+        counts.set(source, (counts.get(source) || 0) + 1);
+      });
     });
 
     return SOURCE_ORDER
@@ -287,7 +375,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   const visibleLayers = useMemo(() => searchedLayers.filter((layer) => {
     if (shapeTypes.size > 0 && !shapeTypes.has(layer.geometry_family || 'mixed')) return false;
     if (subcategories.size > 0 && !subcategories.has((layer.subcategory || '').trim())) return false;
-    if (sources.size > 0 && !sources.has(layer.jurisdiction || 'shared')) return false;
+    if (sources.size > 0 && !sourceGroups(layer).some((source) => sources.has(source))) return false;
     if (activeOnly && !activeLayerIds.has(layer.id)) return false;
     return true;
   }), [activeLayerIds, activeOnly, searchedLayers, shapeTypes, sources, subcategories]);
@@ -419,7 +507,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                     </div>
 
                     {showLayerFilters && (
-                      <div id="layer-catalog-filters" className="mt-3 space-y-3">
+                      <div id="layer-catalog-filters" className="mt-3 h-[300px] space-y-3 overflow-y-auto pr-1">
                         <div className="space-y-1.5">
                           <span className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-600">
                             Visibility
@@ -477,7 +565,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                             <span className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-600">
                               Subcategory
                             </span>
-                            <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto pr-1">
+                            <div className="flex flex-wrap gap-1.5">
                               {subcategoryFacets.map((facet) => (
                                 <FacetChip
                                   key={facet.value}
@@ -510,6 +598,27 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                       const categoryLayers = layersByCategory[category];
                       const allCategoryLayersActive = categoryLayers.every((layer) => activeLayerIds.has(layer.id));
                       const categoryHasLoadingLayer = categoryLayers.some((layer) => loadingLayerIds.has(layer.id));
+                      const directLayers = categoryLayers.filter((layer) => !layer.subcategory?.trim());
+                      const subcategoryGroups = Object.entries(
+                        categoryLayers.reduce<Record<string, DatasetLayer[]>>((groups, layer) => {
+                          const subcategory = layer.subcategory?.trim();
+                          if (!subcategory) return groups;
+
+                          (groups[subcategory] ||= []).push(layer);
+                          return groups;
+                        }, {}),
+                      ).sort(([left], [right]) => {
+                        const preferredOrder = ['Cantons', 'RS Regions'];
+                        const leftIndex = preferredOrder.indexOf(left);
+                        const rightIndex = preferredOrder.indexOf(right);
+                        if (leftIndex !== -1 || rightIndex !== -1) {
+                          if (leftIndex === -1) return 1;
+                          if (rightIndex === -1) return -1;
+                          return leftIndex - rightIndex;
+                        }
+
+                        return left.localeCompare(right);
+                      });
 
                       return (
                         <section key={category} className="border-b border-slate-900 pb-2">
@@ -545,51 +654,75 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
 
                           {!isCollapsed && (
                             <div className="space-y-1">
-                              {categoryLayers.map((layer) => {
-                                const isActive = activeLayerIds.has(layer.id);
-                                const isLayerLoading = loadingLayerIds.has(layer.id);
-                                const isSelected = selectedLayerId === layer.id;
-                                const color = layer.style.markerColor || layer.style.color || layer.style.fillColor || '#60a5fa';
-                                const count = filterCount(filters[layer.id]);
+                              {directLayers.map((layer) => (
+                                <LayerCatalogRow
+                                  key={layer.id}
+                                  layer={layer}
+                                  active={activeLayerIds.has(layer.id)}
+                                  loading={loadingLayerIds.has(layer.id)}
+                                  selected={selectedLayerId === layer.id}
+                                  appliedFilterCount={filterCount(filters[layer.id])}
+                                  onSelect={() => onSelectLayer(layer.id)}
+                                  onToggle={() => onToggleLayer(layer.id)}
+                                />
+                              ))}
+
+                              {subcategoryGroups.map(([subcategory, groupLayers]) => {
+                                const collapseKey = `${category}:${subcategory}`;
+                                const isSubcategoryCollapsed = collapsedSubcategories.has(collapseKey);
+                                const allSubcategoryLayersActive = groupLayers.every((layer) => activeLayerIds.has(layer.id));
+                                const subcategoryHasLoadingLayer = groupLayers.some((layer) => loadingLayerIds.has(layer.id));
 
                                 return (
-                                  <div
-                                    key={layer.id}
-                                    className={`group flex w-full items-center gap-3 rounded-md border px-2 py-2 text-left transition-all ${
-                                      isSelected
-                                        ? 'border-blue-500/60 bg-blue-600/10'
-                                        : isActive
-                                          ? 'border-slate-700 bg-slate-900/80'
-                                          : 'border-transparent bg-transparent hover:border-slate-800 hover:bg-slate-900/70'
-                                    }`}
-                                  >
-                                    <GeometryIcon family={layer.geometry_family} color={color} />
-                                    <button type="button" onClick={() => onSelectLayer(layer.id)} className="min-w-0 flex-1 text-left">
-                                      <div className={`truncate text-xs font-bold ${isActive ? 'text-white' : 'text-slate-400'}`}>
-                                        {layer.display_name}
+                                  <div key={subcategory} className="ml-2 border-l border-slate-800 pl-2">
+                                    <div className="flex items-center gap-1 py-1">
+                                      <button
+                                        type="button"
+                                        aria-expanded={!isSubcategoryCollapsed}
+                                        aria-label={`${subcategory} (${groupLayers.length} layers)`}
+                                        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-slate-900"
+                                        onClick={() => {
+                                          setCollapsedSubcategories((previous) => {
+                                            const next = new Set(previous);
+                                            if (next.has(collapseKey)) next.delete(collapseKey);
+                                            else next.add(collapseKey);
+                                            return next;
+                                          });
+                                        }}
+                                      >
+                                        <span className="flex min-w-0 items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                                          {isSubcategoryCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                                          <span className="truncate">{subcategory}</span>
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-600">{groupLayers.length}</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={subcategoryHasLoadingLayer}
+                                        onClick={() => onSetCategoryLayersActive(groupLayers.map((layer) => layer.id), !allSubcategoryLayersActive)}
+                                        className="shrink-0 rounded-md border border-slate-800 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-blue-400 transition-colors hover:border-blue-500/50 hover:bg-blue-600/10 disabled:cursor-wait disabled:opacity-50"
+                                        title={allSubcategoryLayersActive ? `Hide all ${subcategory} layers` : `Show all ${subcategory} layers`}
+                                      >
+                                        {allSubcategoryLayersActive ? 'All off' : 'All on'}
+                                      </button>
+                                    </div>
+
+                                    {!isSubcategoryCollapsed && (
+                                      <div className="space-y-1">
+                                        {groupLayers.map((layer) => (
+                                          <LayerCatalogRow
+                                            key={layer.id}
+                                            layer={layer}
+                                            active={activeLayerIds.has(layer.id)}
+                                            loading={loadingLayerIds.has(layer.id)}
+                                            selected={selectedLayerId === layer.id}
+                                            appliedFilterCount={filterCount(filters[layer.id])}
+                                            onSelect={() => onSelectLayer(layer.id)}
+                                            onToggle={() => onToggleLayer(layer.id)}
+                                          />
+                                        ))}
                                       </div>
-                                      <div className="flex min-w-0 items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600">
-                                        <span>{layer.geometry_family}</span>
-                                        <span>{layer.feature_count.toLocaleString()}</span>
-                                        {count > 0 && <span className="text-blue-400">{count} filters</span>}
-                                      </div>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        if (!isLayerLoading) onToggleLayer(layer.id);
-                                      }}
-                                      disabled={isLayerLoading}
-                                      aria-pressed={isActive}
-                                      aria-label={isLayerLoading ? `Loading ${layer.display_name}` : undefined}
-                                      className={`shrink-0 ${isLayerLoading ? 'cursor-wait' : ''}`}
-                                      title={isLayerLoading ? 'Loading layer data...' : isActive ? 'Hide layer' : 'Show layer'}
-                                    >
-                                      {isLayerLoading
-                                        ? <Loader2 size={18} className="animate-spin text-blue-400" />
-                                        : <Toggle checked={isActive} />}
-                                    </button>
+                                    )}
                                   </div>
                                 );
                               })}

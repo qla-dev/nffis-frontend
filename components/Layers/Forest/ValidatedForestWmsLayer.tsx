@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import L from 'leaflet';
 import { WMSTileLayer, useMap, useMapEvents } from 'react-leaflet';
 import type { MapLayer } from '../../../types';
@@ -15,19 +15,14 @@ import {
   validateWmsCapabilities,
   type RasterMetadata,
 } from '../../../lib/gis/rasterValidation';
-import { bihBorderData } from '../../../bihData';
-
 interface Props {
   layerId: MapLayer;
   visible: boolean;
   pane?: string;
+  boundary: GeoJSON.FeatureCollection | null;
 }
 
 const requestCache = new Map<string, Promise<string>>();
-
-const BIH_POLYGONS = (bihBorderData.features as Array<{ geometry?: { type?: string; coordinates?: number[][][] } }>)
-  .filter((feature) => feature.geometry?.type === 'Polygon')
-  .map((feature) => feature.geometry!.coordinates!);
 
 interface ClippedWmsProps {
   url: string;
@@ -36,11 +31,12 @@ interface ClippedWmsProps {
   opacity: number;
   pane?: string;
   attribution: string;
+  polygons: number[][][][];
 }
 
 /** Draw each WMS tile in a canvas clipped to the authoritative BiH boundary.
  * The remote WMS remains categorical; this only hides pixels outside BiH. */
-const BiHClippedWmsLayer: React.FC<ClippedWmsProps> = ({ url, layerName, overviewLayerName, opacity, pane, attribution }) => {
+const BiHClippedWmsLayer: React.FC<ClippedWmsProps> = ({ url, layerName, overviewLayerName, opacity, pane, attribution, polygons }) => {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   useMapEvents({ zoomend: () => setZoom(map.getZoom()) });
@@ -63,7 +59,7 @@ const BiHClippedWmsLayer: React.FC<ClippedWmsProps> = ({ url, layerName, overvie
           const tileOrigin = L.point(coords.x * size.x, coords.y * size.y);
           context.save();
           context.beginPath();
-          BIH_POLYGONS.forEach((polygon) => polygon.forEach((ring) => {
+          polygons.forEach((polygon) => polygon.forEach((ring) => {
             ring.forEach(([lng, lat], index) => {
               const point = map.project(L.latLng(lat, lng), coords.z).subtract(tileOrigin);
               if (index === 0) context.moveTo(point.x, point.y);
@@ -103,7 +99,7 @@ const BiHClippedWmsLayer: React.FC<ClippedWmsProps> = ({ url, layerName, overvie
     });
     layer.addTo(map);
     return () => { layer.remove(); };
-  }, [attribution, map, opacity, pane, renderedLayerName, url]);
+  }, [attribution, map, opacity, pane, polygons, renderedLayerName, url]);
 
   return null;
 };
@@ -136,10 +132,16 @@ async function getManifest(url: string): Promise<RasterMetadata[]> {
   return layers;
 }
 
-export const ValidatedForestWmsLayer: React.FC<Props> = ({ layerId, visible, pane }) => {
+export const ValidatedForestWmsLayer: React.FC<Props> = ({ layerId, visible, pane, boundary }) => {
   const [ready, setReady] = useState(false);
   const definition = FOREST_RASTER_LAYERS.find((layer) => layer.id === layerId);
   const serviceUrl = definition?.wmsUrl || FOREST_WMS_URL;
+  const polygons = useMemo(() => (boundary?.features || []).flatMap((feature) => {
+    const geometry = feature.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
+    if (geometry?.type === 'Polygon') return [geometry.coordinates as number[][][]];
+    if (geometry?.type === 'MultiPolygon') return geometry.coordinates as number[][][][];
+    return [];
+  }), [boundary]);
 
   useEffect(() => {
     setReady(false);
@@ -181,7 +183,8 @@ export const ValidatedForestWmsLayer: React.FC<Props> = ({ layerId, visible, pan
   if (!visible || !ready || !definition || !serviceUrl || !definition.wmsLayerName) return null;
 
   if (definition.dataType === 'forest_type') {
-    return <BiHClippedWmsLayer url={serviceUrl} layerName={definition.wmsLayerName} overviewLayerName={definition.overviewWmsLayerName} opacity={definition.opacity} attribution={definition.attribution} pane={pane} />;
+    if (polygons.length === 0) return null;
+    return <BiHClippedWmsLayer url={serviceUrl} layerName={definition.wmsLayerName} overviewLayerName={definition.overviewWmsLayerName} opacity={definition.opacity} attribution={definition.attribution} pane={pane} polygons={polygons} />;
   }
 
   return (

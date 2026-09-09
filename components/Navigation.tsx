@@ -1,5 +1,5 @@
 import React from 'react';
-import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound } from 'lucide-react';
+import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound, Flame } from 'lucide-react';
 import { Language, AppState } from '../types';
 import { TRANSLATIONS } from '../constants';
 import type { AuthUser } from '../lib/auth/session';
@@ -15,6 +15,7 @@ interface NavProps {
   canViewReports: boolean;
   canCreateReports: boolean;
   canViewLayers: boolean;
+  canViewFireMonitoring?: boolean;
   onLogout: () => void;
 }
 
@@ -29,6 +30,7 @@ export const Navigation: React.FC<NavProps> = ({
   canViewReports,
   canCreateReports,
   canViewLayers,
+  canViewFireMonitoring = false,
   onLogout,
 }) => {
   const t = TRANSLATIONS[state.language];
@@ -78,6 +80,7 @@ export const Navigation: React.FC<NavProps> = ({
         {/* Navigation Groups */}
         <div className="flex-1 py-4 flex flex-col gap-1">
           <NavItem icon={Map} label={t.map} id="map" />
+          {canViewFireMonitoring && <NavItem icon={Flame} label="Fire monitoring" id="fires" color="text-orange-500" />}
           {canViewReports && <NavItem icon={AlertTriangle} label={t.reports} id="reports" />}
           {canViewReports && <NavItem icon={BarChart3} label={t.stats} id="stats" />}
           {canViewLayers && <NavItem icon={ListFilter} label={t.layers} id="layers" onClick={onOpenLayers} />}
@@ -111,7 +114,7 @@ export const Navigation: React.FC<NavProps> = ({
       </nav>
 
       {/* Mobile Bottom Navigation - FIXED: High Z-Index, Grid Layout for equal width icons */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 grid grid-cols-5 items-center p-2 pb-[max(1rem,env(safe-area-inset-bottom))] z-[5000] shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 grid grid-cols-6 items-center p-2 pb-[max(1rem,env(safe-area-inset-bottom))] z-[5000] shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
         <button 
           onClick={() => onSetView('map')} 
           className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${state.view === 'map' ? 'text-blue-500' : 'text-slate-500'}`}
@@ -119,6 +122,11 @@ export const Navigation: React.FC<NavProps> = ({
           <Map size={20} />
           <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.map}</span>
         </button>
+        {canViewFireMonitoring ? (
+          <button onClick={() => onSetView('fires')} className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${state.view === 'fires' ? 'text-orange-500' : 'text-slate-500'}`}>
+            <Flame size={20} /><span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">Fires</span>
+          </button>
+        ) : <span />}
         {canViewReports ? (
           <button
             onClick={() => onSetView('reports')}

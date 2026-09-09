@@ -10,9 +10,11 @@ import { fetchDatasetLayerFilterOptions } from '../../../services/datasetService
 interface FiltersTabProps {
   layer: DatasetLayer;
   filter?: DatasetLayerFilterState;
-  onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
+  onUpdateFilter: (layerId: number, filter: FilterUpdate) => void;
   onClearFilter: (layerId: number) => void;
 }
+
+export type FilterUpdate = DatasetLayerFilterState | ((current: DatasetLayerFilterState) => DatasetLayerFilterState);
 
 function filterCount(filter?: DatasetLayerFilterState): number {
   if (!filter) return 0;
@@ -54,7 +56,7 @@ export const FiltersTab: React.FC<FiltersTabProps> = ({
 
   const currentFilter = filter || {};
   const count = filterCount(currentFilter);
-  const updateFilter = (next: DatasetLayerFilterState) => {
+  const updateFilter = (next: FilterUpdate) => {
     onUpdateFilter(layer.id, next);
   };
 
@@ -65,7 +67,7 @@ export const FiltersTab: React.FC<FiltersTabProps> = ({
           <Search size={16} />
           <input
             value={currentFilter.q || ''}
-            onChange={(event) => updateFilter({ ...currentFilter, q: event.target.value })}
+            onChange={(event) => updateFilter((current) => ({ ...current, q: event.target.value }))}
             className="h-full min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-600"
             placeholder="Search attributes"
           />
@@ -107,7 +109,7 @@ export const FiltersTab: React.FC<FiltersTabProps> = ({
 interface FilterFieldProps {
   option: DatasetFilterOption;
   filter: DatasetLayerFilterState;
-  onChange: (filter: DatasetLayerFilterState) => void;
+  onChange: (filter: FilterUpdate) => void;
 }
 
 const FilterField: React.FC<FilterFieldProps> = ({ option, filter, onChange }) => {
@@ -125,19 +127,19 @@ const FilterField: React.FC<FilterFieldProps> = ({ option, filter, onChange }) =
         <div className="grid grid-cols-2 gap-2">
           <input
             value={filter.min?.[option.name] || ''}
-            onChange={(event) => onChange({
-              ...filter,
-              min: { ...(filter.min || {}), [option.name]: event.target.value },
-            })}
+            onChange={(event) => onChange((current) => ({
+              ...current,
+              min: { ...(current.min || {}), [option.name]: event.target.value },
+            }))}
             className="h-9 rounded-md border border-slate-800 bg-slate-950 px-3 text-xs text-white outline-none placeholder:text-slate-600 focus:border-blue-500/70"
             placeholder={option.min !== null && option.min !== undefined ? String(option.min) : 'Min'}
           />
           <input
             value={filter.max?.[option.name] || ''}
-            onChange={(event) => onChange({
-              ...filter,
-              max: { ...(filter.max || {}), [option.name]: event.target.value },
-            })}
+            onChange={(event) => onChange((current) => ({
+              ...current,
+              max: { ...(current.max || {}), [option.name]: event.target.value },
+            }))}
             className="h-9 rounded-md border border-slate-800 bg-slate-950 px-3 text-xs text-white outline-none placeholder:text-slate-600 focus:border-blue-500/70"
             placeholder={option.max !== null && option.max !== undefined ? String(option.max) : 'Max'}
           />
@@ -160,12 +162,17 @@ const FilterField: React.FC<FilterFieldProps> = ({ option, filter, onChange }) =
           {values.length > 0 && (
             <button
               type="button"
-              onClick={() => onChange({
-                ...filter,
-                values: {
-                  ...(filter.values || {}),
-                  [option.name]: allSelected ? [] : values.map((entry) => String(entry.value ?? '')),
-                },
+              onClick={() => onChange((current) => {
+                const currentValues = current.values?.[option.name] || [];
+                const shouldClear = values.length > 0 && currentValues.length === values.length;
+
+                return {
+                  ...current,
+                  values: {
+                    ...(current.values || {}),
+                    [option.name]: shouldClear ? [] : values.map((entry) => String(entry.value ?? '')),
+                  },
+                };
               })}
               className="text-[10px] font-black uppercase tracking-[0.1em] text-blue-400 transition-colors hover:text-blue-300"
             >
@@ -184,16 +191,19 @@ const FilterField: React.FC<FilterFieldProps> = ({ option, filter, onChange }) =
               key={`${option.name}-${value}`}
               type="button"
               onClick={() => {
-                const nextValues = checked
-                  ? selectedValues.filter((item) => item !== value)
-                  : [...selectedValues, value];
+                onChange((current) => {
+                  const currentValues = current.values?.[option.name] || [];
+                  const nextValues = currentValues.includes(value)
+                    ? currentValues.filter((item) => item !== value)
+                    : [...currentValues, value];
 
-                onChange({
-                  ...filter,
-                  values: {
-                    ...(filter.values || {}),
-                    [option.name]: nextValues,
-                  },
+                  return {
+                    ...current,
+                    values: {
+                      ...(current.values || {}),
+                      [option.name]: nextValues,
+                    },
+                  };
                 });
               }}
               className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left transition-colors ${

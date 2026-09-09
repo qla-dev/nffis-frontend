@@ -16,6 +16,8 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
   const [displayName, setDisplayName] = useState(layer.display_name);
   const [category, setCategory] = useState(layer.category);
   const [subcategory, setSubcategory] = useState(layer.subcategory || '');
+  const [nearestRoadEnabled, setNearestRoadEnabled] = useState(layer.nearest_road_enabled);
+  const [roadStatus, setRoadStatus] = useState<NonNullable<DatasetLayer['road_status']>>(layer.road_status || 'unknown');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSavingDelivery, setIsSavingDelivery] = useState(false);
@@ -26,8 +28,10 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
     setDisplayName(layer.display_name);
     setCategory(layer.category);
     setSubcategory(layer.subcategory || '');
+    setNearestRoadEnabled(layer.nearest_road_enabled);
+    setRoadStatus(layer.road_status || 'unknown');
     setError(null);
-  }, [layer.id, layer.display_name, layer.category, layer.subcategory]);
+  }, [layer.id, layer.display_name, layer.category, layer.subcategory, layer.nearest_road_enabled, layer.road_status]);
 
   const canSave = displayName.trim() !== '' && category.trim() !== '' && !isSaving;
 
@@ -42,6 +46,8 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
         display_name: displayName.trim(),
         category: category.trim(),
         subcategory: subcategory.trim() === '' ? null : subcategory.trim(),
+        nearest_road_enabled: layer.geometry_family === 'line' ? nearestRoadEnabled : false,
+        road_status: layer.geometry_family === 'line' && nearestRoadEnabled ? roadStatus : null,
       });
       onLayerUpdated?.(updated);
       setIsEditing(false);
@@ -56,6 +62,8 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
     setDisplayName(layer.display_name);
     setCategory(layer.category);
     setSubcategory(layer.subcategory || '');
+    setNearestRoadEnabled(layer.nearest_road_enabled);
+    setRoadStatus(layer.road_status || 'unknown');
     setError(null);
     setIsEditing(false);
   };
@@ -111,6 +119,35 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
               placeholder="Optional"
             />
 
+            {layer.geometry_family === 'line' && (
+              <div className="space-y-2 rounded-md border border-slate-800 bg-slate-900/60 p-3">
+                <label className="flex items-center justify-between gap-3 text-xs font-bold text-slate-300">
+                  Use for nearest road
+                  <input
+                    type="checkbox"
+                    checked={nearestRoadEnabled}
+                    onChange={(event) => setNearestRoadEnabled(event.target.checked)}
+                    className="h-4 w-4 accent-blue-600"
+                  />
+                </label>
+                {nearestRoadEnabled && (
+                  <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-400">
+                    Road status
+                    <select
+                      value={roadStatus}
+                      onChange={(event) => setRoadStatus(event.target.value as NonNullable<DatasetLayer['road_status']>)}
+                      className="h-9 rounded-md border border-slate-800 bg-slate-950 px-2 text-xs font-bold text-white outline-none focus:border-blue-500/70"
+                    >
+                      <option value="existing">Existing</option>
+                      <option value="planned">Planned</option>
+                      <option value="reconstruction">Reconstruction</option>
+                      <option value="unknown">Unknown</option>
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
+
             {error && (
               <div className="rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs font-bold text-red-200">
                 {error}
@@ -131,6 +168,20 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
             <InfoRow label="Name" value={layer.display_name} />
             <InfoRow label="Category" value={layer.category} />
             <InfoRow label="Subcategory" value={layer.subcategory || 'None'} />
+            <InfoRow label="Layer kind" value={layer.layer_kind || 'vector'} />
+            {layer.layer_kind === 'raster' && (
+              <>
+                <InfoRow label="Latest scene" value={layer.latest_scene?.name || 'No approved imagery'} />
+                <InfoRow label="Provider" value={layer.latest_scene?.provider || 'None'} />
+                <InfoRow label="Acquired" value={layer.latest_scene?.acquired_at ? new Date(layer.latest_scene.acquired_at).toLocaleString() : 'None'} />
+              </>
+            )}
+            {layer.geometry_family === 'line' && (
+              <>
+                <InfoRow label="Nearest-road search" value={layer.nearest_road_enabled ? 'Enabled' : 'Disabled'} />
+                <InfoRow label="Road status" value={layer.road_status || 'None'} />
+              </>
+            )}
             <InfoRow label="Layer ID" value={String(layer.id)} />
             <InfoRow label="Features" value={layer.feature_count.toLocaleString()} />
           </div>
@@ -143,7 +194,7 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
         <InfoRow label="SRID" value={String(layer.srid)} />
       </Section>
 
-      {canManageDataDelivery && (
+      {canManageDataDelivery && layer.layer_kind !== 'raster' && (
         <Section title="Data delivery">
           <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-400">
             Renderer input

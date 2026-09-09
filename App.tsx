@@ -6,6 +6,7 @@ import { ReportModal } from './components/Report/ReportModal';
 import { SessionLoginGate } from './components/Auth/SessionLoginGate';
 import { DatasetLayerOverlay } from './components/Layers/DatasetLayerOverlay';
 import StatisticsDashboard from './components/Statistics/StatisticsDashboard';
+import FireMonitoringDashboard from './components/FireMonitoring/FireMonitoringDashboard';
 import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './types';
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
 import { Waves, Flame, Database } from 'lucide-react';
@@ -45,13 +46,13 @@ const App: React.FC = () => {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [state, setState] = useState<AppState>({
     language: Language.EN,
-    // Enable AWS layers by default along with core GIS layers
+    // Enable only the operational overlays that are intended to be on at startup.
     activeLayers: new Set([
       MapLayer.FIRE_RISK, 
-      MapLayer.BIH_BORDERS, 
       MapLayer.FORESTS, 
       MapLayer.LANDFILLS,
       MapLayer.FWI_BOSNIAN,
+      MapLayer.ACTIVE_FIRES,
       'AWS Precipitation' as MapLayer,
       'AWS Agro' as MapLayer,
       'AWS Meteo' as MapLayer
@@ -101,6 +102,7 @@ const App: React.FC = () => {
   const isSuperAdmin = authUser?.role?.slug === 'super-admin';
   const canViewMapLayers = hasPermission(authUser, 'map-layers', 'view');
   const canViewFwi = hasPermission(authUser, 'fire-weather-indices', 'view');
+  const canViewFireMonitoring = hasPermission(authUser, 'fire-monitoring', 'view');
   const canViewAws = hasPermission(authUser, 'aws-monitoring', 'view');
   const hasEntityScope = hasPermission(authUser, 'fbih', 'view') || hasPermission(authUser, 'rs', 'view');
   const canViewFbih = !hasEntityScope || hasPermission(authUser, 'fbih', 'view');
@@ -128,6 +130,7 @@ const App: React.FC = () => {
 
   const handleSetView = (view: AppState['view']) => {
     if ((view === 'reports' || view === 'stats') && !canViewReports) return;
+    if (view === 'fires' && !canViewFireMonitoring) return;
     if (view === 'layers' && !canViewDatasetLayers) return;
 
     setIsDatasetLayerPanelOpen(false);
@@ -240,9 +243,10 @@ const App: React.FC = () => {
   }, [canUpdateDatasetLayers, canViewDatasetLayers, geoEditorMode]);
 
   const selectDatasetLayer = useCallback((layerId: number) => {
+    const selectedLayer = datasetLayers.find((layer) => layer.id === layerId);
     setSelectedDatasetLayerId(layerId);
     setSelectedDatasetFeature(null);
-    setDatasetEditorInitialTab('filters');
+    setDatasetEditorInitialTab(selectedLayer?.layer_kind === 'raster' ? 'information' : 'filters');
     setDatasetFeatureSaveError(null);
     setGeoEditorMode('view');
     setGeoEditorDrawing([]);
@@ -432,12 +436,20 @@ const App: React.FC = () => {
     });
   }, []);
 
-  const updateDatasetLayerFilter = useCallback((layerId: number, filter: DatasetLayerFilterState) => {
-    setDatasetLayerFilters(prev => ({
-      ...prev,
-      [layerId]: filter,
-    }));
-  }, []);
+  const updateDatasetLayerFilter = useCallback((
+    layerId: number,
+    update: DatasetLayerFilterState | ((current: DatasetLayerFilterState) => DatasetLayerFilterState),
+  ) => {
+    setDatasetLayerFilters((previous) => {
+      const current = previous[layerId] || {};
+      const filter = typeof update === 'function' ? update(current) : update;
+
+      return {
+        ...previous,
+        [layerId]: filter,
+      };
+    });
+  }, [datasetLayers]);
 
   const clearDatasetLayerFilter = useCallback((layerId: number) => {
     setDatasetLayerFilters(prev => {
@@ -551,6 +563,7 @@ const App: React.FC = () => {
         canViewReports={canViewReports}
         canCreateReports={canCreateReports}
         canViewLayers={canViewDatasetLayers}
+        canViewFireMonitoring={canViewFireMonitoring}
         onLogout={handleLogout}
       />}
       
@@ -576,6 +589,7 @@ const App: React.FC = () => {
             onSetLanguage={handleSetLang}
             canViewMapLayers={canViewMapLayers}
             canViewFwi={canViewFwi}
+            canViewFireMonitoring={canViewFireMonitoring}
             canViewAws={canViewAws}
             canViewFbih={canViewFbih}
             canViewRs={canViewRs}
@@ -601,7 +615,7 @@ const App: React.FC = () => {
                     <Database size={14} /> {t.systemCoreData}
                   </div>
                   <h1 className={`text-3xl font-bold tracking-tight ${state.isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                    {state.view === 'reports' ? t.recentReports : state.view === 'layers' ? t.layers : t.stats}
+                    {state.view === 'reports' ? t.recentReports : state.view === 'layers' ? t.layers : state.view === 'fires' ? 'Fire monitoring' : t.stats}
                   </h1>
                 </div>
               </header>
@@ -630,6 +644,9 @@ const App: React.FC = () => {
 
               {state.view === 'stats' && (
                 <StatisticsDashboard language={state.language} isDarkMode={state.isDarkMode} />
+              )}
+              {state.view === 'fires' && canViewFireMonitoring && (
+                <FireMonitoringDashboard isDarkMode={state.isDarkMode} />
               )}
             </div>
           </div>

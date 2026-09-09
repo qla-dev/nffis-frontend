@@ -16,7 +16,7 @@ import type {
   DatasetLayerFilterState,
   DatasetLayerStyle,
 } from '../../../services/datasetService';
-import { FiltersTab } from './FiltersTab';
+import { FiltersTab, type FilterUpdate } from './FiltersTab';
 import { RoleAccessTab } from './RoleAccessTab';
 import { InformationTab } from './InformationTab';
 import { SourceTab } from './SourceTab';
@@ -55,7 +55,7 @@ interface EditLayerSidebarProps {
   geometrySaveError?: string | null;
   onCollapse: () => void;
   onLayerUpdated?: (layer: DatasetLayer) => void;
-  onUpdateFilter: (layerId: number, filter: DatasetLayerFilterState) => void;
+  onUpdateFilter: (layerId: number, filter: FilterUpdate) => void;
   onClearFilter: (layerId: number) => void;
   onUpdateLayerStyle: (layerId: number, style: DatasetLayerStyle) => void;
   onSaveLayerStyle: (layerId: number, style: DatasetLayerStyle) => Promise<void>;
@@ -173,6 +173,10 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
       return <GeoEditorTab mode={geoEditorMode} drawing={geoEditorDrawing} snappingEnabled={geoEditorSnappingEnabled} newPolygonName={geoEditorNewPolygonName} pendingChanges={geoEditorPendingChanges} selectedFeatureId={geoEditorSelectedFeatureId} isSaving={isSavingGeometry} error={geometrySaveError} onModeChange={onGeoEditorModeChange} onSnappingChange={onGeoEditorSnappingChange} onNewPolygonNameChange={onGeoEditorNewPolygonNameChange} onUndoDrawing={onGeoEditorUndoDrawing} onClearDrawing={onGeoEditorClearDrawing} onFinishDrawing={onGeoEditorFinishDrawing} onSave={onGeoEditorSave} onReset={onGeoEditorReset} />;
     }
 
+    if (layer.layer_kind === 'raster') {
+      return <InformationTab layer={layer} canEdit={canUpdateLayer} canManageDataDelivery={false} onLayerUpdated={onLayerUpdated} />;
+    }
+
     return (
       <FiltersTab
         layer={layer}
@@ -225,6 +229,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
             }}
           >
             {TABS.filter((tab) => {
+              if (layer?.layer_kind === 'raster') return tab.id === 'information' || tab.id === 'source' || tab.id === 'symbology' || (tab.id === 'roleaccess' && canManageRoleAccess);
               if (tab.id === 'geoeditor') return layer?.geometry_family === 'polygon' && (canUpdateLayer || canCreateLayer);
               if (tab.id === 'roleaccess') return canManageRoleAccess;
               return canUpdateLayer || (tab.id !== 'symbology' && tab.id !== 'attributes');

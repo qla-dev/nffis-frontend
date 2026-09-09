@@ -29,6 +29,8 @@ function bboxForMap(map: L.Map): string {
   ].map((value) => value.toFixed(6)).join(',');
 }
 
+const OPENSTREETMAP_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> (ODbL)';
+
 function viewportIntersectsLayer(map: L.Map, layer: DatasetLayer): boolean {
   const layerBounds = layer.bounds;
   if (!layerBounds) return true;
@@ -60,6 +62,12 @@ function escapeHtml(value: unknown): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function propertyLabel(key: string): string {
+  return key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function categoryForFeature(layer: DatasetLayer, feature: GeoJSON.Feature): DatasetLayerCategoryStyle | null {
@@ -118,7 +126,7 @@ function tooltipHtml(layer: DatasetLayer, feature: GeoJSON.Feature): string {
     .slice(0, 6)
     .map(([key, value]) => `
       <div style="display:grid;grid-template-columns:96px 1fr;gap:8px;font-size:11px;line-height:1.35;">
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#64748b;font-weight:700;">${escapeHtml(key)}</span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#64748b;font-weight:700;">${escapeHtml(propertyLabel(key))}</span>
         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e2e8f0;">${escapeHtml(value)}</span>
       </div>
     `)
@@ -153,6 +161,12 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
   const requestSequence = useRef(0);
   const filterKey = useMemo(() => JSON.stringify(filters || {}), [filters]);
   const styleKey = useMemo(() => JSON.stringify(layer.style || {}), [layer.style]);
+
+  useEffect(() => {
+    if (!layer.source_driver?.includes('OpenStreetMap')) return;
+    map.attributionControl?.addAttribution(OPENSTREETMAP_ATTRIBUTION);
+    return () => map.attributionControl?.removeAttribution(OPENSTREETMAP_ATTRIBUTION);
+  }, [layer.source_driver, map]);
 
   useMapEvents({
     moveend: () => setBbox(bboxForMap(map)),
@@ -239,7 +253,7 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
           className: 'nffis-dataset-tooltip',
         });
 
-        if (layer.geometry_family === 'polygon' && onPolygonClick) {
+        if (onPolygonClick) {
           leafletLayer.on('click', (event: L.LeafletMouseEvent) => {
             L.DomEvent.stopPropagation(event.originalEvent);
             onPolygonClick(layer.id, feature as GeoJSON.Feature);

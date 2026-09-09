@@ -1,4 +1,5 @@
 import { MapLayer } from '../../types';
+import { API_BASE_URL } from '../../services/api';
 import type { RasterContract, RasterMetadata, WmsRasterMetadata } from './rasterValidation';
 
 export type ForestRasterDataType = 'forest_type' | 'modelled_probability';
@@ -31,8 +32,11 @@ export interface ForestRasterLayerDefinition {
 const env = (import.meta as ImportMeta & { env: Record<string, string | undefined> }).env;
 
 export const FOREST_WMS_URL = (env.VITE_FOREST_WMS_URL || '').trim();
-// Served by our backend in production because the official EEA WMS has no CORS headers.
-export const PUBLIC_FOREST_TYPE_WMS_URL = (env.VITE_FOREST_TYPE_WMS_URL || '/api/forest-type-wms').trim();
+// Served by our backend because the official EEA WMS has no CORS headers.
+// Keep this on the same API origin as the rest of the application. In local
+// development API_BASE_URL is /api (Vite proxies it); in production it is the
+// deployed API origin. A deployment can still explicitly override this URL.
+export const PUBLIC_FOREST_TYPE_WMS_URL = (env.VITE_FOREST_TYPE_WMS_URL || `${API_BASE_URL}/forest-type-wms`).trim();
 export const FOREST_RASTER_MANIFEST_URL = (env.VITE_FOREST_RASTER_MANIFEST_URL || '/forest-rasters/manifest.json').trim();
 
 const species = (

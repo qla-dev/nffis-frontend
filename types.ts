@@ -12,6 +12,7 @@ export enum MapLayer {
   INFRARED = 'Infrared (Vegetation)',
   METEOBLUE = 'Meteoblue Temperature',
   NASA_FIRMS = 'NASA FIRMS (Hotspots)',
+  ACTIVE_FIRES = 'Active Fire Events',
   THERMAL = 'Thermal Infrared (LST)',
   WINDY = 'Windy.com (Dark GIS)',
   WIND_VECTOR = 'Live Wind Vector',
@@ -39,9 +40,6 @@ export enum MapLayer {
   FOREST_CASTANEA = 'Castanea sativa suitability',
   LANDFILLS = 'Active Landfills',
   PROTECTED_AREAS = 'Protected Areas (Heatmap)',
-  FIREFIGHTER_STATIONS = 'Firefighter Stations',
-  RS_FIREFIGHTER_DENSITY = 'Firefighters / Population',
-  BIH_BORDERS = 'BiH State Borders',
   AWS_PRECIPITATION = 'AWS Precipitation',
   AWS_AGRO = 'AWS Agro',
   AWS_METEO = 'AWS Meteo'
@@ -86,7 +84,7 @@ export interface AppState {
   language: Language;
   activeLayers: Set<MapLayer>;
   incidents: IncidentReport[];
-  view: 'map' | 'reports' | 'stats' | 'info' | 'layers';
+  view: 'map' | 'reports' | 'stats' | 'fires' | 'info' | 'layers';
   isReporting: boolean;
   isDarkMode: boolean;
 }

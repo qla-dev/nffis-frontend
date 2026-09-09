@@ -5,6 +5,8 @@ import { Language } from '../types';
 
 const { fetchReportStatistics } = vi.hoisted(() => ({ fetchReportStatistics: vi.fn() }));
 vi.mock('../services/reportStatisticsService', () => ({ fetchReportStatistics }));
+const { fetchFireStatistics } = vi.hoisted(() => ({ fetchFireStatistics: vi.fn() }));
+vi.mock('../services/fireMonitoringService', () => ({ fetchFireStatistics }));
 
 import StatisticsDashboard from '../components/Statistics/StatisticsDashboard';
 
@@ -16,7 +18,10 @@ const statistics = {
 };
 
 describe('StatisticsDashboard', () => {
-  beforeEach(() => fetchReportStatistics.mockResolvedValue(statistics));
+  beforeEach(() => {
+    fetchReportStatistics.mockResolvedValue(statistics);
+    fetchFireStatistics.mockResolvedValue({ active_events: 2, new_last_hour: 0, new_last_24h: 3, high_priority: 1, extinguished_last_24h: 0, highest_current_frp: 19.2, recently_changed: 0, by_canton: [], by_source: [] });
+  });
 
   it('renders KPIs, trend, type, and weather distributions', async () => {
     render(<StatisticsDashboard language={Language.EN} isDarkMode />);
@@ -27,6 +32,8 @@ describe('StatisticsDashboard', () => {
     expect(screen.getByText('Active days')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Incident reports by day' })).toBeInTheDocument();
     expect(screen.getByText('Clear Sky')).toBeInTheDocument();
+    expect(screen.getByText('FireWatch live monitoring')).toBeInTheDocument();
+    expect(screen.getByText('Active FireWatch events')).toBeInTheDocument();
     expect(screen.getAllByText('9').length).toBeGreaterThan(0);
   });
 
