@@ -1,5 +1,5 @@
 
-import { ForestRegion, IncidentType, Language, IncidentReport, RegionType } from './types';
+import { ForestRegion, Language, IncidentReport, RegionType } from './types';
 
 export const BIH_CENTER: [number, number] = [44.1, 17.9];
 
@@ -548,39 +548,7 @@ export const TRANSLATIONS = {
   }
 };
 
-export const INITIAL_INCIDENTS: IncidentReport[] = [
-  {
-    id: 'inc-001',
-    type: IncidentType.FIRE,
-    lat: 44.7347,
-    lng: 18.0878,
-    description: 'Smoke and elevated surface heat reported on the Ozren slopes near Doboj.',
-    timestamp: Date.now() - 3600000,
-    urgency: 'high',
-    windDirection: 165,
-    windSpeed: 22
-  },
-  {
-    id: 'inc-003',
-    type: IncidentType.FIRE,
-    lat: 44.9794,
-    lng: 16.7144,
-    description: 'Active fire-risk hotspot flagged west of Prijedor toward the Kozara approach.',
-    timestamp: Date.now() - 5400000,
-    urgency: 'medium',
-    windDirection: 210,
-    windSpeed: 18
-  },
-  {
-    id: 'inc-002',
-    type: IncidentType.FLOOD,
-    lat: 44.7722,
-    lng: 17.1910,
-    description: 'River Vrbas overflowing near Banja Luka center.',
-    timestamp: Date.now() - 7200000,
-    urgency: 'medium'
-  }
-];
+export const INITIAL_INCIDENTS: IncidentReport[] = [];
 
 export const MOCK_FORESTS: ForestRegion[] = [
   // Major Landfills (Deponije)

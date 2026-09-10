@@ -98,6 +98,19 @@ const SOURCE_LABELS: Record<string, string> = {
   shared: 'Shared',
 };
 
+const CANTON_SOURCE_PREFIX = 'canton:';
+
+function cantonSourceFolder(layer: DatasetLayer): string | null {
+  const segments = (layer.source_path || '').split(/[\\/]+/).map((segment) => segment.trim()).filter(Boolean);
+  const cantonFolder = segments.find((segment) => /\b(?:kanton|canton)\b/iu.test(segment) && !/^cantons?$/iu.test(segment));
+  return cantonFolder ? cantonFolder.replace(/^\d{1,2}[ _-]*/, '').trim() : null;
+}
+
+function sourceLabel(source: string): string {
+  if (source.startsWith(CANTON_SOURCE_PREFIX)) return source.slice(CANTON_SOURCE_PREFIX.length);
+  return SOURCE_LABELS[source] || source;
+}
+
 /**
  * Dataset jurisdiction is used for access control, whereas the source filter
  * reflects the directory the data was imported from. Canton data lives below
@@ -105,9 +118,10 @@ const SOURCE_LABELS: Record<string, string> = {
  */
 function sourceGroups(layer: DatasetLayer): string[] {
   const sourcePath = layer.source_path?.toLocaleLowerCase() || '';
+  const cantonFolder = cantonSourceFolder(layer);
 
-  if (/(^|[\\/])\d{1,2}[ _-]*(?:kanton|canton)\b|(^|[\\/])cantons?([\\/]|$)/iu.test(sourcePath)) {
-    return ['cantons'];
+  if (cantonFolder || /(^|[\\/])cantons?([\\/]|$)/iu.test(sourcePath)) {
+    return cantonFolder ? ['cantons', `${CANTON_SOURCE_PREFIX}${cantonFolder}`] : ['cantons'];
   }
 
   const groups: string[] = [];
@@ -328,7 +342,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
         layer.table_name,
         layer.category,
         layer.subcategory || '',
-        sourceGroups(layer).map((source) => SOURCE_LABELS[source] || source).join(' '),
+        sourceGroups(layer).map(sourceLabel).join(' '),
         layer.geometry_type || '',
       ].some((value) => value.toLowerCase().includes(term));
     });
@@ -367,9 +381,16 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
       });
     });
 
-    return SOURCE_ORDER
+    const generalSources = SOURCE_ORDER
       .filter((source) => counts.has(source))
       .map((source) => ({ value: source, count: counts.get(source) || 0 }));
+
+    const cantonSources = Array.from(counts.entries())
+      .filter(([source]) => source.startsWith(CANTON_SOURCE_PREFIX))
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => sourceLabel(a.value).localeCompare(sourceLabel(b.value)));
+
+    return [...generalSources, ...cantonSources];
   }, [searchedLayers]);
 
   const visibleLayers = useMemo(() => searchedLayers.filter((layer) => {
@@ -531,7 +552,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                               {sourceFacets.map((facet) => (
                                 <FacetChip
                                   key={facet.value}
-                                  label={SOURCE_LABELS[facet.value] || facet.value}
+                                  label={sourceLabel(facet.value)}
                                   count={facet.count}
                                   checked={sources.has(facet.value)}
                                   onClick={() => setSources((prev) => toggleInSet(prev, facet.value))}
