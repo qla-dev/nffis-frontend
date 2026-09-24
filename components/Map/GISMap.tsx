@@ -15,17 +15,24 @@ import { AngstromHeatLayer } from '../Layers/FWI/AngstromHeatLayer';
 import { GFIHeatLayer } from '../Layers/FWI/GFIHeatLayer';
 import { KBDIHeatLayer } from '../Layers/FWI/KBDIHeatLayer';
 import { BosnianFWIHeatLayer } from '../Layers/FWI/BosnianFWIHeatLayer';
+import { FireIntelligenceCogLayer } from '../Layers/FWI/FireIntelligenceCogLayer';
 import { AWSFBiHLayer } from './layers/AWS/AWSFBiHLayer';
 import { AWSRsLayer } from './layers/AWS/AWSRsLayer';
 import { DatasetGeoJsonLayer } from './layers/Datasets/DatasetGeoJsonLayer';
 import { DatasetVectorTileLayer } from './layers/Datasets/DatasetVectorTileLayer';
 import { DatasetRasterLayer } from './layers/Datasets/DatasetRasterLayer';
 import { DatasetGeoEditorLayer } from './layers/Datasets/DatasetGeoEditorLayer';
+import { DatasetEditorDataLoader } from './layers/Datasets/DatasetEditorDataLoader';
 import { LiveWindVectorLayer } from './layers/Wind/LiveWindVectorLayer';
 import { FireMonitoringLayer } from '../Layers/Incidents/FireMonitoringLayer';
+import { PyretechnicsScenarioLayer } from '../Layers/Incidents/PyretechnicsScenarioLayer';
+import type { FireEventProperties } from '../../services/fireMonitoringService';
 import { fetchDatasetLayerFeatures, type DatasetLayer, type DatasetLayerFilterState } from '../../services/datasetService';
 import type { GeoEditorMode, Position } from '../../lib/gis/geoEditor';
+import type { MapPerformanceMetrics } from '../../lib/gis/mapRendererPoc';
 import { BH_FWI_CSS_GRADIENT, BH_FWI_RASTER_BOUNDS } from '../../lib/fwi/bhFwiColorScale';
+import { classifyEffisFwi, EFFIS_FWI_DISPLAY_MAX, EFFIS_FWI_TICKS } from '../../lib/fwi/effisFwiScale';
+import { calculateCanadianFwi } from '../../lib/fwi/canadianFwi';
 import { FOREST_RASTER_LAYERS } from '../../lib/gis/forestRasterLayers';
 import { ValidatedForestWmsLayer } from '../Layers/Forest/ValidatedForestWmsLayer';
 import {
@@ -187,7 +194,7 @@ const FIREFIGHTER_STATION_ICONS = Object.fromEntries(
 
 // --- COMPONENTS ---
 
-interface GISMapProps {
+export interface GISMapProps {
   incidents: IncidentReport[];
   activeLayers: Set<MapLayer>;
   onReportClick: (lat: number, lng: number) => void;
@@ -213,6 +220,7 @@ interface GISMapProps {
   canViewRs: boolean;
   canAdjustAws: boolean;
   geoEditorMode: GeoEditorMode;
+  geoEditorLayerId: number | null;
   geoEditorFeatures: GeoJSON.Feature[];
   geoEditorSelectedFeatureId: string | null;
   geoEditorDrawing: Position[];
@@ -221,6 +229,8 @@ interface GISMapProps {
   onGeoEditorDrawingChange: (positions: Position[]) => void;
   onGeoEditorFeaturesChange: (features: GeoJSON.Feature[]) => void;
   onDatasetFeaturesLoaded: (layerId: number, features: GeoJSON.FeatureCollection | null) => void;
+  onDatasetEditorFeaturesLoaded: (layerId: number, features: GeoJSON.FeatureCollection) => void;
+  onDatasetEditorLoadError: (message: string) => void;
 }
 
 interface FireIndexWeatherData {
@@ -232,6 +242,7 @@ interface FireIndexWeatherData {
     temperature_2m: number[];
     relative_humidity_2m: number[];
     wind_speed_10m: number[];
+    precipitation: number[];
   };
   daily: {
     precipitation_sum: number[];
@@ -278,6 +289,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   canViewRs,
   canAdjustAws,
   geoEditorMode,
+  geoEditorLayerId,
   geoEditorFeatures,
   geoEditorSelectedFeatureId,
   geoEditorDrawing,
@@ -286,9 +298,82 @@ export const GISMap: React.FC<GISMapProps> = ({
   onGeoEditorDrawingChange,
   onGeoEditorFeaturesChange,
   onDatasetFeaturesLoaded,
+  onDatasetEditorFeaturesLoaded,
+  onDatasetEditorLoadError,
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
+  const mapMetricsStartRef = useRef(performance.now());
   const t = TRANSLATIONS[language];
+  const isExtremeFwiTest = useMemo(
+    () => new URLSearchParams(window.location.search).get('fwiTest') === 'extreme',
+    [],
+  );
+
+  useEffect(() => {
+    if (!map) return;
+
+    const metrics: MapPerformanceMetrics = {
+      renderer: 'leaflet',
+      startedAt: mapMetricsStartRef.current,
+      mapLoadMs: null,
+      operationalMs: null,
+      sourceErrors: 0,
+      longTasks: 0,
+      longTaskDurationMs: 0,
+    };
+    window.__NFFIS_MAP_METRICS__ = metrics;
+    let quietTimer: number | null = null;
+
+    const publish = () => {
+      window.__NFFIS_MAP_METRICS__ = { ...metrics };
+    };
+    const scheduleOperational = () => {
+      if (metrics.operationalMs !== null) return;
+      if (quietTimer !== null) window.clearTimeout(quietTimer);
+      quietTimer = window.setTimeout(() => {
+        metrics.operationalMs = performance.now() - metrics.startedAt;
+        publish();
+      }, 750);
+    };
+    const markLoad = () => {
+      if (metrics.mapLoadMs === null) {
+        metrics.mapLoadMs = performance.now() - metrics.startedAt;
+        publish();
+      }
+      scheduleOperational();
+    };
+    const markSourceError = () => {
+      metrics.sourceErrors += 1;
+      publish();
+      scheduleOperational();
+    };
+
+    map.whenReady(markLoad);
+    map.on('layeradd tileload load moveend zoomend', scheduleOperational);
+    map.on('tileerror', markSourceError);
+
+    let observer: PerformanceObserver | null = null;
+    if ('PerformanceObserver' in window) {
+      try {
+        observer = new PerformanceObserver((list) => {
+          const entries = list.getEntries();
+          metrics.longTasks += entries.length;
+          metrics.longTaskDurationMs += entries.reduce((sum, entry) => sum + entry.duration, 0);
+          publish();
+        });
+        observer.observe({ type: 'longtask', buffered: true });
+      } catch {
+        observer = null;
+      }
+    }
+
+    return () => {
+      observer?.disconnect();
+      if (quietTimer !== null) window.clearTimeout(quietTimer);
+      map.off('layeradd tileload load moveend zoomend', scheduleOperational);
+      map.off('tileerror', markSourceError);
+    };
+  }, [map]);
 
   // Helpers
   const fmtTime = (isoString: string) => new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -327,19 +412,10 @@ export const GISMap: React.FC<GISMapProps> = ({
     if (kbdi < 0) kbdi = 0;
     kbdi = Math.min(800, kbdi + (dryDays * 50));
     
-    const isi = (windKmh * 0.12) * (1 + (Math.max(0, 30 - humidity)) / 60) * (Math.max(0, temp) / 15);
-    const bui = (dryDays * 6) + (Math.max(0, temp) / 8);
-    
-    const fD = bui <= 80 
-      ? (0.626 * Math.pow(Math.max(0, bui), 0.809) + 2.0)
-      : (1000.0 / (25.0 + 108.64 * Math.exp(-0.023 * Math.max(0, bui))));
-    
-    const B = 0.1 * isi * fD;
-    const B_safe = Math.max(B, 1e-6);
-    
-    const fwiBosnian = B > 1
-      ? Math.exp(2.72 * Math.pow(Math.max(0, 0.434 * Math.log(B_safe)), 0.647))
-      : Math.max(0, B);
+    const canadianFwi = calculateCanadianFwi(weather);
+    const isi = canadianFwi?.isi ?? 0;
+    const bui = canadianFwi?.bui ?? 0;
+    const fwiBosnian = canadianFwi?.fwi ?? 0;
 
     return { ai, gfi, kbdi, fwiBosnian, isi, bui };
   };
@@ -367,13 +443,12 @@ export const GISMap: React.FC<GISMapProps> = ({
     else if (kbdi > 400) { kbdiRisk = t.riskLevels.high; kbdiColor = "text-red-600"; }
     else if (kbdi > 200) { kbdiRisk = t.riskLevels.moderate; kbdiColor = "text-orange-500"; }
 
-    let fwiRisk = t.riskLevels.low;
-    let fwiColor = "text-emerald-500";
-    if (fwiBosnian >= 70.0) { fwiRisk = t.riskLevels.extreme; fwiColor = "text-purple-600"; }
-    else if (fwiBosnian >= 50.0) { fwiRisk = t.riskLevels.extreme; fwiColor = "text-purple-500"; }
-    else if (fwiBosnian >= 38.0) { fwiRisk = t.riskLevels.veryHigh; fwiColor = "text-red-600"; }
-    else if (fwiBosnian >= 21.3) { fwiRisk = t.riskLevels.high; fwiColor = "text-orange-500"; }
-    else if (fwiBosnian >= 11.2) { fwiRisk = t.riskLevels.moderate; fwiColor = "text-yellow-500"; }
+    const fwiClass = classifyEffisFwi(fwiBosnian);
+    const fwiRisk = fwiClass.label;
+    const fwiColor = {
+      low: 'text-emerald-500', moderate: 'text-yellow-500', high: 'text-orange-500',
+      very_high: 'text-red-500', extreme: 'text-red-800', very_extreme: 'text-purple-600',
+    }[fwiClass.key];
 
     return { ai, aiRisk, aiColor, gfi, gfiRisk, gfiColor, kbdi, kbdiRisk, kbdiColor, fwiBosnian, fwiRisk, fwiColor };
   };
@@ -466,8 +541,11 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [selectedForest, setSelectedForest] = useState<ForestRegion | null>(null);
   const [forestWeather, setForestWeather] = useState<OpenMeteoResponse | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(false);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
   const [forecastMode, setForecastMode] = useState<'hourly' | 'daily'>('hourly');
   const [forestFwiData, setForestFwiData] = useState<ForestFireIndexSnapshot[]>([]);
+  const [activeFireEvents, setActiveFireEvents] = useState<FireEventProperties[]>([]);
+  const [isSpreadLegendExpanded, setIsSpreadLegendExpanded] = useState(false);
   const [isLoadingFwi, setIsLoadingFwi] = useState(false);
   const [isMeteoblueUnavailable, setIsMeteoblueUnavailable] = useState(false);
   const [isPickingLocation, setIsPickingLocation] = useState(false);
@@ -501,6 +579,12 @@ export const GISMap: React.FC<GISMapProps> = ({
   };
 
   const isMeteoblueActive = activeLayers.has(MapLayer.METEOBLUE);
+  const isFireSpreadActive = canViewFireMonitoring
+    && activeLayers.has(MapLayer.FWI_BOSNIAN)
+    && activeLayers.has(MapLayer.FWI_FIRE_SPREAD);
+  useEffect(() => {
+    if (!isFireSpreadActive) setIsSpreadLegendExpanded(false);
+  }, [isFireSpreadActive]);
   const gibsDate = useMemo(() => gibsObservationDate(), []);
 
   // Derive Active Base Layer Object
@@ -528,7 +612,7 @@ export const GISMap: React.FC<GISMapProps> = ({
     [incidents]
   );
   const isAnyFwiLayerActive = useMemo(
-    () => activeLayers.has(MapLayer.FWI_BOSNIAN),
+    () => activeLayers.has(MapLayer.FWI_BOSNIAN) || activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI),
     [activeLayers]
   );
   const activeFwiValue = useMemo(() => {
@@ -541,12 +625,22 @@ export const GISMap: React.FC<GISMapProps> = ({
   const activeFwiLayerInfo = useMemo(() => {
     if (activeLayers.has(MapLayer.FWI_BOSNIAN)) {
       return { 
-        title: t.dashboard.fwiBosnian, 
+        title: 'NFFIS FWI · EFFIS scale',
         min: 0, 
-        max: 80, 
+        max: EFFIS_FWI_DISPLAY_MAX,
         gradient: BH_FWI_CSS_GRADIENT,
         iconGradient: BH_FWI_CSS_GRADIENT,
         currentValue: activeFwiValue
+      };
+    }
+    if (activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI)) {
+      return {
+        title: 'BiH FWI COG · EFFIS scale',
+        min: 0,
+        max: EFFIS_FWI_DISPLAY_MAX,
+        gradient: BH_FWI_CSS_GRADIENT,
+        iconGradient: BH_FWI_CSS_GRADIENT,
+        currentValue: null,
       };
     }
     return null;
@@ -670,6 +764,9 @@ export const GISMap: React.FC<GISMapProps> = ({
   useEffect(() => {
     if (selectedForest) {
       setLoadingWeather(true);
+      setWeatherError(null);
+      setForestWeather(null);
+      const controller = new AbortController();
       const latitude = selectedForest.coordinates[0];
       const longitude = selectedForest.coordinates[1];
       
@@ -686,24 +783,37 @@ export const GISMap: React.FC<GISMapProps> = ({
         'soil_moisture_9_to_27cm', 'soil_moisture_27_to_81cm', 'uv_index'
       ].join(',');
 
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=${params}&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,uv_index_max,precipitation_sum,rain_sum,showers_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&timezone=auto`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=${params}&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,uv_index_max,precipitation_sum,rain_sum,showers_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant&past_days=30&timezone=auto`;
       
-      fetch(url)
-        .then(res => res.json())
+      fetch(url, { signal: controller.signal })
+        .then(res => {
+          if (!res.ok) throw new Error(`Weather request failed (${res.status})`);
+          return res.json();
+        })
         .then(data => {
             if (data.error) {
-                 console.error("Open-Meteo API Error", data);
-                 setForestWeather(null);
+                 throw new Error(data.reason || 'Weather service rejected the request');
             } else {
                 setForestWeather(data);
             }
         })
-        .catch(err => console.error("Weather Fetch Error", err))
-        .finally(() => setLoadingWeather(false));
+        .catch(err => {
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          console.error("Weather Fetch Error", err);
+          setWeatherError(language === Language.BS
+            ? 'Nije moguće učitati vremenske podatke za odabranu lokaciju.'
+            : 'Weather data could not be loaded for the selected location.');
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setLoadingWeather(false);
+        });
+
+      return () => controller.abort();
     } else {
         setForestWeather(null);
+        setWeatherError(null);
     }
-  }, [selectedForest]);
+  }, [language, selectedForest]);
 
   const handleLocateMe = useCallback(() => {
     if (!navigator.geolocation) return;
@@ -910,8 +1020,9 @@ export const GISMap: React.FC<GISMapProps> = ({
               // Open-Meteo always returns current.time alongside whatever variable is
               // requested, and current.time is the only field this fetch actually reads.
               '&current=temperature_2m' +
-              '&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m' +
+              '&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation' +
               '&daily=precipitation_sum' +
+              '&past_days=30' +
               '&timezone=auto';
 
             const response = await fetch(url, { signal: controller.signal });
@@ -936,6 +1047,7 @@ export const GISMap: React.FC<GISMapProps> = ({
               angstrom: metrics.ai,
               gfi: metrics.gfi,
               kbdi: metrics.kbdi,
+              fwi: metrics.fwiBosnian,
             });
 
             nextData.push({
@@ -1013,27 +1125,47 @@ export const GISMap: React.FC<GISMapProps> = ({
     return null;
   };
 
-  const CustomLocationPicker = () => {
-    useMapEvents({
-      click(e) {
-        if (!isPickingLocation) return;
-        
-        const { lat, lng } = e.latlng;
-        
-        // Create a custom forest region object
-        const customForest: ForestRegion = {
-          id: `custom-${Date.now()}`,
-          name: language === Language.BS ? 'Odabrana lokacija' : 'Selected Location',
-          type: RegionType.MIXED, // Default to mixed for custom points
-          coordinates: [lat, lng],
-          area: 0,
-          riskScore: 0.5, // Neutral starting risk
-        };
+  const selectCustomLocation = useCallback((lat: number, lng: number) => {
+    const customForest: ForestRegion = {
+      id: `custom-${Date.now()}`,
+      name: language === Language.BS ? 'Odabrana lokacija' : 'Selected Location',
+      type: RegionType.MIXED,
+      coordinates: [lat, lng],
+      area: 0,
+      riskScore: 0.5,
+    };
 
-        setSelectedForest(customForest);
-        setIsPickingLocation(false);
-      },
-    });
+    setSelectedForest(customForest);
+    setIsPickingLocation(false);
+  }, [language]);
+
+  const CustomLocationPicker = () => {
+    const pickerMap = useMap();
+
+    useEffect(() => {
+      const container = pickerMap.getContainer();
+      if (!isPickingLocation) {
+        container.classList.remove('cursor-crosshair');
+        return;
+      }
+
+      const handleClick = (event: L.LeafletMouseEvent) => {
+        selectCustomLocation(event.latlng.lat, event.latlng.lng);
+      };
+      const handleEscape = (event: KeyboardEvent) => {
+        if (event.key === 'Escape') setIsPickingLocation(false);
+      };
+
+      container.classList.add('cursor-crosshair');
+      pickerMap.on('click', handleClick);
+      window.addEventListener('keydown', handleEscape);
+      return () => {
+        container.classList.remove('cursor-crosshair');
+        pickerMap.off('click', handleClick);
+        window.removeEventListener('keydown', handleEscape);
+      };
+    }, [isPickingLocation, pickerMap]);
+
     return null;
   };
 
@@ -1216,7 +1348,12 @@ export const GISMap: React.FC<GISMapProps> = ({
             opacity={0.72}
           />
         )}
-        <FireMonitoringLayer visible={canViewFireMonitoring && activeLayers.has(MapLayer.ACTIVE_FIRES)} />
+        <FireMonitoringLayer
+          visible={canViewFireMonitoring && activeLayers.has(MapLayer.ACTIVE_FIRES)}
+          showSpreadWarnings={false}
+          injectExtremeTestFire={isExtremeFwiTest}
+          onEventsLoaded={setActiveFireEvents}
+        />
         <ThreatHeatmapLayer
           data={fireIncidents}
           gradient={FIRE_HEAT_GRADIENT}
@@ -1250,12 +1387,19 @@ export const GISMap: React.FC<GISMapProps> = ({
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_KBDI)}
         />
-        {canViewFwi && administrativeBoundaryData && <BosnianFWIHeatLayer
+        {canViewFwi && <BosnianFWIHeatLayer
           points={forestFwiData}
           rasterBounds={BH_FWI_RASTER_BOUNDS}
-          rasterMask={administrativeBoundaryData}
+          rasterMask={administrativeBoundaryData ?? undefined}
+          activeFires={activeFireEvents}
+          fireSpreadVisible={false}
           pane={FWI_OVERLAY_PANE}
           visible={activeLayers.has(MapLayer.FWI_BOSNIAN)}
+        />}
+        <PyretechnicsScenarioLayer visible={isFireSpreadActive} events={activeFireEvents} pane={FWI_OVERLAY_PANE} />
+        {canViewFwi && <FireIntelligenceCogLayer
+          visible={activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI)}
+          pane={FWI_OVERLAY_PANE}
         />}
         {canViewMapLayers && administrativeBoundaryData && <LiveWindVectorLayer
           visible={activeLayers.has(MapLayer.WIND_VECTOR) || activeLayers.has(MapLayer.WINDY)}
@@ -1277,10 +1421,12 @@ export const GISMap: React.FC<GISMapProps> = ({
               key={layer.id}
               layer={layer}
               pane={DATASET_LAYER_PANE}
+              boundaryMask={administrativeBoundaryData ?? undefined}
               onLoadingChange={onDatasetLayerLoadingChange}
             /> : layer.data_delivery === 'vector_tile' ? <DatasetVectorTileLayer
               key={layer.id}
               layer={layer}
+              filters={datasetLayerFilters[layer.id]}
               pane={DATASET_LAYER_PANE}
               onPolygonClick={!isReporting && !isPickingLocation && geoEditorMode !== 'draw' && geoEditorMode !== 'edit-shared' ? onDatasetPolygonClick : undefined}
               onLoadingChange={onDatasetLayerLoadingChange}
@@ -1314,6 +1460,12 @@ export const GISMap: React.FC<GISMapProps> = ({
           onDrawingChange={onGeoEditorDrawingChange}
           onFeaturesChange={onGeoEditorFeaturesChange}
         />
+        <DatasetEditorDataLoader
+          layerId={geoEditorLayerId}
+          mode={geoEditorMode}
+          onFeaturesLoaded={onDatasetEditorFeaturesLoaded}
+          onError={onDatasetEditorLoadError}
+        />
         <CountryBorderReference visible={hasPlainBaseLayer} />
 
         {/* FOREST MARKERS - Hover triggers Tooltip card, Button in Tooltip triggers Full Screen */}
@@ -1330,6 +1482,10 @@ export const GISMap: React.FC<GISMapProps> = ({
                    click: () => {
                      if (isReporting) {
                        onReportClick(forest.coordinates[0], forest.coordinates[1]);
+                       return;
+                     }
+                     if (isPickingLocation) {
+                       selectCustomLocation(forest.coordinates[0], forest.coordinates[1]);
                        return;
                      }
                      setSelectedForest(forest);
@@ -1393,7 +1549,19 @@ export const GISMap: React.FC<GISMapProps> = ({
 
            {/* Content */}
            <div className="flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))] md:p-8 scrollbar-thin scrollbar-thumb-slate-700">
-              {loadingWeather || !forestWeather ? (
+              {weatherError ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 gap-4 px-6">
+                    <AlertTriangle size={48} className="text-amber-400" />
+                    <p className="max-w-md font-semibold">{weatherError}</p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedForest(null)}
+                      className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:border-slate-500"
+                    >
+                      {language === Language.BS ? 'Odaberi drugu lokaciju' : 'Choose another location'}
+                    </button>
+                  </div>
+              ) : loadingWeather || !forestWeather ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4">
                       <Loader2 size={48} className="animate-spin text-blue-500" />
                       <p className="font-mono text-sm tracking-widest uppercase">{t.dashboard.loading}</p>
@@ -1474,7 +1642,10 @@ export const GISMap: React.FC<GISMapProps> = ({
                                 <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
                                     {forecastMode === 'daily' ? (
                                         // DAILY FORECAST CARDS (SQUARE)
-                                        forestWeather.daily.time.slice(0, 7).map((timeStr, i) => {
+                                        (() => {
+                                          const todayIndex = Math.max(0, forestWeather.daily.time.indexOf(forestWeather.current.time.slice(0, 10)));
+                                          return forestWeather.daily.time.slice(todayIndex, todayIndex + 7).map((timeStr, offset) => {
+                                            const i = todayIndex + offset;
                                             const code = forestWeather.daily.weather_code[i];
                                             const max = forestWeather.daily.temperature_2m_max[i];
                                             const min = forestWeather.daily.temperature_2m_min[i];
@@ -1483,7 +1654,7 @@ export const GISMap: React.FC<GISMapProps> = ({
 
                                             return (
                                                 <div key={i} className="flex-shrink-0 w-32 h-32 flex flex-col items-center justify-between p-4 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-600 transition-all group shadow-lg">
-                                                    <span className="text-xs font-bold text-slate-400 group-hover:text-blue-400 transition-colors uppercase tracking-wider">{i === 0 ? t.dashboard.today : fmtDay(timeStr)}</span>
+                                                    <span className="text-xs font-bold text-slate-400 group-hover:text-blue-400 transition-colors uppercase tracking-wider">{offset === 0 ? t.dashboard.today : fmtDay(timeStr)}</span>
                                                     
                                                     <wInfo.icon size={32} className="text-white" />
                                                     
@@ -1502,7 +1673,8 @@ export const GISMap: React.FC<GISMapProps> = ({
                                                     )}
                                                 </div>
                                             );
-                                        })
+                                          });
+                                        })()
                                     ) : (
                                         // HOURLY FORECAST CARDS (SQUARE)
                                         (() => {
@@ -1603,7 +1775,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                                                     <div 
                                                         className="absolute top-2 transition-all duration-1000 ease-out z-20"
                                                         style={{ 
-                                                            left: `${Math.min(100, (risk.fwiBosnian / 80) * 100)}%`, 
+                                                            left: `${Math.min(100, (risk.fwiBosnian / EFFIS_FWI_DISPLAY_MAX) * 100)}%`,
                                                             transform: 'translateX(-50%)' 
                                                         }}
                                                     >
@@ -1622,7 +1794,7 @@ export const GISMap: React.FC<GISMapProps> = ({
 
                                                     {/* Scale Labels */}
                                                     <div className="flex justify-between px-0.5 mt-1.5">
-                                                        {[0, 10, 20, 30, 40, 50, 60, 70, 80].map(v => (
+                                                        {EFFIS_FWI_TICKS.map(v => (
                                                             <span key={v} className="text-[10px] font-black text-slate-400 font-mono">
                                                                 {v}
                                                             </span>
@@ -1631,7 +1803,7 @@ export const GISMap: React.FC<GISMapProps> = ({
                                                 </div>
                                                 <div className="mt-2 text-[11px] text-slate-400 font-mono text-right flex justify-end items-center gap-1.5">
                                                     <span className="text-white font-black text-sm">{risk.fwiBosnian.toFixed(2)}</span>
-                                                    <span className="opacity-40">/ 80</span>
+                                                    <span className="opacity-40">EFFIS scale</span>
                                                 </div>
 
                                                 <div className="mt-4 pt-4 border-t border-white/5 space-y-5">
@@ -1722,15 +1894,15 @@ export const GISMap: React.FC<GISMapProps> = ({
                                                         <p className="text-[9px] text-slate-400 leading-relaxed italic">
                                                             <span className="text-blue-400 font-black not-italic mr-1">MODEL:</span>
                                                             {language === Language.BS
-                                                                ? "Finalni BH FWI se dobija kombinacijom ISI i BUI indeksa, koristeći modifikovanu Canadian FWI formulu optimizovanu za orografiju i specifične vegetacijske zone Bosne i Hercegovine."
-                                                                : "Final BH FWI is derived by combining ISI and BUI indexes, using a modified Canadian FWI formula optimized for the orography and specific vegetation zones of Bosnia and Herzegovina."}
+                                                                ? "NFFIS FWI koristi standardne Canadian FWI jednačine (ISI + BUI), a rezultat prikazuje kroz aktuelne EFFIS Europe klase opasnosti."
+                                                                : "NFFIS FWI uses the standard Canadian FWI equations (ISI + BUI) and displays the result with the current EFFIS Europe danger classes."}
                                                         </p>
                                                         <div className="h-px bg-white/5 w-full"></div>
                                                         <p className="text-[9px] text-slate-500 leading-relaxed italic">
                                                             <span className="text-emerald-400 font-black not-italic mr-1">ADJUSTMENT:</span>
                                                             {language === Language.BS
-                                                                ? "Sistem vrši automatsku korekciju rezultata na osnovu gustine goriva i nagiba terena, što direktno utiče na projektovanu brzinu širenja požara."
-                                                                : "The system automatically adjusts results based on fuel density and terrain slope, which directly impacts the projected fire spread rate."}
+                                                                ? "FWI opisuje opasnost od požara, ne simulirano širenje. Gorivo, nagib i vjetar zasebno koristi Pyretechnics scenarij širenja."
+                                                                : "FWI describes fire danger, not simulated spread. Fuel, slope and wind are applied separately by the Pyretechnics spread scenario."}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1837,6 +2009,14 @@ export const GISMap: React.FC<GISMapProps> = ({
         className="fixed top-0 left-0 right-0 z-[1900] bg-slate-950 md:hidden pointer-events-none"
         style={{ height: 'env(safe-area-inset-top)' }}
       />
+
+      {isExtremeFwiTest && (
+        <div className="pointer-events-none absolute bottom-8 left-1/2 z-[2400] -translate-x-1/2">
+          <div className="rounded-lg border border-red-400 bg-red-950/95 px-4 py-2 text-center text-[11px] font-black uppercase tracking-wider text-red-100 shadow-2xl backdrop-blur">
+            FWI test mode — localized synthetic fire-spread plume at Hutovo Blato
+          </div>
+        </div>
+      )}
 
       {/* Floating Operations Header (Aesthetic) - Hides when interaction banners are active */}
       {!isPickingLocation && !isReporting && (
@@ -1965,7 +2145,7 @@ export const GISMap: React.FC<GISMapProps> = ({
               <div 
                 className="absolute -top-3.5 transition-all duration-1000 ease-out z-20"
                 style={{ 
-                  left: `${Math.min(100, (activeFwiLayerInfo.currentValue / 80) * 100)}%`, 
+                  left: `${Math.min(100, (activeFwiLayerInfo.currentValue / EFFIS_FWI_DISPLAY_MAX) * 100)}%`,
                   transform: 'translateX(-50%)' 
                 }}
               >
@@ -1986,12 +2166,48 @@ export const GISMap: React.FC<GISMapProps> = ({
 
           {/* Scale Labels */}
           <div className="flex justify-between px-0.5 mt-1">
-            {[0, 10, 20, 30, 40, 50, 60, 70, 80].map(v => (
+            {EFFIS_FWI_TICKS.map(v => (
               <span key={v} className="text-[10px] font-black text-slate-400 font-mono">
                 {v}
               </span>
             ))}
           </div>
+          {isFireSpreadActive && (
+            <div className="mt-3 border-t border-slate-800 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsSpreadLegendExpanded((expanded) => !expanded)}
+                className="flex w-full items-center justify-between gap-2 rounded-md px-1 py-1 text-left hover:bg-slate-900/70"
+                aria-expanded={isSpreadLegendExpanded}
+              >
+                <span className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-slate-400">
+                  <ChevronRight size={12} className={`text-orange-400 transition-transform ${isSpreadLegendExpanded ? 'rotate-90' : ''}`} />
+                  Pyretechnics spread scenarios
+                </span>
+                <span className="text-[8px] font-bold uppercase text-slate-600">Downwind</span>
+              </button>
+              {isSpreadLegendExpanded && (
+                <div className="pt-2">
+                  <div className="grid grid-cols-4 gap-1 text-center text-[8px] font-bold uppercase text-slate-400">
+                    {[
+                      ['#facc15', 'Watch'],
+                      ['#f97316', 'Elevated'],
+                      ['#dc2626', 'High'],
+                      ['#7f1d1d', 'Extreme'],
+                    ].map(([color, label]) => (
+                      <div key={label} className="flex flex-col items-center gap-1">
+                        <div className="h-1.5 w-full rounded-full" style={{ backgroundColor: color }} />
+                        <span>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[8px] leading-tight text-slate-600">
+                    TEST / ADVISORY: polygons are produced by the pinned Pyretechnics engine from the selected fuel COG, terrain and forecast weather. Unapproved test fuel remains non-operational.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

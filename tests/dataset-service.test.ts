@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   fetchDatasetLayerFeatures,
+  fetchDatasetLayerFeature,
+  fetchDatasetLayerEditFeatures,
   fetchDatasetLayerFields,
   fetchDatasetLayerFieldValues,
   fetchDatasetLayerFilterOptions,
@@ -62,6 +64,32 @@ describe('dataset/GIS service', () => {
       '/api/dataset-layers/9/features',
       expect.objectContaining({ signal: controller.signal }),
     );
+  });
+
+  it('loads authoritative feature and viewport editing geometry', async () => {
+    const feature = { type: 'Feature', id: 'a/b', properties: { name: 'Forest' }, geometry: null };
+    const geojson = { type: 'FeatureCollection', features: [feature] };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ feature }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ geojson, truncated: false }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+
+    await expect(fetchDatasetLayerFeature(5, 'a/b', controller.signal)).resolves.toEqual(feature);
+    await expect(fetchDatasetLayerEditFeatures(5, {
+      bbox: '17,43,19,45', limit: 5000, signal: controller.signal,
+    })).resolves.toEqual(geojson);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/dataset-layers/5/features/a%2Fb', expect.objectContaining({ signal: controller.signal }));
+    expect(decodeURIComponent(String(fetchMock.mock.calls[1][0]))).toBe('/api/dataset-layers/5/edit-features?bbox=17,43,19,45&limit=5000');
+  });
+
+  it('refuses a truncated editing viewport', async () => {
+    const geojson = { type: 'FeatureCollection', features: [] };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ geojson, truncated: true }), { status: 200 })));
+
+    await expect(fetchDatasetLayerEditFeatures(5, { bbox: '17,43,19,45' }))
+      .rejects.toThrow('zoom in');
   });
 
   it('updates feature attributes and layer styles', async () => {

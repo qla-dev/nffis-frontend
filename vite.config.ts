@@ -53,6 +53,30 @@ export default defineConfig(({ mode }) => {
         },
       },
       plugins: [react()],
+      // Mapbox GL's ESM entry emits a code-split module worker. Vite's default
+      // IIFE worker format cannot represent that graph.
+      worker: {
+        format: 'es',
+      },
+      // These packages reference module workers through import-query URLs.
+      // Prebundling them creates an invalid `.vite/deps/worker.js?...` URL;
+      // let Vite's normal module transformer process those worker imports.
+      optimizeDeps: {
+        exclude: ['mapbox-gl', 'mapbox-gl/esm', 'maplibre-gl'],
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (id.includes('node_modules/mapbox-gl')) return 'mapbox';
+              if (id.includes('node_modules/maplibre-gl')) return 'maplibre';
+              if (id.includes('node_modules/leaflet') || id.includes('node_modules/react-leaflet')) return 'mapping';
+              if (id.includes('node_modules/geotiff') || id.includes('node_modules/plotty') || id.includes('@qartlabs')) return 'raster';
+              if (id.includes('node_modules/react')) return 'react-vendor';
+            },
+          },
+        },
+      },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

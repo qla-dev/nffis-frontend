@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Pencil, X } from 'lucide-react';
 import type { DatasetLayer } from '../../../services/datasetService';
 import { updateDatasetLayerDataDelivery, updateDatasetLayerMetadata } from '../../../services/datasetService';
+import { ESA_WORLDCOVER_CLASSES, isEsaWorldCoverLayer } from '../../../lib/gis/worldCoverLegend';
 
 interface InformationTabProps {
   layer: DatasetLayer;
@@ -183,16 +184,35 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
               </>
             )}
             <InfoRow label="Layer ID" value={String(layer.id)} />
-            <InfoRow label="Features" value={layer.feature_count.toLocaleString()} />
+            <InfoRow label={layer.layer_kind === 'raster' ? 'Dataset' : 'Features'} value={layer.layer_kind === 'raster' ? 'Cloud Optimized GeoTIFF' : layer.feature_count.toLocaleString()} />
+            {layer.layer_kind === 'raster' && <InfoRow label="Map resolution" value={formatResolution(bounds?.resolution_m)} />}
           </div>
         )}
       </section>
 
-      <Section title="Geometry">
+      <Section title={layer.layer_kind === 'raster' ? 'Raster reference' : 'Geometry'}>
         <InfoRow label="Family" value={layer.geometry_family} />
         <InfoRow label="Type" value={layer.geometry_type || 'Unknown'} />
         <InfoRow label="SRID" value={String(layer.srid)} />
       </Section>
+
+      {layer.layer_kind === 'raster' && isEsaWorldCoverLayer(layer.table_name, layer.display_name) && (
+        <Section title="Land-cover legend">
+          <p className="text-[11px] font-medium leading-5 text-slate-500">ESA WorldCover 2021 classes</p>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+            {ESA_WORLDCOVER_CLASSES.map(item => (
+              <div key={item.value} className="flex min-w-0 items-center gap-2 text-xs">
+                <span
+                  aria-hidden="true"
+                  className="h-3 w-3 shrink-0 rounded-sm border border-white/20 shadow-sm"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span className="min-w-0 leading-tight text-slate-300">{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {canManageDataDelivery && layer.layer_kind !== 'raster' && (
         <Section title="Data delivery">
@@ -215,12 +235,12 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
       )}
 
       <Section title="Bounds">
-        {bounds ? (
+        {hasSpatialBounds(bounds) ? (
           <>
-            <InfoRow label="West" value={bounds.minx.toFixed(6)} />
-            <InfoRow label="South" value={bounds.miny.toFixed(6)} />
-            <InfoRow label="East" value={bounds.maxx.toFixed(6)} />
-            <InfoRow label="North" value={bounds.maxy.toFixed(6)} />
+            <InfoRow label="West" value={formatCoordinate(bounds?.minx)} />
+            <InfoRow label="South" value={formatCoordinate(bounds?.miny)} />
+            <InfoRow label="East" value={formatCoordinate(bounds?.maxx)} />
+            <InfoRow label="North" value={formatCoordinate(bounds?.maxy)} />
           </>
         ) : (
           <div className="text-xs font-bold text-slate-600">No bounds available</div>
@@ -229,6 +249,18 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
     </div>
   );
 };
+
+function hasSpatialBounds(bounds: DatasetLayer['bounds']): boolean {
+  return Boolean(bounds && [bounds.minx, bounds.miny, bounds.maxx, bounds.maxy].every(value => typeof value === 'number' && Number.isFinite(value)));
+}
+
+function formatCoordinate(value: number | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(6) : 'Unavailable';
+}
+
+function formatResolution(value: number | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? `${value.toLocaleString()} m` : 'Not recorded';
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

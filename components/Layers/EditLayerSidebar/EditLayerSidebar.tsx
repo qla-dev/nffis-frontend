@@ -195,7 +195,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
           <div className="min-w-0">
             <div className="truncate text-sm font-black text-white">{layer?.display_name || 'Layer editor'}</div>
             <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
-              {layer ? `${layer.feature_count.toLocaleString()} features` : 'No layer selected'}
+              {layer ? (layer.layer_kind === 'raster' ? 'Raster dataset' : `${layer.feature_count.toLocaleString()} features`) : 'No layer selected'}
             </div>
           </div>
         </div>
@@ -229,7 +229,7 @@ export const EditLayerSidebar: React.FC<EditLayerSidebarProps> = ({
             }}
           >
             {TABS.filter((tab) => {
-              if (layer?.layer_kind === 'raster') return tab.id === 'information' || tab.id === 'source' || tab.id === 'symbology' || (tab.id === 'roleaccess' && canManageRoleAccess);
+              if (layer?.layer_kind === 'raster') return tab.id === 'information' || tab.id === 'source' || (tab.id === 'roleaccess' && canManageRoleAccess);
               if (tab.id === 'geoeditor') return layer?.geometry_family === 'polygon' && (canUpdateLayer || canCreateLayer);
               if (tab.id === 'roleaccess') return canManageRoleAccess;
               return canUpdateLayer || (tab.id !== 'symbology' && tab.id !== 'attributes');

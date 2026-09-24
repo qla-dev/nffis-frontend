@@ -82,11 +82,11 @@ export const MapControls: React.FC<MapControlsProps> = ({
   const activeFwiLayer = [
     MapLayer.FWI_ANGSTROM,
     MapLayer.FWI_GFI,
-    MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN].find((layer) => activeLayers.has(layer)) ?? null;
+    MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN, MapLayer.FIRE_INTELLIGENCE_FWI].find((layer) => activeLayers.has(layer)) ?? null;
   const isAnyFwiActive = [
     MapLayer.FWI_ANGSTROM,
     MapLayer.FWI_GFI,
-    MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN].some((layer) => activeLayers.has(layer));
+    MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN, MapLayer.FIRE_INTELLIGENCE_FWI].some((layer) => activeLayers.has(layer));
 
   return (
     <div ref={effectiveRef} className="fixed top-0 left-0 right-0 pt-[env(safe-area-inset-top)] md:absolute md:top-4 md:right-4 md:left-auto md:pt-0 z-[2000] flex flex-col items-end gap-2 pointer-events-none">
@@ -381,7 +381,8 @@ export const MapControls: React.FC<MapControlsProps> = ({
             <div className="space-y-1">
               {[
                 { id: null, label: 'Off', icon: X, color: 'text-slate-400' },
-                { id: MapLayer.FWI_BOSNIAN, label: t.dashboard.fwiBosnian, icon: Flame, color: 'text-purple-500' },
+                { id: MapLayer.FWI_BOSNIAN, label: 'NFFIS FWI (EFFIS scale)', icon: Flame, color: 'text-purple-500' },
+                { id: MapLayer.FIRE_INTELLIGENCE_FWI, label: 'BiH FWI COG (EFFIS scale)', icon: Flame, color: 'text-orange-500' },
               ].map((layer) => (
                 <button
                   key={layer.id ?? 'fwi-off'}
@@ -410,6 +411,26 @@ export const MapControls: React.FC<MapControlsProps> = ({
                   {(layer.id ? activeLayers.has(layer.id) : !activeFwiLayer) && <ShieldCheck size={12} className="text-blue-500" />}
                 </button>
               ))}
+              {canViewFireMonitoring && (
+                <button
+                  type="button"
+                  onClick={() => onToggleLayer(MapLayer.FWI_FIRE_SPREAD)}
+                  className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
+                    activeLayers.has(MapLayer.FWI_FIRE_SPREAD)
+                      ? 'bg-orange-500/10 border-orange-500/50'
+                      : 'bg-slate-900/50 border-transparent hover:border-slate-700'
+                  }`}
+                  aria-pressed={activeLayers.has(MapLayer.FWI_FIRE_SPREAD)}
+                >
+                  <div className="flex items-center gap-3">
+                    <Wind size={16} className={activeLayers.has(MapLayer.FWI_FIRE_SPREAD) ? 'text-orange-400' : 'text-slate-600'} />
+                    <span className={`text-[11px] font-bold ${activeLayers.has(MapLayer.FWI_FIRE_SPREAD) ? 'text-white' : 'text-slate-500'}`}>
+                      {language === Language.BS ? 'Pyretechnics širenje (test)' : 'Pyretechnics spread (test)'}
+                    </span>
+                  </div>
+                  {activeLayers.has(MapLayer.FWI_FIRE_SPREAD) && <ShieldCheck size={12} className="text-orange-400" />}
+                </button>
+              )}
             </div>
 
             <div className="pt-3 mt-3 border-t border-slate-800">
@@ -424,8 +445,12 @@ export const MapControls: React.FC<MapControlsProps> = ({
                   <MapPin size={16} className="text-blue-400 group-hover:text-white transition-colors" />
                 </div>
                 <div className="flex flex-col items-start leading-tight">
-                  <span className="text-[11px] font-bold">Uzmi lokaciju</span>
-                  <span className="text-[9px] text-slate-500 italic">Analiza tačke na mapi</span>
+                  <span className="text-[11px] font-bold">
+                    {language === Language.BS ? 'Odaberi lokaciju' : 'Select location'}
+                  </span>
+                  <span className="text-[9px] text-slate-500 italic">
+                    {language === Language.BS ? 'Analiza tačke na mapi' : 'Analyse a point on the map'}
+                  </span>
                 </div>
               </button>
             </div>

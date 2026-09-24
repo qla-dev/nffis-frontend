@@ -24,6 +24,8 @@ export enum MapLayer {
   FWI_GFI = 'FWI GFI',
   FWI_KBDI = 'FWI KBDI',
   FWI_BOSNIAN = 'FWI Bosnian',
+  FWI_FIRE_SPREAD = 'FWI Fire Spread',
+  FIRE_INTELLIGENCE_FWI = 'Fire Intelligence FWI COG',
   FIRE_RISK = 'Fire Risk',
   FLOOD_RISK = 'Flood Risk',
   VEGETATION = 'Vegetation',

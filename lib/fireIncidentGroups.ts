@@ -8,6 +8,7 @@ export interface FireIncidentReport {
   latitude: number | null;
   longitude: number | null;
   reported_at: string | null;
+  fire_event_id?: number | null;
 }
 
 export interface FireIncidentGroup {
@@ -77,12 +78,12 @@ function groupMatchesEvent(group: FireIncidentGroup, event: FireEventProperties)
 }
 
 export function combineFireMonitoringRows(events: FireEventProperties[], reports: FireIncidentReport[]): FireMonitoringRow[] {
-  const groups = groupFireIncidentReports(reports);
+  const groups = groupFireIncidentReports(reports.filter(report => report.fire_event_id == null));
   const linked = new Set<string>();
   const rows = events.map(event => {
     const matching = groups.filter(group => groupMatchesEvent(group, event));
     matching.forEach(group => linked.add(group.id));
-    return { key: `event-${event.id}`, kind: 'satellite' as const, event, linkedReportCount: matching.reduce((total, group) => total + group.count, 0) };
+    return { key: `event-${event.id}`, kind: 'satellite' as const, event, linkedReportCount: event.linked_report_count ?? matching.reduce((total, group) => total + group.count, 0) };
   });
   return [...rows, ...groups.filter(group => !linked.has(group.id)).map(group => ({ key: group.id, kind: 'reported' as const, reportGroup: group, linkedReportCount: group.count }))];
 }

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import * as plotty from 'plotty';
 // leaflet-geotiff 1.1.2 installs its own Plotty 0.2 instance. Registering the
 // scale only on the app's Plotty 0.4 instance leaves the renderer unaware of it.
@@ -9,6 +9,12 @@ import {
   BH_FWI_COLOR_STOPS,
   BH_FWI_RASTER_BOUNDS,
 } from '../../../lib/fwi/bhFwiColorScale';
+import {
+  applySpreadWarningsToFwi,
+  assessFireSpreadWarning,
+} from '../../../lib/fwi/fireSpreadWarning';
+import type { FireEventProperties } from '../../../services/fireMonitoringService';
+import { EFFIS_FWI_DISPLAY_MAX } from '../../../lib/fwi/effisFwiScale';
 
 plotty.addColorScale(
   BH_FWI_COLOR_SCALE_NAME,
@@ -37,6 +43,8 @@ interface BosnianFWIHeatLayerProps {
   pane?: string;
   visible: boolean;
   rasterMask?: GeoJSON.FeatureCollection;
+  activeFires?: FireEventProperties[];
+  fireSpreadVisible?: boolean;
 }
 
 export const BosnianFWIHeatLayer: React.FC<BosnianFWIHeatLayerProps> = ({
@@ -45,10 +53,29 @@ export const BosnianFWIHeatLayer: React.FC<BosnianFWIHeatLayerProps> = ({
   pane,
   visible,
   rasterMask,
+  activeFires = [],
+  fireSpreadVisible = false,
 }) => {
   const getFwiValue = useCallback(
     (point: BosnianFWIHeatLayerProps['points'][number]) => point.fwiBosnian,
     []
+  );
+  const spreadWarnings = useMemo(
+    () => fireSpreadVisible ? activeFires.flatMap((event) => {
+      if (!event.is_active) return [];
+      // Test FWI is injected only at the synthetic fire for the composite
+      // surface; it is intentionally not added to the nationwide base raster.
+      const calculationPoints = event.external_id === 'SYNTHETIC-FWI-TEST'
+        ? [...points, { id: 'synthetic-fwi-maximum', lat: event.latitude, lng: event.longitude, fwiBosnian: 80 }]
+        : points;
+      const warning = assessFireSpreadWarning(event, calculationPoints);
+      return warning ? [warning] : [];
+    }) : [],
+    [activeFires, fireSpreadVisible, points],
+  );
+  const applySpreadToCell = useCallback(
+    (value: number, lat: number, lng: number) => applySpreadWarningsToFwi(value, lat, lng, spreadWarnings),
+    [spreadWarnings],
   );
 
   return (
@@ -56,8 +83,9 @@ export const BosnianFWIHeatLayer: React.FC<BosnianFWIHeatLayerProps> = ({
       points={points}
       visible={visible}
       valueAccessor={getFwiValue}
+      cellValueTransform={fireSpreadVisible ? applySpreadToCell : undefined}
       displayMin={0}
-      displayMax={80}
+      displayMax={EFFIS_FWI_DISPLAY_MAX}
       colorScaleName={BH_FWI_COLOR_SCALE_NAME}
       rasterBounds={rasterBounds ?? BH_FWI_RASTER_BOUNDS}
       rasterMask={rasterMask}

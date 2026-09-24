@@ -80,16 +80,20 @@ export interface DatasetLayer {
   srid: number;
   feature_count: number;
   bounds?: {
-    minx: number;
-    miny: number;
-    maxx: number;
-    maxy: number;
+    minx?: number;
+    miny?: number;
+    maxx?: number;
+    maxy?: number;
+    pilot?: string;
+    resolution_m?: number;
   } | null;
   style: DatasetLayerStyle;
   filter_fields: DatasetFilterField[];
   visible_by_default: boolean;
   min_zoom?: number | null;
   data_delivery?: 'geojson' | 'vector_tile';
+  /** Changes whenever feature/style data changes, so cached tiles can be invalidated. */
+  tile_version?: string;
   // `accessibility` decides whether a role may see the layer at all; `role_visibility`
   // only decides whether it starts switched on for that role. The backend keeps them
   // in separate columns (visibility_level / role_visibility) — `visibility` is the
@@ -134,6 +138,12 @@ interface FetchFeaturesOptions {
   filters?: DatasetLayerFilterState;
   limit?: number;
   tolerance?: number;
+  signal?: AbortSignal;
+}
+
+interface FetchEditFeaturesOptions {
+  bbox: string;
+  limit?: number;
   signal?: AbortSignal;
 }
 
@@ -223,6 +233,37 @@ export async function fetchDatasetLayerFeatures(
     `/dataset-layers/${layerId}/features${query ? `?${query}` : ''}`,
     { signal: options.signal },
   );
+
+  return data.geojson;
+}
+
+export async function fetchDatasetLayerFeature(
+  layerId: number,
+  featureId: string | number,
+  signal?: AbortSignal,
+): Promise<GeoJSON.Feature> {
+  const data = await requestJson<{ feature: GeoJSON.Feature }>(
+    `/dataset-layers/${layerId}/features/${encodeURIComponent(String(featureId))}`,
+    { signal },
+  );
+
+  return data.feature;
+}
+
+export async function fetchDatasetLayerEditFeatures(
+  layerId: number,
+  options: FetchEditFeaturesOptions,
+): Promise<GeoJSON.FeatureCollection> {
+  const params = new URLSearchParams({ bbox: options.bbox });
+  if (options.limit) params.set('limit', String(options.limit));
+  const data = await requestJson<{ geojson: GeoJSON.FeatureCollection; truncated?: boolean }>(
+    `/dataset-layers/${layerId}/edit-features?${params.toString()}`,
+    { signal: options.signal },
+  );
+
+  if (data.truncated) {
+    throw new Error('Too many polygons are visible for safe editing. Exit editing, zoom in, and try again.');
+  }
 
   return data.geojson;
 }

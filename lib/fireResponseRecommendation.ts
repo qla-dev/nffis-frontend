@@ -43,7 +43,7 @@ export function getFireResponseRecommendation(event: FireEventProperties, statio
   const highIntensity = (event.peak_frp ?? event.latest_frp ?? 0) >= 50;
 
   if (!hasReliableDetection) reasons.push('Satellite anomaly has not yet been corroborated.');
-  if (roadDistanceM == null) reasons.push('No mapped access road was found within the configured search area.');
+  if (roadDistanceM == null) reasons.push('No eligible mapped road result is available.');
   else if (roadDistanceM > ROAD_ACCESS_LIMIT_M) reasons.push(`Nearest mapped road is ${Math.round(roadDistanceM)} m away (review threshold: ${ROAD_ACCESS_LIMIT_M} m).`);
   else reasons.push(`Nearest mapped road is ${Math.round(roadDistanceM)} m away.`);
   if (nearestStation) reasons.push(`Nearest listed station: ${nearestStation.name}, about ${nearestStation.distanceKm} km straight-line.`);

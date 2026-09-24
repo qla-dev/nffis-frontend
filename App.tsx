@@ -1,17 +1,13 @@
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useCallback, useEffect, useRef } from 'react';
 import { Navigation } from './components/Navigation';
-import { GISMap } from './components/Map/GISMap';
 import { ReportModal } from './components/Report/ReportModal';
 import { SessionLoginGate } from './components/Auth/SessionLoginGate';
-import { DatasetLayerOverlay } from './components/Layers/DatasetLayerOverlay';
-import StatisticsDashboard from './components/Statistics/StatisticsDashboard';
-import FireMonitoringDashboard from './components/FireMonitoring/FireMonitoringDashboard';
 import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './types';
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
 import { Waves, Flame, Database } from 'lucide-react';
 import type { DatasetLayer, DatasetLayerFilterState, DatasetLayerStyle } from './services/datasetService';
-import { bulkSaveDatasetFeatureGeometries, createDatasetPolygon, fetchDatasetLayers, saveActiveDatasetLayerIds, saveDatasetLayerStyle, updateDatasetFeatureAttributes } from './services/datasetService';
+import { bulkSaveDatasetFeatureGeometries, createDatasetPolygon, fetchDatasetLayerFeature, fetchDatasetLayers, saveActiveDatasetLayerIds, saveDatasetLayerStyle, updateDatasetFeatureAttributes } from './services/datasetService';
 import { createIncidentReport, type CreateReportPayload } from './services/reportStatisticsService';
 import type { EditLayerSidebarTabId } from './components/Layers/EditLayerSidebar/EditLayerSidebar';
 import {
@@ -22,6 +18,26 @@ import {
   type AuthUser,
 } from './lib/auth/session';
 import { changedFeatures, cloneFeatures, closeRing, type GeoEditorMode, type Position } from './lib/gis/geoEditor';
+import { selectMapRenderer } from './lib/gis/mapRendererPoc';
+
+const mapEnvironment = (import.meta as ImportMeta & { env: Record<string, string | boolean | undefined> }).env;
+const selectedMapRenderer = selectMapRenderer(window.location.search, {
+  enabled: mapEnvironment.DEV === true || mapEnvironment.VITE_ENABLE_MAPLIBRE_POC === 'true',
+  mapboxEnabled: mapEnvironment.DEV === true || mapEnvironment.VITE_ENABLE_MAPBOX_POC === 'true',
+  defaultRenderer: String(mapEnvironment.VITE_MAP_RENDERER_DEFAULT || 'leaflet'),
+});
+const GISMap = lazy(() => {
+  if (selectedMapRenderer === 'maplibre') {
+    return import('./components/Map/MapLibreGISMap').then(module => ({ default: module.MapLibreGISMap }));
+  }
+  if (selectedMapRenderer === 'mapbox') {
+    return import('./components/Map/MapboxGISMap').then(module => ({ default: module.MapboxGISMap }));
+  }
+  return import('./components/Map/GISMap').then(module => ({ default: module.GISMap }));
+});
+const DatasetLayerOverlay = lazy(() => import('./components/Layers/DatasetLayerOverlay').then(module => ({ default: module.DatasetLayerOverlay })));
+const StatisticsDashboard = lazy(() => import('./components/Statistics/StatisticsDashboard'));
+const FireMonitoringDashboard = lazy(() => import('./components/FireMonitoring/OperationalFireDashboard'));
 
 const BASE_LAYER_IDS = [
   MapLayer.SATELLITE,
@@ -36,10 +52,12 @@ const BASE_LAYER_IDS = [
 ];
 
 const FWI_LAYER_IDS = [
-  MapLayer.FWI_BOSNIAN
+  MapLayer.FWI_BOSNIAN,
+  MapLayer.FIRE_INTELLIGENCE_FWI,
 ];
 
 const FWI_DEBUG_PREFIX = '[FWI DEBUG]';
+const IS_EXTREME_FWI_TEST_ROUTE = new URLSearchParams(window.location.search).get('fwiTest') === 'extreme';
 
 const App: React.FC = () => {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -52,6 +70,7 @@ const App: React.FC = () => {
       MapLayer.FORESTS, 
       MapLayer.LANDFILLS,
       MapLayer.FWI_BOSNIAN,
+      ...(IS_EXTREME_FWI_TEST_ROUTE ? [MapLayer.FWI_FIRE_SPREAD] : []),
       MapLayer.ACTIVE_FIRES,
       'AWS Precipitation' as MapLayer,
       'AWS Agro' as MapLayer,
@@ -103,6 +122,10 @@ const App: React.FC = () => {
   const canViewMapLayers = hasPermission(authUser, 'map-layers', 'view');
   const canViewFwi = hasPermission(authUser, 'fire-weather-indices', 'view');
   const canViewFireMonitoring = hasPermission(authUser, 'fire-monitoring', 'view');
+  const canManageFireMonitoring = hasPermission(authUser, 'fire-monitoring', 'update');
+  const canViewFireIntelligence = hasPermission(authUser, 'fire-intelligence', 'view');
+  const canRunFireIntelligence = hasPermission(authUser, 'fire-intelligence', 'create');
+  const canReviewFireIntelligence = hasPermission(authUser, 'fire-intelligence', 'update');
   const canViewAws = hasPermission(authUser, 'aws-monitoring', 'view');
   const hasEntityScope = hasPermission(authUser, 'fbih', 'view') || hasPermission(authUser, 'rs', 'view');
   const canViewFbih = !hasEntityScope || hasPermission(authUser, 'fbih', 'view');
@@ -240,6 +263,19 @@ const App: React.FC = () => {
     setDatasetFeatureSaveError(null);
     setIsDatasetLayerPanelOpen(true);
     setIsDatasetFilterPanelOpen(true);
+
+    // Vector tiles carry lightweight display data. Resolve the authoritative
+    // feature before showing attributes or beginning a single-feature edit.
+    if (featureId !== undefined && featureId !== null && feature?.geometry == null) {
+      void fetchDatasetLayerFeature(layerId, featureId)
+        .then((fullFeature) => {
+          setSelectedDatasetFeature((current) => {
+            const currentId = current?.id ?? current?.properties?.id;
+            return String(currentId) === String(featureId) ? fullFeature : current;
+          });
+        })
+        .catch(() => setDatasetFeatureSaveError('Unable to load feature details.'));
+    }
   }, [canUpdateDatasetLayers, canViewDatasetLayers, geoEditorMode]);
 
   const selectDatasetLayer = useCallback((layerId: number) => {
@@ -262,6 +298,12 @@ const App: React.FC = () => {
   const handleDatasetLayerUpdated = useCallback((updated: DatasetLayer) => {
     setDatasetLayers(prev => prev.map(layer => (
       layer.id === updated.id ? { ...layer, ...updated } : layer
+    )));
+  }, []);
+
+  const invalidateDatasetLayerTiles = useCallback((layerId: number) => {
+    setDatasetLayers((previous) => previous.map((layer) => (
+      layer.id === layerId ? { ...layer, tile_version: String(Date.now()) } : layer
     )));
   }, []);
 
@@ -301,13 +343,14 @@ const App: React.FC = () => {
     try {
       const updatedFeature = await updateDatasetFeatureAttributes(selectedDatasetLayerId, featureId, attributes);
       setSelectedDatasetFeature(updatedFeature);
+      invalidateDatasetLayerTiles(selectedDatasetLayerId);
       setDatasetLayerRefreshKey(prev => prev + 1);
     } catch {
       setDatasetFeatureSaveError('Unable to save attributes.');
     } finally {
       setIsSavingDatasetFeature(false);
     }
-  }, [canUpdateDatasetLayers, selectedDatasetFeature, selectedDatasetLayerId]);
+  }, [canUpdateDatasetLayers, invalidateDatasetLayerTiles, selectedDatasetFeature, selectedDatasetLayerId]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -332,6 +375,18 @@ const App: React.FC = () => {
         const isAlreadyActive = newLayers.has(layer);
         FWI_LAYER_IDS.forEach(id => newLayers.delete(id));
         if (!isAlreadyActive) {
+          newLayers.add(layer);
+        } else {
+          newLayers.delete(MapLayer.FWI_FIRE_SPREAD);
+        }
+        return { ...prev, activeLayers: newLayers };
+      }
+
+      if (layer === MapLayer.FWI_FIRE_SPREAD) {
+        if (newLayers.has(layer)) {
+          newLayers.delete(layer);
+        } else {
+          newLayers.add(MapLayer.FWI_BOSNIAN);
           newLayers.add(layer);
         }
         return { ...prev, activeLayers: newLayers };
@@ -468,6 +523,14 @@ const App: React.FC = () => {
     geoEditorLayerIdRef.current = layerId;
   }, [selectedDatasetLayerId]);
 
+  const handleDatasetEditorFeaturesLoaded = useCallback((layerId: number, collection: GeoJSON.FeatureCollection) => {
+    if (layerId !== selectedDatasetLayerId) return;
+    const features = cloneFeatures(collection.features);
+    setGeoEditorOriginalFeatures(features);
+    setGeoEditorFeatures(cloneFeatures(features));
+    geoEditorLayerIdRef.current = layerId;
+  }, [selectedDatasetLayerId]);
+
   const geoEditorPendingChanges = changedFeatures(geoEditorOriginalFeatures, geoEditorFeatures).length;
 
   const handleGeoEditorModeChange = useCallback((mode: GeoEditorMode) => {
@@ -485,15 +548,16 @@ const App: React.FC = () => {
       return;
     }
     const loaded = loadedDatasetFeatures[layer.id];
-    if (!loaded) {
-      setGeometrySaveError('Show the layer and wait for its data to load before editing.');
-      return;
-    }
     if (geoEditorLayerIdRef.current !== layer.id) {
-      const features = cloneFeatures(loaded.features);
-      setGeoEditorOriginalFeatures(features);
-      setGeoEditorFeatures(cloneFeatures(features));
-      geoEditorLayerIdRef.current = layer.id;
+      if (loaded) {
+        const features = cloneFeatures(loaded.features);
+        setGeoEditorOriginalFeatures(features);
+        setGeoEditorFeatures(cloneFeatures(features));
+        geoEditorLayerIdRef.current = layer.id;
+      } else {
+        setGeoEditorOriginalFeatures([]);
+        setGeoEditorFeatures([]);
+      }
     }
     setActiveDatasetLayerIds((previous) => new Set(previous).add(layer.id));
     setGeometrySaveError(null);
@@ -542,13 +606,14 @@ const App: React.FC = () => {
       setGeoEditorOriginalFeatures([]);
       setGeoEditorFeatures([]);
       geoEditorLayerIdRef.current = null;
+      invalidateDatasetLayerTiles(selectedDatasetLayerId);
       setDatasetLayerRefreshKey((previous) => previous + 1);
     } catch (error) {
       setGeometrySaveError(error instanceof Error ? error.message : 'Unable to save polygon geometry.');
     } finally {
       setIsSavingGeometry(false);
     }
-  }, [geoEditorFeatures, geoEditorOriginalFeatures, selectedDatasetLayerId]);
+  }, [geoEditorFeatures, geoEditorOriginalFeatures, invalidateDatasetLayerTiles, selectedDatasetLayerId]);
 
   return (
     <div className={`flex h-screen w-full overflow-hidden ${state.isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
@@ -569,6 +634,7 @@ const App: React.FC = () => {
       
       <main className="flex-1 relative md:ml-auto h-full min-h-0 min-w-0 overflow-hidden transition-all duration-300">
         {state.view === 'map' && (
+          <Suspense fallback={<ScreenLoader label="Loading map" />}>
           <GISMap 
             incidents={state.incidents} 
             activeLayers={state.activeLayers} 
@@ -595,6 +661,7 @@ const App: React.FC = () => {
             canViewRs={canViewRs}
             canAdjustAws={canAdjustAws}
             geoEditorMode={geoEditorMode}
+            geoEditorLayerId={selectedDatasetLayerId}
             geoEditorFeatures={geoEditorFeatures}
             geoEditorSelectedFeatureId={geoEditorSelectedFeatureId}
             geoEditorDrawing={geoEditorDrawing}
@@ -603,7 +670,10 @@ const App: React.FC = () => {
             onGeoEditorDrawingChange={setGeoEditorDrawing}
             onGeoEditorFeaturesChange={setGeoEditorFeatures}
             onDatasetFeaturesLoaded={handleDatasetFeaturesLoaded}
+            onDatasetEditorFeaturesLoaded={handleDatasetEditorFeaturesLoaded}
+            onDatasetEditorLoadError={setGeometrySaveError}
           />
+          </Suspense>
         )}
 
         {state.view !== 'map' && (
@@ -618,6 +688,7 @@ const App: React.FC = () => {
                     {state.view === 'reports' ? t.recentReports : state.view === 'layers' ? t.layers : state.view === 'fires' ? 'Fire monitoring' : t.stats}
                   </h1>
                 </div>
+                {state.view === 'fires' && <div id="fire-monitoring-header-actions" className="relative flex items-center" />}
               </header>
 
               {state.view === 'reports' && (
@@ -643,16 +714,16 @@ const App: React.FC = () => {
               )}
 
               {state.view === 'stats' && (
-                <StatisticsDashboard language={state.language} isDarkMode={state.isDarkMode} />
+                <Suspense fallback={<ScreenLoader label="Loading statistics" />}><StatisticsDashboard language={state.language} isDarkMode={state.isDarkMode} /></Suspense>
               )}
               {state.view === 'fires' && canViewFireMonitoring && (
-                <FireMonitoringDashboard isDarkMode={state.isDarkMode} />
+                <Suspense fallback={<ScreenLoader label="Loading fire operations" />}><FireMonitoringDashboard isDarkMode={state.isDarkMode} canManage={canManageFireMonitoring} canViewIntelligence={canViewFireIntelligence} canRunIntelligence={canRunFireIntelligence} canReviewIntelligence={canReviewFireIntelligence} /></Suspense>
               )}
             </div>
           </div>
         )}
 
-        <DatasetLayerOverlay
+        <Suspense fallback={null}><DatasetLayerOverlay
           isOpen={isDatasetLayerPanelOpen}
           layers={datasetLayers}
           activeLayerIds={activeDatasetLayerIds}
@@ -697,7 +768,7 @@ const App: React.FC = () => {
           onGeoEditorFinishDrawing={finishGeoEditorDrawing}
           onGeoEditorSave={saveGeoEditor}
           onGeoEditorReset={resetGeoEditor}
-        />
+        /></Suspense>
 
         {showModal && (
           <ReportModal 
@@ -720,5 +791,9 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+const ScreenLoader = ({ label }: { label: string }) => (
+  <div className="flex h-full w-full items-center justify-center bg-slate-950 text-sm font-bold text-slate-400">{label}...</div>
+);
 
 export default App;
