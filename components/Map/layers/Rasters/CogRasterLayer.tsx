@@ -8,6 +8,7 @@ import '@qartlabs/leaflet-geotiff/leaflet-geotiff-plotty.js';
 import { EFFIS_FWI_COLOR_STOPS, EFFIS_FWI_DISPLAY_MAX } from '../../../../lib/fwi/effisFwiScale';
 import { smoothRasterTransform } from '../../../../lib/fwi/smoothRasterTransform';
 import { ESA_WORLDCOVER_CLASSES } from '../../../../lib/gis/worldCoverLegend';
+import { API_BASE_URL } from '../../../../services/api';
 
 const EFFIS_SCALE = 'effis-fwi-cog-2021';
 const WORLD_COVER_SCALE = 'esa-worldcover-2021';
@@ -53,8 +54,25 @@ export function CogRasterLayer({ url, pane, style, opacity = .78, boundaryMask, 
       if (objectUrlRef.current) { URL.revokeObjectURL(objectUrlRef.current); objectUrlRef.current = null; }
     };
     cleanup(); onLoadingChange?.(true);
-    fetch(url, { credentials: 'include', headers: { Accept: 'image/tiff' } })
-      .then(response => { if (!response.ok) throw new Error(`COG request failed (${response.status})`); return response.arrayBuffer(); })
+    // Dataset raster URLs are API routes. On nffis.com the API has a separate
+    // origin, so a relative /api URL would otherwise request the static frontend
+    // host and hand its HTML response to the GeoTIFF decoder.
+    const rasterUrl = url.startsWith('/api/') ? `${API_BASE_URL}${url.slice('/api'.length)}` : url;
+    fetch(rasterUrl, { credentials: 'include', headers: { Accept: 'image/tiff' } })
+      .then(async response => {
+        if (!response.ok) throw new Error(`COG request failed (${response.status})`);
+        const buffer = await response.arrayBuffer();
+        const header = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 4));
+        const isTiff = header.length === 4 && (
+          (header[0] === 0x49 && header[1] === 0x49 && (header[2] === 0x2a || header[2] === 0x2b) && header[3] === 0x00) ||
+          (header[0] === 0x4d && header[1] === 0x4d && header[2] === 0x00 && (header[3] === 0x2a || header[3] === 0x2b))
+        );
+        if (!isTiff) {
+          const contentType = response.headers.get('content-type') || 'unknown content type';
+          throw new Error(`COG response is not a TIFF (${contentType}; ${buffer.byteLength} bytes).`);
+        }
+        return buffer;
+      })
       .then(buffer => {
         if (cancelled) return;
         const objectUrl = URL.createObjectURL(new Blob([buffer], { type: 'image/tiff' })); objectUrlRef.current = objectUrl;
