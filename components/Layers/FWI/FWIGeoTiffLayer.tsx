@@ -1,9 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useMap } from 'react-leaflet';
-import L from 'leaflet';
 import { writeArrayBuffer } from 'geotiff';
-import '@qartlabs/leaflet-geotiff';
-import '@qartlabs/leaflet-geotiff/leaflet-geotiff-plotty.js';
 import {
   createFwiRasterSurface,
   FWI_NO_DATA_VALUE,
@@ -11,7 +8,7 @@ import {
   FWI_RASTER_WIDTH,
   type FwiRasterPoint,
 } from '../../../lib/fwi/fwiRasterSurface';
-import { smoothRasterTransform } from '../../../lib/fwi/smoothRasterTransform';
+import { createLeafletRasterOverlay } from '../../../lib/gis/leafletRasterOverlay';
 import { validateGeneratedRaster } from '../../../lib/gis/rasterValidation';
 
 export type { FwiRasterPoint } from '../../../lib/fwi/fwiRasterSurface';
@@ -54,7 +51,7 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
 }: FWIGeoTiffLayerProps<TPoint>) => {
   const map = useMap();
   const layerRef = useRef<any>(null);
-  const objectUrlRef = useRef<string | null>(null);
+  const releaseRef = useRef<(() => void) | null>(null);
   const mountedRef = useRef(true);
   const logPrefix = `[FWI DEBUG][${debugLabel}]`;
   const serializedPoints = useMemo(
@@ -84,10 +81,8 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
         }
         layerRef.current = null;
       }
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
+      releaseRef.current?.();
+      releaseRef.current = null;
     };
 
     if (!visible || points.length === 0) {
@@ -169,44 +164,22 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
         return;
       }
 
-      const objectUrl = URL.createObjectURL(new Blob([arrayBuffer], { type: 'image/tiff' }));
-      objectUrlRef.current = objectUrl;
-
-      const leafletWithRaster = L as typeof L & {
-        leafletGeotiff: (url: string, options: Record<string, unknown>) => any;
-        LeafletGeotiff: {
-          plotty: (options: Record<string, unknown>) => unknown;
-        };
-      };
-
-      const layer = leafletWithRaster.leafletGeotiff(objectUrl, {
-        bounds: [
-          [raster.south, raster.west],
-          [raster.north, raster.east],
-        ],
+      const rendered = await createLeafletRasterOverlay(arrayBuffer, {
+        colorScale: colorScaleName || 'viridis',
+        displayMin,
+        displayMax,
         opacity,
         pane,
-        // The raster is visual context. It must never consume map clicks used
-        // by the FWI point picker or incident-report workflow.
-        interactive: false,
-        renderer: leafletWithRaster.LeafletGeotiff.plotty({
-          clampLow: true,
-          clampHigh: true,
-          colorScale: colorScaleName,
-          displayMin,
-          displayMax,
-        }),
+        bounds: { west: raster.west, east: raster.east, south: raster.south, north: raster.north },
+        boundaryMask: rasterMask,
+        smooth: true,
       });
-
-      // leaflet-geotiff defaults to nearest-neighbour screen sampling. Keep
-      // the numerical raster unchanged while presenting it as a smooth field.
-      layer.transform = smoothRasterTransform;
-
-      layer.addTo(map);
-      layerRef.current = layer;
+      if (cancelled || !mountedRef.current) { rendered.release(); return; }
+      rendered.layer.addTo(map);
+      layerRef.current = rendered.layer;
+      releaseRef.current = rendered.release;
       console.info(logPrefix, 'layer added to map', {
-        objectUrl,
-        mapHasLayer: map.hasLayer(layer),
+        mapHasLayer: map.hasLayer(rendered.layer),
       });
     };
 

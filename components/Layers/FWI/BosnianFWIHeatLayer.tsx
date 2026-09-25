@@ -1,8 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
 import * as plotty from 'plotty';
-// leaflet-geotiff 1.1.2 installs its own Plotty 0.2 instance. Registering the
-// scale only on the app's Plotty 0.4 instance leaves the renderer unaware of it.
-import * as leafletGeoTiffPlotty from '@qartlabs/leaflet-geotiff/node_modules/plotty';
 import { FWIGeoTiffLayer } from './FWIGeoTiffLayer';
 import {
   BH_FWI_COLOR_SCALE_NAME,
@@ -17,11 +14,6 @@ import type { FireEventProperties } from '../../../services/fireMonitoringServic
 import { EFFIS_FWI_DISPLAY_MAX } from '../../../lib/fwi/effisFwiScale';
 
 plotty.addColorScale(
-  BH_FWI_COLOR_SCALE_NAME,
-  BH_FWI_COLOR_STOPS.map((stop) => stop.color),
-  BH_FWI_COLOR_STOPS.map((stop) => stop.position),
-);
-leafletGeoTiffPlotty.addColorScale(
   BH_FWI_COLOR_SCALE_NAME,
   BH_FWI_COLOR_STOPS.map((stop) => stop.color),
   BH_FWI_COLOR_STOPS.map((stop) => stop.position),

@@ -13,7 +13,6 @@
     "test:live:statistics": "pwsh -NoProfile -File tests/live/reports-statistics-live.ps1"
   },
   "dependencies": {
-    "@qartlabs/leaflet-geotiff": "^1.1.2",
     "geotiff": "^3.0.5",
     "leaflet": "1.9.4",
     "leaflet-velocity": "^2.1.4",
