@@ -12,6 +12,10 @@ export interface MapPerformanceMetrics {
   longTaskDurationMs: number;
 }
 
+export function hasUsableMapboxToken(token: string | undefined): boolean {
+  return Boolean(token?.trim().startsWith('pk.'));
+}
+
 declare global {
   interface Window {
     __NFFIS_MAP_METRICS__?: MapPerformanceMetrics;
@@ -20,15 +24,22 @@ declare global {
 
 export function selectMapRenderer(
   search: string,
-  options: { enabled: boolean; mapboxEnabled?: boolean; defaultRenderer?: string },
+  options: {
+    enabled: boolean;
+    mapboxEnabled?: boolean;
+    mapboxAccessToken?: string;
+    defaultRenderer?: string;
+  },
 ): MapRendererName {
   const requested = new URLSearchParams(search).get('mapRenderer');
+  const mapboxAvailable = Boolean(options.mapboxEnabled)
+    && (options.mapboxAccessToken === undefined || hasUsableMapboxToken(options.mapboxAccessToken));
   if (requested === 'leaflet') return 'leaflet';
   if (requested === 'maplibre' && options.enabled) return 'maplibre';
-  if (requested === 'mapbox' && options.mapboxEnabled) return 'mapbox';
+  if (requested === 'mapbox' && mapboxAvailable) return 'mapbox';
 
   if (options.defaultRenderer === 'maplibre' && options.enabled) return 'maplibre';
-  if (options.defaultRenderer === 'mapbox' && options.mapboxEnabled) return 'mapbox';
+  if (options.defaultRenderer === 'mapbox' && mapboxAvailable) return 'mapbox';
   return 'leaflet';
 }
 

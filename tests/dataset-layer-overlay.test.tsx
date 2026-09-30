@@ -217,4 +217,36 @@ describe('DatasetLayerOverlay source filters', () => {
     await interaction.click(allOnButtons[1]);
     expect(setLayersActive).toHaveBeenCalledWith([2, 3], true);
   });
+
+  it('requires confirmation before activating an expensive group', async () => {
+    const interaction = userEvent.setup();
+    const setLayersActive = vi.fn();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const layers = Array.from({ length: 13 }, (_, index) => ({
+      ...makeLayer(index + 1, `Boundary ${index + 1}`, 'shared'),
+      feature_count: 1_800,
+    }));
+
+    render(
+      <DatasetLayerOverlay
+        isOpen layers={layers} activeLayerIds={new Set()} loadingLayerIds={new Set()} selectedLayerId={null}
+        filters={{}} isFilterPanelOpen={false} editorInitialTab="filters" isSavingFeature={false}
+        isLoading={false} canUpdateLayer={false} canCreateLayer={false} canManageRoleAccess={false}
+        isSuperAdmin={false} geoEditorMode="view" geoEditorDrawing={[]} geoEditorSnappingEnabled
+        geoEditorNewPolygonName="" geoEditorPendingChanges={0} geoEditorSelectedFeatureId={null}
+        isSavingGeometry={false} onClose={vi.fn()} onToggleLayer={vi.fn()} onSetCategoryLayersActive={setLayersActive}
+        onSelectLayer={vi.fn()} onFilterPanelOpenChange={vi.fn()} onUpdateLayerStyle={vi.fn()}
+        onSaveLayerStyle={vi.fn()} onSaveFeatureAttributes={vi.fn()} onUpdateFilter={vi.fn()}
+        onClearFilter={vi.fn()} onGeoEditorModeChange={vi.fn()} onGeoEditorSnappingChange={vi.fn()}
+        onGeoEditorNewPolygonNameChange={vi.fn()} onGeoEditorUndoDrawing={vi.fn()}
+        onGeoEditorClearDrawing={vi.fn()} onGeoEditorFinishDrawing={vi.fn()} onGeoEditorSave={vi.fn()}
+        onGeoEditorReset={vi.fn()}
+      />
+    );
+
+    await interaction.click(screen.getByRole('button', { name: 'All on' }));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('controlled batches'));
+    expect(setLayersActive).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
 });

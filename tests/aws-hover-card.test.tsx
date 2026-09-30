@@ -3,20 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  disableClickPropagation,
-  disableScrollPropagation,
   adjustAwsStation,
   fetchAwsStationHistory,
 } = vi.hoisted(() => ({
-  disableClickPropagation: vi.fn(),
-  disableScrollPropagation: vi.fn(),
   adjustAwsStation: vi.fn(),
   fetchAwsStationHistory: vi.fn(),
 }));
-vi.mock('leaflet', () => ({
-  default: { DomEvent: { disableClickPropagation, disableScrollPropagation } },
-}));
-
 vi.mock('../services/awsStationService', () => ({
   adjustAwsStation,
   fetchAwsStationHistory,
@@ -45,8 +37,20 @@ describe('AWSHoverCard', () => {
     expect(screen.getByText(/64/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /history/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /adjust/i })).not.toBeInTheDocument();
-    expect(disableClickPropagation).toHaveBeenCalled();
-    expect(disableScrollPropagation).toHaveBeenCalled();
+  });
+
+  it('shows Latin station names by default', () => {
+    render(<AWSHoverCard station={{ type: 'meteo', name: 'Калиновик', lat: 43.25, lon: 18.61, tempC: 7 } as any} source="rs" canAdjust={false} onAdjusted={vi.fn()} />);
+    expect(screen.getByText('Kalinovik')).toBeInTheDocument();
+    expect(screen.queryByText('Калиновик')).not.toBeInTheDocument();
+  });
+
+  it('shows Cyrillic to the RS role while using the stable Latin key for history', async () => {
+    const interaction = userEvent.setup();
+    render(<AWSHoverCard station={{ type: 'meteo', name: 'Kalinovik', lat: 43.25, lon: 18.61, tempC: 7 } as any} source="rs" canAdjust={false} onAdjusted={vi.fn()} useCyrillicStationNames />);
+    expect(screen.getByText('\u041a\u0430\u043b\u0438\u043d\u043e\u0432\u0438\u043a')).toBeInTheDocument();
+    await interaction.click(screen.getByRole('button', { name: /history/i }));
+    expect(fetchAwsStationHistory).toHaveBeenCalledWith('rs', 'meteo', 'Kalinovik');
   });
 
   it('opens history inside the same card and renders changed fields', async () => {

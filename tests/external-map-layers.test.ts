@@ -24,12 +24,17 @@ describe('external map layers', () => {
     expect(usesPlainBaseLayer(MapLayer.NASA_FIRMS)).toBe(false);
   });
 
-  it('uses a working Sentinel-2 cloudless WMTS tile template', () => {
+  it('uses the cached Sentinel-2 cloudless tile template', () => {
     const sentinel = EXTERNAL_BASE_LAYERS[MapLayer.SENTINEL];
 
-    expect(sentinel?.url).toContain('s2cloudless-2025_3857');
-    expect(sentinel?.url).toContain('/{z}/{y}/{x}.jpg');
+    expect(sentinel?.url).toContain('/{z}/{x}/{y}.jpg');
     expect(sentinel?.maxNativeZoom).toBe(14);
+  });
+
+  it('loads Sentinel tiles through the same-origin backend cache', () => {
+    const sentinel = EXTERNAL_BASE_LAYERS[MapLayer.SENTINEL];
+
+    expect(sentinel?.url).toBe('/api/copernicus-tiles/{z}/{x}/{y}.jpg');
   });
 
   it('uses genuine NASA products for fires and land-surface temperature', () => {

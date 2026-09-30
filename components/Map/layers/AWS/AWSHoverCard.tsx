@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import L from 'leaflet';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Clock3, Edit3, Loader2, RotateCcw, X } from 'lucide-react';
 import { AnyStation } from '../../../../AWSFBiHData';
 import { RsStation } from '../../../../AWSRsData';
+import { toCyrillicScript, toLatinScript } from '../../../../lib/text/latinScript';
 import {
   adjustAwsStation,
   fetchAwsStationHistory,
@@ -18,6 +18,7 @@ interface AWSHoverCardProps {
   canAdjust: boolean;
   adjustment?: AwsStationAdjustment;
   onAdjusted: (adjustment: AwsStationAdjustment) => void;
+  useCyrillicStationNames?: boolean;
 }
 
 const FIELD_META: Array<{ key: keyof AwsStationValues; label: string; unit: string; color: string; step?: string }> = [
@@ -30,9 +31,9 @@ const FIELD_META: Array<{ key: keyof AwsStationValues; label: string; unit: stri
 ];
 
 function getStationName(station: AnyStation | RsStation): string {
-  if ('city' in station) return station.city;
-  if ('station' in station) return station.station;
-  return station.name;
+  if ('city' in station) return toLatinScript(station.city);
+  if ('station' in station) return toLatinScript(station.station);
+  return toLatinScript(station.name);
 }
 
 function getStationValues(station: AnyStation | RsStation): AwsStationValues {
@@ -40,8 +41,9 @@ function getStationValues(station: AnyStation | RsStation): AwsStationValues {
   return Object.fromEntries(FIELD_META.filter(({ key }) => key in record && record[key] !== null).map(({ key }) => [key, record[key]])) as AwsStationValues;
 }
 
-export const AWSHoverCard: React.FC<AWSHoverCardProps> = ({ station, source, canAdjust, adjustment, onAdjusted }) => {
-  const name = getStationName(station);
+export const AWSHoverCard: React.FC<AWSHoverCardProps> = ({ station, source, canAdjust, adjustment, onAdjusted, useCyrillicStationNames = false }) => {
+  const stationKey = getStationName(station);
+  const displayName = useCyrillicStationNames ? toCyrillicScript(stationKey) : stationKey;
   const typeLabel = station.type === 'precipitation' ? 'Precipitation' : station.type === 'agro' ? 'Agro' : station.type === 'air_quality' ? 'Air Quality' : 'Meteo';
   const accentColor = source === 'rs' ? '#818cf8' : station.type === 'agro' ? '#eab308' : station.type === 'precipitation' ? '#06b6d4' : station.type === 'air_quality' ? '#a855f7' : '#10b981';
   const visibleValues = useMemo(() => getStationValues(station), [station]);
@@ -52,15 +54,8 @@ export const AWSHoverCard: React.FC<AWSHoverCardProps> = ({ station, source, can
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<AwsStationHistoryEntry[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setMode('view'); setError(null); }, [name, source, station.type]);
-
-  useEffect(() => {
-    if (!cardRef.current) return;
-    L.DomEvent.disableClickPropagation(cardRef.current);
-    L.DomEvent.disableScrollPropagation(cardRef.current);
-  }, []);
+  useEffect(() => { setMode('view'); setError(null); }, [stationKey, source, station.type]);
 
   const beginEdit = () => {
     setDraft(Object.fromEntries(Object.entries(visibleValues).map(([key, value]) => [key, value == null ? '' : String(value)])));
@@ -70,7 +65,7 @@ export const AWSHoverCard: React.FC<AWSHoverCardProps> = ({ station, source, can
 
   const openHistory = async () => {
     setMode('history'); setIsLoadingHistory(true); setError(null);
-    try { setHistory(await fetchAwsStationHistory(source, station.type, name)); }
+    try { setHistory(await fetchAwsStationHistory(source, station.type, stationKey)); }
     catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Station history is unavailable.'); }
     finally { setIsLoadingHistory(false); }
   };
@@ -83,16 +78,16 @@ export const AWSHoverCard: React.FC<AWSHoverCardProps> = ({ station, source, can
         if (key === 'windDir' && typeof visibleValues.windDir === 'string') return [key, raw.trim() || null];
         return [key, raw.trim() === '' ? null : Number(raw)];
       })) as AwsStationValues;
-      onAdjusted(await adjustAwsStation(source, station.type, name, values, visibleValues));
+      onAdjusted(await adjustAwsStation(source, station.type, stationKey, values, visibleValues));
       setMode('view');
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Station values could not be updated.'); }
     finally { setIsSaving(false); }
   };
 
   return (
-    <div ref={cardRef} className="min-w-[260px] max-w-[340px] rounded-xl border border-slate-700 bg-slate-950/95 p-4 font-sans shadow-2xl backdrop-blur-xl" style={{ borderTopColor: accentColor, borderTopWidth: 2 }}>
+    <div onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onWheel={event => event.stopPropagation()} className="min-w-[260px] max-w-[340px] rounded-xl border border-slate-700 bg-slate-950/95 p-4 font-sans shadow-2xl backdrop-blur-xl" style={{ borderTopColor: accentColor, borderTopWidth: 2 }}>
       <div className="mb-1 flex items-start justify-between gap-3">
-        <div><h3 className="max-w-[210px] truncate text-sm font-black leading-tight text-white">{name}</h3><div className="mt-1 text-[9px] font-bold uppercase tracking-widest" style={{ color: accentColor }}>{typeLabel} Station • FHMZ/RHMZ</div></div>
+        <div><h3 className="max-w-[210px] truncate text-sm font-black leading-tight text-white">{displayName}</h3><div className="mt-1 text-[9px] font-bold uppercase tracking-widest" style={{ color: accentColor }}>{typeLabel} Station • FHMZ/RHMZ</div></div>
         {adjustment && <span title={`Adjusted ${new Date(adjustment.adjusted_at).toLocaleString()}`} className="rounded bg-amber-500/15 px-1.5 py-1 text-[8px] font-black uppercase text-amber-400">Adjusted</span>}
       </div>
       <div className="my-3 border-t border-slate-800" />

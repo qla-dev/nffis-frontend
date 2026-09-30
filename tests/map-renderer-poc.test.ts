@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   datasetTileQuery,
+  hasUsableMapboxToken,
   mapLibreTileUrl,
   selectMapRenderer,
   wmsTileUrl,
@@ -15,6 +16,29 @@ describe('map renderer proof-of-concept helpers', () => {
     expect(selectMapRenderer('?mapRenderer=mapbox', { enabled: true })).toBe('leaflet');
     expect(selectMapRenderer('?mapRenderer=mapbox', { enabled: true, mapboxEnabled: true })).toBe('mapbox');
     expect(selectMapRenderer('', { enabled: true, mapboxEnabled: true, defaultRenderer: 'mapbox' })).toBe('mapbox');
+    expect(selectMapRenderer('', {
+      enabled: false,
+      mapboxEnabled: true,
+      mapboxAccessToken: '',
+      defaultRenderer: 'mapbox',
+    })).toBe('leaflet');
+    expect(selectMapRenderer('?mapRenderer=mapbox', {
+      enabled: false,
+      mapboxEnabled: true,
+      mapboxAccessToken: 'not-a-public-token',
+    })).toBe('leaflet');
+    expect(selectMapRenderer('', {
+      enabled: false,
+      mapboxEnabled: true,
+      mapboxAccessToken: 'pk.test-token',
+      defaultRenderer: 'mapbox',
+    })).toBe('mapbox');
+  });
+
+  it('accepts only configured public Mapbox browser tokens', () => {
+    expect(hasUsableMapboxToken(' pk.example ')).toBe(true);
+    expect(hasUsableMapboxToken('sk.secret')).toBe(false);
+    expect(hasUsableMapboxToken('')).toBe(false);
   });
 
   it('translates Leaflet subdomain URLs and preserves dataset filters', () => {

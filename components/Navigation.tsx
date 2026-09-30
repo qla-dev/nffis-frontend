@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound, Flame } from 'lucide-react';
 import { Language, AppState } from '../types';
 import { TRANSLATIONS } from '../constants';
 import type { AuthUser } from '../lib/auth/session';
+import { ApiUsageDashboard } from './Admin/ApiUsageDashboard';
 
 interface NavProps {
   state: AppState;
@@ -37,6 +38,8 @@ export const Navigation: React.FC<NavProps> = ({
   const languages = Object.values(Language);
   const activeLanguageIndex = languages.indexOf(state.language);
   const nextLanguage = languages[(activeLanguageIndex + 1) % languages.length];
+  const [showApiUsage, setShowApiUsage] = useState(false);
+  const isSuperAdmin = user.role?.slug === 'super-admin';
 
   const NavItem = ({ icon: Icon, label, id, onClick, color = "text-slate-400" }: any) => {
     const isActive = id === 'layers' ? isLayersOpen : state.view === id && !onClick;
@@ -107,7 +110,7 @@ export const Navigation: React.FC<NavProps> = ({
              />
              <NavItem icon={Settings} label={t.system} onClick={() => {}} />
              <NavItem icon={HelpCircle} label={t.support} onClick={() => {}} />
-             <NavItem icon={UserRound} label={`${user.username} · ${user.role?.name || 'No role'}`} onClick={() => {}} />
+             <NavItem icon={UserRound} label={`${user.username} · ${user.role?.name || 'No role'}${isSuperAdmin ? ' · API usage' : ''}`} onClick={() => isSuperAdmin && setShowApiUsage(true)} />
              <NavItem icon={LogOut} label="Sign out" onClick={onLogout} color="text-red-400" />
            </div>
         </div>
@@ -179,6 +182,7 @@ export const Navigation: React.FC<NavProps> = ({
         <LogOut size={14} className="text-red-400" />
         {user.role?.name || user.username}
       </button>
+      {showApiUsage && isSuperAdmin && <ApiUsageDashboard onClose={() => setShowApiUsage(false)} />}
     </>
   );
 };

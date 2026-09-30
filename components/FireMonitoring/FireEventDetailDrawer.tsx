@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Loader2, Trees, UserCheck, X } from 'lucide-react';
 import { createFirePerimeter, fetchBurnSeverity, fetchFireDetails, fetchFireImpacts, fetchFirePerimeters, fetchFireRecovery, fetchFireScenarios, requestBurnSeverity, reviewBurnSeverity, reviewFirePerimeter, runFireScenario, updateFireIncidentCase, type BurnSeverityAssessment, type FireEventDetails, type FirePerimeter, type FirePriority, type FireScenarioRun, type FireWorkflowStatus } from '../../services/fireMonitoringService';
+import { ResponseReadinessPanel } from './ResponseReadinessPanel';
 
 const NEXT: Record<FireWorkflowStatus, FireWorkflowStatus[]> = {
   new: ['acknowledged', 'false_positive'], acknowledged: ['verified', 'false_positive'],
@@ -58,6 +59,7 @@ export function FireEventDetailDrawer({ eventId, canManage, canViewIntelligence,
         </section>
 
         <InitialExposure exposure={event.initial_exposure} />
+        <ResponseReadinessPanel eventId={event.id} canManage={canManage} />
 
         <section className="rounded-xl border border-slate-700/40 p-4">
           <h3 className="mb-4 flex items-center gap-2 font-bold"><UserCheck size={18} /> Response workflow</h3>

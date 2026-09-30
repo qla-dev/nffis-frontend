@@ -57,7 +57,20 @@
             height: 100%;
             background-color: #f8fafc !important;
         }
-
+        .nffis-operational-popup .mapboxgl-popup-content,
+        .nffis-operational-popup .maplibregl-popup-content {
+            padding: 0;
+            overflow: hidden;
+            border-radius: 12px;
+            background: transparent;
+            box-shadow: none;
+        }
+        .nffis-operational-popup .mapboxgl-popup-close-button,
+        .nffis-operational-popup .maplibregl-popup-close-button {
+            z-index: 2;
+            color: #cbd5e1;
+            font-size: 20px;
+        }
         /* A key-free, Positron-like treatment for detailed OSM raster tiles. */
         .nffis-positron-basemap .leaflet-tile {
           filter: grayscale(72%) saturate(32%) brightness(1.1) contrast(84%);

@@ -14,6 +14,7 @@ import { awsStationIdentity, fetchAwsStationAdjustments, type AwsStationAdjustme
 interface AWSFBiHLayerProps {
   activeTypes: Set<MapLayer>;
   canAdjust: boolean;
+  useCyrillicStationNames: boolean;
 }
 
 function typeToKey(s: AnyStation): MapLayer | null {
@@ -55,7 +56,7 @@ function makeIcon(station: AnyStation) {
   return L.divIcon({ html, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
 }
 
-export const AWSFBiHLayer: React.FC<AWSFBiHLayerProps> = ({ activeTypes, canAdjust }) => {
+export const AWSFBiHLayer: React.FC<AWSFBiHLayerProps> = ({ activeTypes, canAdjust, useCyrillicStationNames }) => {
   const [data, setData] = useState<ScrapedData | null>(null);
   const [adjustments, setAdjustments] = useState<AwsStationAdjustment[]>([]);
 
@@ -93,7 +94,7 @@ export const AWSFBiHLayer: React.FC<AWSFBiHLayerProps> = ({ activeTypes, canAdju
             icon={makeIcon(station)}
           >
             <Popup closeButton closeOnClick={false} maxWidth={360} minWidth={280} className="aws-edit-popup">
-              <AWSHoverCard station={station} source="fbih" canAdjust={canAdjust} adjustment={adjustment} onAdjusted={handleAdjusted} />
+              <AWSHoverCard station={station} source="fbih" canAdjust={canAdjust} adjustment={adjustment} onAdjusted={handleAdjusted} useCyrillicStationNames={useCyrillicStationNames} />
             </Popup>
           </Marker>
         );

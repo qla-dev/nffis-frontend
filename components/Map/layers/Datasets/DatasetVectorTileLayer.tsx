@@ -44,7 +44,10 @@ export function DatasetVectorTileLayer({ layer, filters, pane, onPolygonClick, o
 
   useEffect(() => {
     let disposed = false;
+    let retryTimeoutId: number | null = null;
+    let retriedAfterTileError = false;
     onLoadingChange?.(layer.id, true);
+    const loadingTimeoutId = window.setTimeout(() => onLoadingChange?.(layer.id, false), 20_000);
 
     loadVectorGrid().then(() => {
       if (disposed) return;
@@ -74,13 +77,28 @@ export function DatasetVectorTileLayer({ layer, filters, pane, onPolygonClick, o
         rendererFactory: L.canvas.tile,
         minZoom: layer.min_zoom ?? 0,
         maxNativeZoom: 22,
+        keepBuffer: 0,
+        updateWhenIdle: true,
+        updateWhenZooming: false,
         vectorTileLayerStyles: {
           dataset: styleForFeature,
         },
       });
 
-      grid.on('load', () => onLoadingChange?.(layer.id, false));
-      grid.on('tileerror', () => onLoadingChange?.(layer.id, false));
+      grid.on('load', () => {
+        retriedAfterTileError = false;
+        window.clearTimeout(loadingTimeoutId);
+        onLoadingChange?.(layer.id, false);
+      });
+      grid.on('tileerror', () => {
+        onLoadingChange?.(layer.id, false);
+        if (retriedAfterTileError || retryTimeoutId !== null) return;
+        retriedAfterTileError = true;
+        retryTimeoutId = window.setTimeout(() => {
+          retryTimeoutId = null;
+          if (!disposed && 'redraw' in grid && typeof grid.redraw === 'function') grid.redraw();
+        }, 750);
+      });
       grid.on('click', (event: L.LeafletMouseEvent & { layer?: { properties?: Record<string, unknown> } }) => {
         if (!onPolygonClick) return;
 
@@ -101,6 +119,8 @@ export function DatasetVectorTileLayer({ layer, filters, pane, onPolygonClick, o
 
     return () => {
       disposed = true;
+      window.clearTimeout(loadingTimeoutId);
+      if (retryTimeoutId !== null) window.clearTimeout(retryTimeoutId);
       gridRef.current?.remove();
       gridRef.current = null;
       onLoadingChange?.(layer.id, false);

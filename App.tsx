@@ -2,10 +2,11 @@
 import React, { lazy, Suspense, useState, useCallback, useEffect, useRef } from 'react';
 import { Navigation } from './components/Navigation';
 import { ReportModal } from './components/Report/ReportModal';
+import { IncidentReportGrid } from './components/Report/IncidentReportGrid';
 import { SessionLoginGate } from './components/Auth/SessionLoginGate';
 import { Language, AppState, MapLayer, IncidentReport, IncidentType } from './types';
 import { INITIAL_INCIDENTS, TRANSLATIONS } from './constants';
-import { Waves, Flame, Database } from 'lucide-react';
+import { Database } from 'lucide-react';
 import type { DatasetLayer, DatasetLayerFilterState, DatasetLayerStyle } from './services/datasetService';
 import { bulkSaveDatasetFeatureGeometries, createDatasetPolygon, fetchDatasetLayerFeature, fetchDatasetLayers, saveActiveDatasetLayerIds, saveDatasetLayerStyle, updateDatasetFeatureAttributes } from './services/datasetService';
 import { createIncidentReport, type CreateReportPayload } from './services/reportStatisticsService';
@@ -19,11 +20,21 @@ import {
 } from './lib/auth/session';
 import { changedFeatures, cloneFeatures, closeRing, type GeoEditorMode, type Position } from './lib/gis/geoEditor';
 import { selectMapRenderer } from './lib/gis/mapRendererPoc';
+import {
+  MAX_CONCURRENT_GEOJSON_LAYERS,
+  MAX_CONCURRENT_VECTOR_TILE_LAYERS,
+  shouldUseVectorTiles,
+} from './lib/gis/datasetLayerLoading';
+import { installExternalApiUsageTracker } from './services/apiUsageService';
 
 const mapEnvironment = (import.meta as ImportMeta & { env: Record<string, string | boolean | undefined> }).env;
+const mapboxAccessToken = String(mapEnvironment.VITE_MAPBOX_ACCESS_TOKEN || '');
 const selectedMapRenderer = selectMapRenderer(window.location.search, {
   enabled: mapEnvironment.DEV === true || mapEnvironment.VITE_ENABLE_MAPLIBRE_POC === 'true',
-  mapboxEnabled: mapEnvironment.DEV === true || mapEnvironment.VITE_ENABLE_MAPBOX_POC === 'true',
+  mapboxEnabled: mapEnvironment.DEV === true
+    || mapEnvironment.VITE_ENABLE_MAPBOX === 'true'
+    || mapEnvironment.VITE_ENABLE_MAPBOX_POC === 'true',
+  mapboxAccessToken,
   defaultRenderer: String(mapEnvironment.VITE_MAP_RENDERER_DEFAULT || 'leaflet'),
 });
 const GISMap = lazy(() => {
@@ -59,9 +70,16 @@ const FWI_LAYER_IDS = [
 const FWI_DEBUG_PREFIX = '[FWI DEBUG]';
 const IS_EXTREME_FWI_TEST_ROUTE = new URLSearchParams(window.location.search).get('fwiTest') === 'extreme';
 
+interface BulkDatasetLayerActivation {
+  queuedIds: number[];
+  targetIds: number[];
+  total: number;
+}
+
 const App: React.FC = () => {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
+  useEffect(() => authUser ? installExternalApiUsageTracker() : undefined, [authUser?.id]);
   const [state, setState] = useState<AppState>({
     language: Language.EN,
     // Enable only the operational overlays that are intended to be on at startup.
@@ -96,6 +114,7 @@ const App: React.FC = () => {
   const [datasetLayersError, setDatasetLayersError] = useState<string | null>(null);
   const [activeDatasetLayerIds, setActiveDatasetLayerIds] = useState<Set<number>>(new Set());
   const [loadingDatasetLayerIds, setLoadingDatasetLayerIds] = useState<Set<number>>(new Set());
+  const [bulkDatasetLayerActivation, setBulkDatasetLayerActivation] = useState<BulkDatasetLayerActivation | null>(null);
   const [selectedDatasetLayerId, setSelectedDatasetLayerId] = useState<number | null>(null);
   const [datasetLayerFilters, setDatasetLayerFilters] = useState<Record<number, DatasetLayerFilterState>>({});
   const [loadedDatasetFeatures, setLoadedDatasetFeatures] = useState<Record<number, GeoJSON.FeatureCollection | null>>({});
@@ -119,6 +138,7 @@ const App: React.FC = () => {
   const canCreateDatasetLayers = hasPermission(authUser, 'dataset-layers', 'create');
   const canManageLayerRoleAccess = hasPermission(authUser, 'layer-visibility', 'update');
   const isSuperAdmin = authUser?.role?.slug === 'super-admin';
+  const useCyrillicStationNames = authUser?.role?.slug === 'ministry-of-rs';
   const canViewMapLayers = hasPermission(authUser, 'map-layers', 'view');
   const canViewFwi = hasPermission(authUser, 'fire-weather-indices', 'view');
   const canViewFireMonitoring = hasPermission(authUser, 'fire-monitoring', 'view');
@@ -439,6 +459,7 @@ const App: React.FC = () => {
 
   const toggleDatasetLayer = useCallback((layerId: number) => {
     if (loadingDatasetLayerIds.has(layerId)) return;
+    setBulkDatasetLayerActivation(null);
     const isActive = activeDatasetLayerIds.has(layerId);
 
     setActiveDatasetLayerIds(prev => {
@@ -461,26 +482,76 @@ const App: React.FC = () => {
   }, [activeDatasetLayerIds, loadingDatasetLayerIds]);
 
   const setCategoryDatasetLayersActive = useCallback((layerIds: number[], active: boolean) => {
+    if (!active) {
+      setBulkDatasetLayerActivation(null);
+      setActiveDatasetLayerIds((previous) => {
+        const next = new Set(previous);
+        layerIds.forEach((layerId) => next.delete(layerId));
+        void saveActiveDatasetLayerIds(Array.from(next)).catch(() => undefined);
+        return next;
+      });
+      setLoadingDatasetLayerIds((previous) => {
+        const next = new Set(previous);
+        layerIds.forEach((layerId) => next.delete(layerId));
+        return next;
+      });
+      return;
+    }
+
     const idsToChange = layerIds.filter((layerId) => (
       !loadingDatasetLayerIds.has(layerId)
-      && (active ? !activeDatasetLayerIds.has(layerId) : activeDatasetLayerIds.has(layerId))
+      && !activeDatasetLayerIds.has(layerId)
     ));
 
     if (idsToChange.length === 0) return;
-
-    setActiveDatasetLayerIds((previous) => {
-      const next = new Set(previous);
-      idsToChange.forEach((layerId) => active ? next.add(layerId) : next.delete(layerId));
-      void saveActiveDatasetLayerIds(Array.from(next)).catch(() => undefined);
-      return next;
-    });
-
-    setLoadingDatasetLayerIds((previous) => {
-      const next = new Set(previous);
-      idsToChange.forEach((layerId) => active ? next.add(layerId) : next.delete(layerId));
-      return next;
+    setBulkDatasetLayerActivation({
+      queuedIds: idsToChange,
+      targetIds: idsToChange,
+      total: idsToChange.length,
     });
   }, [activeDatasetLayerIds, loadingDatasetLayerIds]);
+
+  useEffect(() => {
+    if (!bulkDatasetLayerActivation) return;
+
+    const byId = new Map(datasetLayers.map((layer) => [layer.id, layer]));
+    const isTileLike = (layerId: number) => {
+      const layer = byId.get(layerId);
+      return Boolean(layer && (layer.layer_kind === 'raster' || shouldUseVectorTiles(layer)));
+    };
+    const loadingIds = Array.from(loadingDatasetLayerIds);
+    let geoJsonSlots = Math.max(0, MAX_CONCURRENT_GEOJSON_LAYERS - loadingIds.filter((id) => !isTileLike(id)).length);
+    let tileSlots = Math.max(0, MAX_CONCURRENT_VECTOR_TILE_LAYERS - loadingIds.filter(isTileLike).length);
+    const nextBatch: number[] = [];
+
+    for (const layerId of bulkDatasetLayerActivation.queuedIds) {
+      if (isTileLike(layerId)) {
+        if (tileSlots <= 0) continue;
+        tileSlots -= 1;
+      } else {
+        if (geoJsonSlots <= 0) continue;
+        geoJsonSlots -= 1;
+      }
+      nextBatch.push(layerId);
+    }
+
+    if (nextBatch.length > 0) {
+      const selected = new Set(nextBatch);
+      setLoadingDatasetLayerIds((previous) => new Set([...previous, ...nextBatch]));
+      setActiveDatasetLayerIds((previous) => new Set([...previous, ...nextBatch]));
+      setBulkDatasetLayerActivation((previous) => previous ? {
+        ...previous,
+        queuedIds: previous.queuedIds.filter((id) => !selected.has(id)),
+      } : null);
+      return;
+    }
+
+    const targetStillLoading = bulkDatasetLayerActivation.targetIds.some((id) => loadingDatasetLayerIds.has(id));
+    if (bulkDatasetLayerActivation.queuedIds.length === 0 && !targetStillLoading) {
+      setBulkDatasetLayerActivation(null);
+      void saveActiveDatasetLayerIds(Array.from(activeDatasetLayerIds)).catch(() => undefined);
+    }
+  }, [activeDatasetLayerIds, bulkDatasetLayerActivation, datasetLayers, loadingDatasetLayerIds]);
 
   const handleDatasetLayerLoadingChange = useCallback((layerId: number, isLoading: boolean) => {
     setLoadingDatasetLayerIds(previous => {
@@ -659,6 +730,7 @@ const App: React.FC = () => {
             canViewAws={canViewAws}
             canViewFbih={canViewFbih}
             canViewRs={canViewRs}
+            useCyrillicStationNames={useCyrillicStationNames}
             canAdjustAws={canAdjustAws}
             geoEditorMode={geoEditorMode}
             geoEditorLayerId={selectedDatasetLayerId}
@@ -691,28 +763,7 @@ const App: React.FC = () => {
                 {state.view === 'fires' && <div id="fire-monitoring-header-actions" className="relative flex items-center" />}
               </header>
 
-              {state.view === 'reports' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {state.incidents.map(inc => (
-                    <div key={inc.id} className={`group border rounded-xl overflow-hidden transition-all duration-300 shadow-xl ${state.isDarkMode ? 'bg-slate-900 border-slate-800 hover:border-blue-500/50' : 'bg-white border-slate-200 hover:border-blue-500/50'}`}>
-                      <div className={`h-1.5 w-full ${inc.type === IncidentType.FIRE ? 'bg-red-600' : 'bg-blue-600'}`} />
-                      <div className="p-5">
-                        <div className="flex justify-between items-start mb-4">
-                           <div className={`p-2 rounded-lg ${inc.type === IncidentType.FIRE ? 'bg-red-600/10 text-red-500' : 'bg-blue-600/10 text-blue-500'}`}>
-                             {inc.type === IncidentType.FIRE ? <Flame size={20} /> : <Waves size={20} />}
-                           </div>
-                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${inc.urgency === 'high' ? 'border-red-500/50 text-red-500 bg-red-500/5' : state.isDarkMode ? 'border-slate-700 text-slate-400' : 'border-slate-300 text-slate-500'}`}>
-                             {inc.urgency.toUpperCase()}
-                           </span>
-                        </div> 
-                        <h3 className={`font-bold text-lg mb-2 ${state.isDarkMode ? 'text-white' : 'text-slate-900'}`}>{inc.type === IncidentType.FIRE ? t.fireAlert : t.floodAlert}</h3>
-                        <p className={`text-sm leading-relaxed mb-6 line-clamp-3 ${state.isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>"{inc.description}"</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
+              {state.view === 'reports' && <IncidentReportGrid incidents={state.incidents} dark={state.isDarkMode} fireLabel={t.fireAlert} floodLabel={t.floodAlert} />}
               {state.view === 'stats' && (
                 <Suspense fallback={<ScreenLoader label="Loading statistics" />}><StatisticsDashboard language={state.language} isDarkMode={state.isDarkMode} /></Suspense>
               )}
@@ -728,6 +779,12 @@ const App: React.FC = () => {
           layers={datasetLayers}
           activeLayerIds={activeDatasetLayerIds}
           loadingLayerIds={loadingDatasetLayerIds}
+          bulkActivationProgress={bulkDatasetLayerActivation ? {
+            completed: bulkDatasetLayerActivation.total
+              - bulkDatasetLayerActivation.queuedIds.length
+              - bulkDatasetLayerActivation.targetIds.filter((id) => loadingDatasetLayerIds.has(id)).length,
+            total: bulkDatasetLayerActivation.total,
+          } : null}
           selectedLayerId={selectedDatasetLayerId}
           filters={datasetLayerFilters}
           isFilterPanelOpen={isDatasetFilterPanelOpen}

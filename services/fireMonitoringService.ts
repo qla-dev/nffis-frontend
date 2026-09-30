@@ -94,6 +94,18 @@ export interface FireEventDetails extends FireEventProperties {
 export interface FireSourceStatus { source: string; status: 'healthy' | 'stale' | 'unknown'; last_started_at?: string | null; last_success_at?: string | null; last_failure_at?: string | null; duration_ms?: number | null; consecutive_failures: number; last_error?: string | null; stale_after_seconds: number; }
 export interface FireHealth { enabled: boolean; checked_at: string; sources: FireSourceStatus[]; }
 export interface FireNotification { id: string; data: { fire_event_id: number; external_id: string; transition: string; detail: string; priority: string; municipality?: string | null; canton?: string | null; occurred_at: string }; read_at?: string | null; created_at: string; }
+export interface FireResponsePlanPayload {
+  schema_version: number;
+  generated_at: string;
+  decision_support_notice: string;
+  access: { nearest_road?: FireEventProperties['nearest_road']; nearest_water_source?: FireEventProperties['nearest_water_source'] };
+  ranked_stations: Array<{ id: number; name: string; station_type: string; municipality: string; straight_line_distance_km: number; travel_time_minutes: number | null; capacity: number; capacity_source: string; vehicle_count?: number | null; verification_status: string; source_updated_at?: string | null }>;
+  staging_candidates: Array<{ kind: string; coordinates: { latitude: number; longitude: number }; distance_km: number; basis: string; status: string; limitations: string }>;
+  exposure?: FireEventProperties['initial_exposure'];
+  warnings: string[];
+  provenance: Record<string, string>;
+}
+export interface FireResponsePlan { id: number; fire_event_id: number; version: number; status: 'draft' | 'approved' | 'rejected'; plan: FireResponsePlanPayload; reviewed_by_name?: string | null; review_note?: string | null; reviewed_at?: string | null; created_at: string; }
 
 export type FireFeature = GeoJSON.Feature<GeoJSON.Point, FireEventProperties>;
 export type FireFeatureCollection = GeoJSON.FeatureCollection<GeoJSON.Point, FireEventProperties>;
@@ -130,6 +142,18 @@ export function fetchFireDetails(id: number, signal?: AbortSignal): Promise<{ da
 
 export function updateFireIncidentCase(id: number, payload: { workflow_status?: FireWorkflowStatus; priority?: FirePriority; assign_to_me?: boolean; assigned_user_id?: number | null; note?: string }): Promise<{ data: FireIncidentCase }> {
   return apiRequest(`/fires/${id}/case`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+export function fetchFireResponsePlan(id: number, signal?: AbortSignal): Promise<{ data: FireResponsePlan | null; preview: FireResponsePlanPayload }> {
+  return apiRequest(`/fires/${id}/response-plan`, { signal });
+}
+
+export function createFireResponsePlan(id: number): Promise<{ data: FireResponsePlan }> {
+  return apiRequest(`/fires/${id}/response-plan`, { method: 'POST' });
+}
+
+export function reviewFireResponsePlan(fireId: number, planId: number, status: 'approved' | 'rejected', note: string): Promise<{ data: FireResponsePlan }> {
+  return apiRequest(`/fires/${fireId}/response-plan/${planId}`, { method: 'PATCH', body: JSON.stringify({ status, note }) });
 }
 
 export function fetchFireHealth(signal?: AbortSignal): Promise<FireHealth> {

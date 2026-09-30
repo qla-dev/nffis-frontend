@@ -13,8 +13,8 @@ maximum FWI colour and the localized downwind fire-spread influence. Enable the
 **BH FWI** layer and its **Fire spread** option in the map controls after
 opening the route. Fire spread is intentionally off by default.
 
-The generated FWI raster is currently implemented by the Leaflet map, so this
-test should be run with Leaflet. The explicit equivalent URL is:
+The generated FWI raster is available as a native Mapbox image/raster layer. To
+compare the independent Leaflet emergency fallback explicitly, use:
 
 - [Extreme FWI test using Leaflet](http://localhost:3000/?mapRenderer=leaflet&fwiTest=extreme)
 
@@ -24,16 +24,19 @@ test should be run with Leaflet. The explicit equivalent URL is:
 - [MapLibre GL](http://localhost:3000/?mapRenderer=maplibre)
 - [Mapbox GL](http://localhost:3000/?mapRenderer=mapbox)
 
-Leaflet is the default and supports the complete application. MapLibre and
-Mapbox are comparison implementations; generated FWI rasters, wind, AWS and
-geometry editing remain on the Leaflet implementation.
+Mapbox is the configured default when its production flag and public token are
+present. Leaflet remains an independent emergency fallback. Mapbox renders the
+base map, dataset GeoJSON/MVT/raster/WMS layers, FWI, wind, AWS, active fires,
+assets, weather tools and geometry editor directly; no Leaflet instance is
+mounted inside Mapbox mode.
 
 Mapbox requires a public `pk.*` token in `VITE_MAPBOX_ACCESS_TOKEN`. In a
 production build, the GL routes also require their corresponding feature flags:
 
 ```env
 VITE_ENABLE_MAPLIBRE_POC=true
-VITE_ENABLE_MAPBOX_POC=true
+VITE_ENABLE_MAPBOX=true
+VITE_MAP_RENDERER_DEFAULT=mapbox
 ```
 
 ## Built application

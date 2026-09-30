@@ -32,25 +32,30 @@ Windy-labelled view uses the application's Open-Meteo wind-vector renderer.
 These integrations do not require browser API keys. Provider attribution must
 remain visible.
 
-## Map renderer comparison builds
+## Map renderers
 
-Leaflet remains the default renderer. During local development, open the app
-with `?mapRenderer=maplibre` to load the isolated MapLibre proof of concept and
-with `?mapRenderer=mapbox` to load the equivalent Mapbox GL implementation. Use
-`?mapRenderer=leaflet` to switch back. Mapbox requires a public `pk.*` token in
+Mapbox GL is the configured production renderer when `VITE_ENABLE_MAPBOX=true`,
+`VITE_MAP_RENDERER_DEFAULT=mapbox`, and a public token is available. Use
+`?mapRenderer=leaflet` for the full Leaflet fallback or `?mapRenderer=maplibre`
+for the MapLibre comparison renderer. Mapbox requires a public `pk.*` token in
 `VITE_MAPBOX_ACCESS_TOKEN`; restrict that token to the deployed application URLs
 in the Mapbox account.
 
-Production builds require `VITE_ENABLE_MAPLIBRE_POC=true` or
-`VITE_ENABLE_MAPBOX_POC=true` before the corresponding query option is accepted.
+Production builds require `VITE_ENABLE_MAPLIBRE_POC=true` for MapLibre or
+`VITE_ENABLE_MAPBOX=true` for Mapbox before the corresponding renderer is accepted.
 `VITE_MAP_RENDERER_DEFAULT` may be `leaflet`, `maplibre`, or `mapbox`, but a GL
-renderer becomes the default only while its feature gate is enabled.
+renderer becomes the default only while its feature gate is enabled. Mapbox also
+requires a usable public token; otherwise renderer selection falls back to Leaflet.
 
-The proof of concept supports the existing raster basemaps, database GeoJSON,
+The GL renderer supports the existing raster basemaps, database GeoJSON,
 MVT and raster layers, NASA/forest WMS overlays, incident heatmaps, filters,
-feature selection and report-location clicks. Wind, AWS, generated FWI rasters
-and geometry editing intentionally stay on the Leaflet fallback until the
-comparison meets its reliability and performance gates.
+feature selection and report-location clicks. Mapbox additionally enables 3D
+terrain and hillshade when the Terrain base layer is selected. Wind, AWS and its
+adjustment history/editor, active fires, spread scenarios, forest and landfill
+assets, generated and archived FWI, Meteoblue, weather-location tools and geometry
+editing are implemented as native Mapbox sources and layers. Mapbox mode does not
+mount a hidden or transparent Leaflet map. The explicit Leaflet renderer remains
+available only as an independent emergency fallback.
 
 The GL status badge reports renderer load, operational readiness, source errors
 and browser long tasks. All three renderers expose the same fields at

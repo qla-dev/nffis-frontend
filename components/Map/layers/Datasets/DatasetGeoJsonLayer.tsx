@@ -7,6 +7,7 @@ import type {
   DatasetLayerFilterState,
 } from '../../../../services/datasetService';
 import { fetchDatasetLayerFeatures } from '../../../../services/datasetService';
+import { scheduleGeoJsonRequest } from '../../../../lib/gis/datasetLayerLoading';
 
 interface DatasetGeoJsonLayerProps {
   layer: DatasetLayer;
@@ -188,14 +189,15 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
     const requestId = ++requestSequence.current;
     onLoadingChange?.(layer.id, true);
 
-    const timeoutId = window.setTimeout(() => {
-      fetchDatasetLayerFeatures(layer.id, {
+    const requestTimeoutId = window.setTimeout(() => controller.abort(), 20_000);
+    const debounceTimeoutId = window.setTimeout(() => {
+      scheduleGeoJsonRequest(() => fetchDatasetLayerFeatures(layer.id, {
         bbox,
         filters,
         limit: 1800,
         tolerance: toleranceForZoom(map.getZoom()),
         signal: controller.signal,
-      })
+      }), controller.signal)
         .then((data) => {
           if (!controller.signal.aborted && requestSequence.current === requestId) {
             setFeatureCollection(data);
@@ -210,7 +212,10 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
           }
         })
         .finally(() => {
+          window.clearTimeout(requestTimeoutId);
           if (!controller.signal.aborted && requestSequence.current === requestId) {
+            onLoadingChange?.(layer.id, false);
+          } else if (requestSequence.current === requestId) {
             onLoadingChange?.(layer.id, false);
           }
         });
@@ -218,7 +223,9 @@ export const DatasetGeoJsonLayer: React.FC<DatasetGeoJsonLayerProps> = ({
 
     return () => {
       controller.abort();
-      window.clearTimeout(timeoutId);
+      window.clearTimeout(debounceTimeoutId);
+      window.clearTimeout(requestTimeoutId);
+      onLoadingChange?.(layer.id, false);
     };
   }, [bbox, filterKey, layer, map, filters, refreshKey, zoom, onLoadingChange, onFeaturesLoaded]);
 

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { MapContainer, TileLayer, WMSTileLayer, Marker, LayerGroup, GeoJSON, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, Marker, LayerGroup, GeoJSON, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
 import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar, MapPin, Play, Pause, RotateCcw } from 'lucide-react';
@@ -9,6 +9,7 @@ import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteo
 import type { FirefighterStationType } from '../../firefighterData';
 import { MapControls } from './MapControls';
 import { MapScaleControl } from './MapScaleControl';
+import { OperationalBaseLayers } from './OperationalBaseLayers';
 import { ForestHoverCard } from './ForestHoverCard';
 import { FIREFIGHTER_STATION_STYLE } from './firefighterStationUi';
 import { AngstromHeatLayer } from '../Layers/FWI/AngstromHeatLayer';
@@ -21,6 +22,7 @@ import { AWSRsLayer } from './layers/AWS/AWSRsLayer';
 import { DatasetGeoJsonLayer } from './layers/Datasets/DatasetGeoJsonLayer';
 import { DatasetVectorTileLayer } from './layers/Datasets/DatasetVectorTileLayer';
 import { DatasetRasterLayer } from './layers/Datasets/DatasetRasterLayer';
+import { shouldUseVectorTiles } from '../../lib/gis/datasetLayerLoading';
 import { DatasetGeoEditorLayer } from './layers/Datasets/DatasetGeoEditorLayer';
 import { DatasetEditorDataLoader } from './layers/Datasets/DatasetEditorDataLoader';
 import { LiveWindVectorLayer } from './layers/Wind/LiveWindVectorLayer';
@@ -37,10 +39,6 @@ import { FOREST_RASTER_LAYERS } from '../../lib/gis/forestRasterLayers';
 import { ValidatedForestWmsLayer } from '../Layers/Forest/ValidatedForestWmsLayer';
 import {
   EXTERNAL_BASE_LAYERS,
-  NASA_FIRMS_LAYER,
-  NASA_GIBS_WMS_URL,
-  NASA_LAND_SURFACE_TEMPERATURE_LAYER,
-  OPENSTREETMAP_BASE_LAYER,
   gibsObservationDate,
   usesPlainBaseLayer,
 } from '../../lib/gis/externalMapLayers';
@@ -218,6 +216,7 @@ export interface GISMapProps {
   canViewAws: boolean;
   canViewFbih: boolean;
   canViewRs: boolean;
+  useCyrillicStationNames: boolean;
   canAdjustAws: boolean;
   geoEditorMode: GeoEditorMode;
   geoEditorLayerId: number | null;
@@ -287,6 +286,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   canViewAws,
   canViewFbih,
   canViewRs,
+  useCyrillicStationNames,
   canAdjustAws,
   geoEditorMode,
   geoEditorLayerId,
@@ -561,7 +561,6 @@ export const GISMap: React.FC<GISMapProps> = ({
     south: number;
     north: number;
   } | null>(null);
-
   // -- METEOBLUE DYNAMIC STATE --
   const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
 
@@ -600,15 +599,7 @@ export const GISMap: React.FC<GISMapProps> = ({
     );
   }, [activeLayers]);
   
-  const activeBaseLayer = useMemo(() => {
-      if (activeBaseLayerId) {
-          return EXTERNAL_BASE_LAYERS[activeBaseLayerId] ?? null;
-      }
-      return null;
-  }, [activeBaseLayerId]);
-  const activeBaseLayerKey = activeBaseLayerId ?? (isDarkMode ? 'dark' : 'light');
   const hasPlainBaseLayer = usesPlainBaseLayer(activeBaseLayerId);
-  const shouldRenderStandaloneMeteoblue = isMeteoblueActive && !isMeteoblueUnavailable;
   const fireIncidents = useMemo(
     () => incidents.filter(incident => incident.type === IncidentType.FIRE),
     [incidents]
@@ -627,21 +618,40 @@ export const GISMap: React.FC<GISMapProps> = ({
       return;
     }
     const controller = new AbortController();
+    let retryTimeoutId: number | null = null;
     setIsFwiTimelapsePlaying(false);
     setIsLoadingFwiArchive(true);
     setFwiArchiveError(null);
-    fetchFwiAvailability(92, controller.signal)
-      .then(({ data }) => {
-        const historical = data.filter((product) => product.product_kind === 'historical_reanalysis');
-        setFwiArchive(historical);
-        setSelectedFwiArchiveIndex(Math.max(0, historical.length - 1));
-      })
-      .catch((error) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return;
-        setFwiArchiveError(language === Language.BS ? 'Historijski FWI trenutno nije dostupan.' : 'Historical FWI is currently unavailable.');
-      })
-      .finally(() => { if (!controller.signal.aborted) setIsLoadingFwiArchive(false); });
-    return () => controller.abort();
+    const scheduleRetry = () => {
+      if (!controller.signal.aborted && retryTimeoutId === null) {
+        retryTimeoutId = window.setTimeout(() => {
+          retryTimeoutId = null;
+          loadArchive(false);
+        }, 60_000);
+      }
+    };
+    const loadArchive = (showLoading: boolean) => {
+      if (showLoading) setIsLoadingFwiArchive(true);
+      fetchFwiAvailability(92, controller.signal)
+        .then(({ data }) => {
+          const historical = data.filter((product) => product.product_kind === 'historical_reanalysis');
+          setFwiArchive(historical);
+          setSelectedFwiArchiveIndex(Math.max(0, historical.length - 1));
+          setFwiArchiveError(null);
+          if (historical.length === 0) scheduleRetry();
+        })
+        .catch((error) => {
+          if (error instanceof DOMException && error.name === 'AbortError') return;
+          setFwiArchiveError(language === Language.BS ? 'Historijski FWI trenutno nije dostupan.' : 'Historical FWI is currently unavailable.');
+          scheduleRetry();
+        })
+        .finally(() => { if (!controller.signal.aborted) setIsLoadingFwiArchive(false); });
+    };
+    loadArchive(true);
+    return () => {
+      controller.abort();
+      if (retryTimeoutId !== null) window.clearTimeout(retryTimeoutId);
+    };
   }, [isAnyFwiLayerActive, language]);
   const selectedFwiProduct = fwiArchive[selectedFwiArchiveIndex] ?? null;
   const nextFwiProduct = fwiArchive.length > 1
@@ -1328,65 +1338,12 @@ export const GISMap: React.FC<GISMapProps> = ({
         style={{ background: isDarkMode ? '#0f172a' : '#f8fafc' }}
         ref={setMap}
         zoomControl={false}
+        zoomSnap={1}
+        zoomDelta={1}
       >
         <ReportLocationPicker />
         <CustomLocationPicker />
-        {!shouldRenderStandaloneMeteoblue && !hasPlainBaseLayer && (
-          <TileLayer
-              key={activeBaseLayerKey}
-              url={activeBaseLayer?.url ?? OPENSTREETMAP_BASE_LAYER.url}
-              attribution={activeBaseLayer?.attribution ?? OPENSTREETMAP_BASE_LAYER.attribution}
-              className={activeBaseLayer?.className ?? OPENSTREETMAP_BASE_LAYER.className}
-              maxNativeZoom={activeBaseLayer?.maxNativeZoom ?? OPENSTREETMAP_BASE_LAYER.maxNativeZoom}
-              maxZoom={activeBaseLayer?.maxZoom ?? OPENSTREETMAP_BASE_LAYER.maxZoom}
-          />
-        )}
-        {shouldRenderStandaloneMeteoblue && meteoblueUrl && (
-          <TileLayer
-            key={`meteoblue-${meteoblueUrl}`}
-            url={meteoblueUrl}
-            attribution="Meteoblue"
-            opacity={0.78}
-            pane={METEOBLUE_OVERLAY_PANE}
-            zIndex={380}
-            keepBuffer={0}
-            updateWhenIdle={true}
-            updateWhenZooming={false}
-            eventHandlers={{ tileerror: handleMeteoblueTileError }}
-          />
-        )}
-        {activeLayers.has(MapLayer.NASA_FIRMS) && (
-          <WMSTileLayer
-            key={`nasa-firms-${gibsDate}`}
-            url={NASA_GIBS_WMS_URL}
-            params={{
-              layers: NASA_FIRMS_LAYER,
-              styles: 'default',
-              format: 'image/png',
-              transparent: true,
-              version: '1.3.0',
-              time: gibsDate,
-            } as L.WMSParams}
-            attribution={`NASA EOSDIS GIBS / FIRMS (${gibsDate})`}
-            opacity={0.95}
-          />
-        )}
-        {activeLayers.has(MapLayer.THERMAL) && (
-          <WMSTileLayer
-            key={`nasa-lst-${gibsDate}`}
-            url={NASA_GIBS_WMS_URL}
-            params={{
-              layers: NASA_LAND_SURFACE_TEMPERATURE_LAYER,
-              styles: 'default',
-              format: 'image/png',
-              transparent: true,
-              version: '1.3.0',
-              time: gibsDate,
-            } as L.WMSParams}
-            attribution={`NASA EOSDIS GIBS — Terra/MODIS land-surface temperature (${gibsDate})`}
-            opacity={0.72}
-          />
-        )}
+        <OperationalBaseLayers activeBaseLayerId={activeBaseLayerId} activeLayers={activeLayers} meteoblueUrl={meteoblueUrl} meteoblueAvailable={isMeteoblueActive && !isMeteoblueUnavailable} gibsDate={gibsDate} onMeteoblueTileError={handleMeteoblueTileError} />
         <FireMonitoringLayer
           visible={canViewFireMonitoring && activeLayers.has(MapLayer.ACTIVE_FIRES)}
           showSpreadWarnings={false}
@@ -1451,8 +1408,8 @@ export const GISMap: React.FC<GISMapProps> = ({
           activeLayers.has('AWS Agro' as MapLayer) || 
           activeLayers.has('AWS Meteo' as MapLayer)) && (
           <>
-            {canViewFbih && <AWSFBiHLayer activeTypes={activeLayers} canAdjust={canAdjustAws} />}
-            {canViewRs && <AWSRsLayer activeTypes={activeLayers} canAdjust={canAdjustAws} />}
+            {canViewFbih && <AWSFBiHLayer activeTypes={activeLayers} canAdjust={canAdjustAws} useCyrillicStationNames={useCyrillicStationNames} />}
+            {canViewRs && <AWSRsLayer activeTypes={activeLayers} canAdjust={canAdjustAws} useCyrillicStationNames={useCyrillicStationNames} />}
           </>
         )}
         {datasetLayers
@@ -1464,7 +1421,7 @@ export const GISMap: React.FC<GISMapProps> = ({
               pane={DATASET_LAYER_PANE}
               boundaryMask={administrativeBoundaryData ?? undefined}
               onLoadingChange={onDatasetLayerLoadingChange}
-            /> : layer.data_delivery === 'vector_tile' ? <DatasetVectorTileLayer
+            /> : shouldUseVectorTiles(layer) ? <DatasetVectorTileLayer
               key={layer.id}
               layer={layer}
               filters={datasetLayerFilters[layer.id]}

@@ -9,6 +9,7 @@ import { awsStationIdentity, fetchAwsStationAdjustments, type AwsStationAdjustme
 interface AWSRsLayerProps {
   activeTypes: Set<MapLayer>;
   canAdjust: boolean;
+  useCyrillicStationNames: boolean;
 }
 
 function makeIcon(station: RsStation) {
@@ -18,7 +19,7 @@ function makeIcon(station: RsStation) {
   return L.divIcon({ html, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
 }
 
-export const AWSRsLayer: React.FC<AWSRsLayerProps> = ({ activeTypes, canAdjust }) => {
+export const AWSRsLayer: React.FC<AWSRsLayerProps> = ({ activeTypes, canAdjust, useCyrillicStationNames }) => {
   const [data, setData] = useState<RsScrapedData | null>(null);
   const [adjustments, setAdjustments] = useState<AwsStationAdjustment[]>([]);
 
@@ -50,7 +51,7 @@ export const AWSRsLayer: React.FC<AWSRsLayerProps> = ({ activeTypes, canAdjust }
         const station = adjustment ? { ...sourceStation, ...adjustment.values } as RsStation : sourceStation;
         return <Marker key={`rs-${station.name}-${i}`} position={[station.lat, station.lon]} icon={makeIcon(station)}>
           <Popup closeButton closeOnClick={false} maxWidth={360} minWidth={280} className="aws-edit-popup">
-            <AWSHoverCard station={station} source="rs" canAdjust={canAdjust} adjustment={adjustment} onAdjusted={handleAdjusted} />
+            <AWSHoverCard station={station} source="rs" canAdjust={canAdjust} adjustment={adjustment} onAdjusted={handleAdjusted} useCyrillicStationNames={useCyrillicStationNames} />
           </Popup>
         </Marker>;
       })}

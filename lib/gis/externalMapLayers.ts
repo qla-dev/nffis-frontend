@@ -41,7 +41,7 @@ export const EXTERNAL_BASE_LAYERS: Partial<Record<MapLayer, ExternalBaseLayerCon
     attribution: 'OpenTopoMap',
   },
   [MapLayer.SENTINEL]: {
-    url: 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/{z}/{y}/{x}.jpg',
+    url: '/api/copernicus-tiles/{z}/{x}/{y}.jpg',
     attribution: 'Sentinel-2 cloudless 2025 &copy; EOX; modified Copernicus Sentinel data 2025',
     maxNativeZoom: 14,
     maxZoom: 18,

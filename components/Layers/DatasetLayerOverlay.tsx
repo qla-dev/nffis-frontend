@@ -21,12 +21,14 @@ import type {
 import { EditLayerSidebar, type EditLayerSidebarTabId } from './EditLayerSidebar/EditLayerSidebar';
 import type { FilterUpdate } from './EditLayerSidebar/FiltersTab';
 import type { GeoEditorMode, Position } from '../../lib/gis/geoEditor';
+import { bulkLayerCost } from '../../lib/gis/datasetLayerLoading';
 
 interface DatasetLayerOverlayProps {
   isOpen: boolean;
   layers: DatasetLayer[];
   activeLayerIds: Set<number>;
   loadingLayerIds: Set<number>;
+  bulkActivationProgress?: { completed: number; total: number } | null;
   selectedLayerId: number | null;
   filters: Record<number, DatasetLayerFilterState>;
   isFilterPanelOpen: boolean;
@@ -267,6 +269,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
   layers,
   activeLayerIds,
   loadingLayerIds,
+  bulkActivationProgress,
   selectedLayerId,
   filters,
   isFilterPanelOpen,
@@ -430,6 +433,24 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
 
   const activeCount = activeLayerIds.size;
 
+  const setGroupLayersActive = (groupLayers: DatasetLayer[], active: boolean) => {
+    if (active) {
+      const inactiveLayers = groupLayers.filter((layer) => !activeLayerIds.has(layer.id));
+      const cost = bulkLayerCost(inactiveLayers);
+      if (cost.requiresConfirmation) {
+        const approved = window.confirm(
+          `Load ${cost.layerCount} layers in controlled batches?\n\n`
+          + `Estimated map cost: ${cost.estimatedCost.toLocaleString()} units; `
+          + `${cost.vectorTileCount} vector-tile and ${cost.rasterCount} raster layers.\n\n`
+          + 'The map will remain usable while the layers are added. You can use Clear view to cancel.'
+        );
+        if (!approved) return;
+      }
+    }
+
+    onSetCategoryLayersActive(groupLayers.map((layer) => layer.id), active);
+  };
+
   return (
     <div className="fixed inset-y-0 left-0 right-0 z-[3600] pointer-events-none md:left-14">
       <div className="absolute inset-y-0 left-0 right-0 flex pointer-events-none">
@@ -455,12 +476,12 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    disabled={activeCount === 0 || loadingLayerIds.size > 0}
+                    disabled={activeCount === 0 && !bulkActivationProgress}
                     onClick={() => onSetCategoryLayersActive(Array.from(activeLayerIds), false)}
                     className="rounded-md border border-slate-800 px-2 py-1.5 text-[9px] font-black uppercase tracking-[0.08em] text-blue-400 transition-colors hover:border-blue-500/50 hover:bg-blue-600/10 disabled:cursor-not-allowed disabled:opacity-40"
                     title="Hide all active layers and clear the map view"
                   >
-                    Clear view
+                    {bulkActivationProgress ? 'Cancel loading' : 'Clear view'}
                   </button>
                   <button
                     type="button"
@@ -482,6 +503,11 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
               </header>
 
               <div className="border-b border-slate-800 p-3">
+                {bulkActivationProgress && (
+                  <div className="mb-3 rounded-md border border-blue-500/30 bg-blue-600/10 px-3 py-2 text-[11px] font-bold text-blue-200" role="status">
+                    Loading layers in safe batches: {Math.max(0, bulkActivationProgress.completed)} / {bulkActivationProgress.total}
+                  </div>
+                )}
                 <div className="flex h-10 items-center gap-2 rounded-md border border-slate-800 bg-slate-900 px-3 text-slate-400 focus-within:border-blue-500/70">
                   <Search size={16} />
                   <input
@@ -665,7 +691,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                             <button
                               type="button"
                               disabled={categoryHasLoadingLayer}
-                              onClick={() => onSetCategoryLayersActive(categoryLayers.map((layer) => layer.id), !allCategoryLayersActive)}
+                              onClick={() => setGroupLayersActive(categoryLayers, !allCategoryLayersActive)}
                               className="shrink-0 rounded-md border border-slate-800 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-blue-400 transition-colors hover:border-blue-500/50 hover:bg-blue-600/10 disabled:cursor-wait disabled:opacity-50"
                               title={allCategoryLayersActive ? `Hide all ${CATEGORY_LABELS[category] || category} layers` : `Show all ${CATEGORY_LABELS[category] || category} layers`}
                             >
@@ -720,7 +746,7 @@ export const DatasetLayerOverlay: React.FC<DatasetLayerOverlayProps> = ({
                                       <button
                                         type="button"
                                         disabled={subcategoryHasLoadingLayer}
-                                        onClick={() => onSetCategoryLayersActive(groupLayers.map((layer) => layer.id), !allSubcategoryLayersActive)}
+                                        onClick={() => setGroupLayersActive(groupLayers, !allSubcategoryLayersActive)}
                                         className="shrink-0 rounded-md border border-slate-800 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-blue-400 transition-colors hover:border-blue-500/50 hover:bg-blue-600/10 disabled:cursor-wait disabled:opacity-50"
                                         title={allSubcategoryLayersActive ? `Hide all ${subcategory} layers` : `Show all ${subcategory} layers`}
                                       >

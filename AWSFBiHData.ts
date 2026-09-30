@@ -178,8 +178,7 @@ export interface ScrapedData {
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
-const FHMZ_URL = "https://www.fhmzbih.gov.ba/latinica/AKTUELNO/Automatske.php";
-const CORS_PROXY = "https://api.allorigins.win/raw?url=";
+const FHMZ_FEED_URL = "/api/weather-stations/fbih";
 
 /** Parse a cell string to float, returning null for empty / error codes. */
 function parseNum(raw: string): number | null {
@@ -212,10 +211,7 @@ function dataRows(table: Element | undefined): Element[] {
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 export async function scrape(): Promise<ScrapedData> {
-  const useProxy = typeof process === "undefined" || !process.env?.FHMZ_NO_PROXY;
-  const url = useProxy ? CORS_PROXY + encodeURIComponent(FHMZ_URL) : FHMZ_URL;
-
-  const res = await fetch(url);
+  const res = await fetch(FHMZ_FEED_URL, { credentials: "include", headers: { Accept: "text/html" } });
   if (!res.ok) throw new Error(`FHMZ fetch failed: HTTP ${res.status}`);
 
   const html = await res.text();

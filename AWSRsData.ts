@@ -1,5 +1,7 @@
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+import { toLatinScript } from './lib/text/latinScript';
+
 export interface RsStation {
   type: 'meteo';
   name: string;
@@ -57,8 +59,7 @@ export const rsAwsDummyData: RsScrapedData = {
 
 // ─── Scraper ─────────────────────────────────────────────────────────────────
 
-const RS_API_URL = 'https://rhmzrs.com/data/feeds/pointweather.json';
-const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+const RS_FEED_URL = '/api/weather-stations/rs';
 
 function parseNum(v: string | number | null | undefined): number | null {
   if (v === null || v === undefined || v === '' || v === 'null') return null;
@@ -68,8 +69,7 @@ function parseNum(v: string | number | null | undefined): number | null {
 }
 
 export async function scrapeRs(): Promise<RsScrapedData> {
-  const url = CORS_PROXY + encodeURIComponent(RS_API_URL);
-  const res = await fetch(url);
+  const res = await fetch(RS_FEED_URL, { credentials: 'include', headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`RHMZ RS fetch failed: HTTP ${res.status}`);
 
   const json = await res.json();
@@ -90,7 +90,7 @@ export async function scrapeRs(): Promise<RsScrapedData> {
       const latest = obsArr[obsArr.length - 1] ?? null;
       return {
         type: 'meteo' as const,
-        name: loc.name ?? 'Unknown',
+        name: toLatinScript(String(loc.name ?? 'Unknown')),
         lat: parseFloat(loc.lat),
         lon: parseFloat(loc.lon),
         tempC: latest ? parseNum(latest.temperature) : null,
