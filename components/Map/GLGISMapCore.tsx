@@ -326,7 +326,7 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
   useEffect(() => {
     if (!fwiVisible) { setFwiPlaying(false); return; }
     const controller = new AbortController();
-    fetchFwiAvailability(92, controller.signal).then(({ data }) => {
+    fetchFwiAvailability(undefined, controller.signal).then(({ data }) => {
       const products = data.filter(product => product.product_kind === 'historical_reanalysis');
       setFwiArchive(products);
       setFwiIndex(Math.max(0, products.length - 1));

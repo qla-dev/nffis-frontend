@@ -632,7 +632,7 @@ export const GISMap: React.FC<GISMapProps> = ({
     };
     const loadArchive = (showLoading: boolean) => {
       if (showLoading) setIsLoadingFwiArchive(true);
-      fetchFwiAvailability(92, controller.signal)
+      fetchFwiAvailability(undefined, controller.signal)
         .then(({ data }) => {
           const historical = data.filter((product) => product.product_kind === 'historical_reanalysis');
           setFwiArchive(historical);
