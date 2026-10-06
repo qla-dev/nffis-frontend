@@ -134,7 +134,15 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
       if (!rasterValidation.valid) {
         throw new Error(`Generated raster validation failed: ${rasterValidation.errors.join(' ')}`);
       }
-      const validRasterValues = Array.from(raster.data).filter((value) => value !== FWI_NO_DATA_VALUE);
+      let validCellCount = 0;
+      let rasterMin = Infinity;
+      let rasterMax = -Infinity;
+      for (const value of raster.data) {
+        if (value === FWI_NO_DATA_VALUE) continue;
+        validCellCount += 1;
+        if (value < rasterMin) rasterMin = value;
+        if (value > rasterMax) rasterMax = value;
+      }
       console.info(logPrefix, 'raster surface ready', {
         bounds: {
           west: raster.west,
@@ -142,9 +150,9 @@ export const FWIGeoTiffLayer = <TPoint extends FwiRasterPoint>({
           south: raster.south,
           north: raster.north,
         },
-        validCellCount: validRasterValues.length,
-        rasterMin: validRasterValues.length ? Math.min(...validRasterValues) : null,
-        rasterMax: validRasterValues.length ? Math.max(...validRasterValues) : null,
+        validCellCount,
+        rasterMin: validCellCount ? rasterMin : null,
+        rasterMax: validCellCount ? rasterMax : null,
         grid: `${raster.width}x${raster.height}`,
         generationMs: Math.round(performance.now() - rasterStartedAt),
       });

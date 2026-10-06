@@ -14,6 +14,7 @@ import { renderFwiCogForMapbox } from '../../lib/gis/mapboxRasterImage';
 import { insertVertex, outerRings, positionKey, removeVertex, updateVertex, vertices, type Position, type VertexRef } from '../../lib/gis/geoEditor';
 import { AWSHoverCard } from './layers/AWS/AWSHoverCard';
 import { awsStationIdentity, fetchAwsStationAdjustments, type AwsStationAdjustment } from '../../services/awsStationService';
+import { AWS_DATASET_UPDATED_EVENT } from '../../services/awsCurrentService';
 import { toCyrillicScript } from '../../lib/text/latinScript';
 
 type PopupLike = { setLngLat: (point: [number, number]) => PopupLike; setHTML: (html: string) => PopupLike; setDOMContent: (element: HTMLElement) => PopupLike; addTo: (map: GLMap) => PopupLike; on: (event: string, handler: () => void) => PopupLike; remove: () => void };
@@ -99,12 +100,14 @@ function assetMarkerElement(type: RegionType): HTMLButtonElement {
 
 function awsMarkerElement(station: AnyStation | RsStation, color: string, name: string): HTMLButtonElement {
   const element = document.createElement('button');
-  const value = station.tempC == null ? '–' : `${station.tempC}°`;
+  const value = station.type === 'unclassified' ? 'RAW' : station.tempC == null ? '–' : `${station.tempC}°`;
   const icon = station.type === 'precipitation'
     ? `<path d="M12 2.7S6.5 9 6.5 13.3a5.5 5.5 0 0 0 11 0C17.5 9 12 2.7 12 2.7Z"/><path d="M9.5 14.2a2.8 2.8 0 0 0 2.5 2.1"/>`
     : station.type === 'agro'
       ? `<path d="M12 22V12"/><path d="M7 12c3 0 5 2 5 5-3 0-5-2-5-5Z"/><path d="M17 7c-3 0-5 2-5 5 3 0 5-2 5-5Z"/>`
-      : `<path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z"/><path d="M12 9v7"/>`;
+      : station.type === 'unclassified'
+        ? `<path d="M4 12h3l2-4 4 8 2-4h5"/>`
+        : `<path d="M14 14.76V5a2 2 0 0 0-4 0v9.76a4 4 0 1 0 4 0Z"/><path d="M12 9v7"/>`;
   element.type = 'button';
   element.title = name;
   element.setAttribute('aria-label', `${name}: ${value}`);
@@ -114,6 +117,9 @@ function awsMarkerElement(station: AnyStation | RsStation, color: string, name: 
 }
 
 function remove(map: GLMap, layers: string[], sources: string[]) {
+  // React runs the parent's effect cleanup before child effect cleanups. The
+  // parent may already have called map.remove(), which clears Mapbox's style.
+  if (!(map as GLMap & { style?: unknown }).style) return;
   layers.forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
   sources.forEach(id => { if (map.getSource(id)) map.removeSource(id); });
 }
@@ -121,7 +127,8 @@ function esc(value: unknown) { return String(value ?? '—').replace(/[&<>"']/g,
 function stationName(station: AnyStation) { return 'city' in station ? station.city : station.station; }
 function enabledAws(station: AnyStation, active: Set<MapLayer>) {
   return station.type === 'precipitation' ? active.has(MapLayer.AWS_PRECIPITATION)
-    : station.type === 'agro' ? active.has(MapLayer.AWS_AGRO) : active.has(MapLayer.AWS_METEO);
+    : station.type === 'agro' ? active.has(MapLayer.AWS_AGRO)
+    : station.type === 'unclassified' ? active.has(MapLayer.AWS_SENSORS) : active.has(MapLayer.AWS_METEO);
 }
 function fireColor(event: FireEventProperties) {
   if (!event.is_active) return '#64748b';
@@ -140,9 +147,10 @@ export function MapboxOperationalLayers(props: Props) {
   const fireEventsRef = useRef<FireEventProperties[]>([]);
   const selectedVertexRef = useRef<VertexRef | null>(null);
   const [awsAdjustments, setAwsAdjustments] = useState<AwsStationAdjustment[]>([]);
+  const [awsRevision, setAwsRevision] = useState(0);
   const assetSignature = `${Number(activeLayers.has(MapLayer.FORESTS))}|${Number(activeLayers.has(MapLayer.LANDFILLS))}`;
   const fireSignature = `${Number(activeLayers.has(MapLayer.ACTIVE_FIRES))}|${Number(activeLayers.has(MapLayer.FWI_FIRE_SPREAD))}`;
-  const awsSignature = `${Number(activeLayers.has(MapLayer.AWS_PRECIPITATION))}|${Number(activeLayers.has(MapLayer.AWS_AGRO))}|${Number(activeLayers.has(MapLayer.AWS_METEO))}`;
+  const awsSignature = `${Number(activeLayers.has(MapLayer.AWS_PRECIPITATION))}|${Number(activeLayers.has(MapLayer.AWS_AGRO))}|${Number(activeLayers.has(MapLayer.AWS_METEO))}|${Number(activeLayers.has(MapLayer.AWS_SENSORS))}`;
   const windVisible = activeLayers.has(MapLayer.WIND_VECTOR) || activeLayers.has(MapLayer.WINDY);
   const meteoblueVisible = activeLayers.has(MapLayer.METEOBLUE);
   const fwiSignature = [MapLayer.FWI_ANGSTROM, MapLayer.FWI_GFI, MapLayer.FWI_KBDI, MapLayer.FWI_BOSNIAN, MapLayer.FIRE_INTELLIGENCE_FWI]
@@ -155,6 +163,11 @@ export function MapboxOperationalLayers(props: Props) {
     return () => controller.abort();
   }, [props.canViewAws]);
   useEffect(() => () => { popupRootRef.current?.unmount(); popupRef.current?.remove(); }, []);
+  useEffect(() => {
+    const refresh = () => setAwsRevision((value) => value + 1);
+    window.addEventListener(AWS_DATASET_UPDATED_EVENT, refresh);
+    return () => window.removeEventListener(AWS_DATASET_UPDATED_EVENT, refresh);
+  }, []);
 
   useEffect(() => {
     if (!props.canViewMapLayers) return;
@@ -195,7 +208,7 @@ export function MapboxOperationalLayers(props: Props) {
           remove(map,[SPREAD_FILL,SPREAD_LINE],[SPREAD_SOURCE]);
           const features=groups.flat(); if(features.length){map.addSource(SPREAD_SOURCE,{type:'geojson',data:{type:'FeatureCollection',features}}); map.addLayer({id:SPREAD_FILL,type:'fill',source:SPREAD_SOURCE,paint:{'fill-color':['match',['to-number',['get','horizon_h']],1,'#facc15',3,'#f97316',6,'#dc2626','#7f1d1d'],'fill-opacity':.18}}); map.addLayer({id:SPREAD_LINE,type:'line',source:SPREAD_SOURCE,paint:{'line-color':['match',['to-number',['get','horizon_h']],1,'#facc15',3,'#f97316',6,'#dc2626','#7f1d1d'],'line-width':2}});}
         }
-      } catch(error){if((error as Error).name!=='AbortError') console.warn('Native fire layer unavailable',error);}
+      } catch(error){if(alive && controller && !controller.signal.aborted && (error as Error).name!=='AbortError') console.warn('Native fire layer unavailable',error);}
     };
     void load(); const timer=window.setInterval(load,FIRE_REFRESH_MS);
     const click=(event:FeatureMouseEvent)=>{const feature=event.features?.[0];if(!feature)return;const p=feature.properties||{};popupRef.current?.remove();popupRef.current=props.createPopup().setLngLat((feature.geometry as GeoJSON.Point).coordinates as [number,number]).setHTML(popupHtml('Active fire',[['Status',p.status],['Peak FRP',`${p.peak_frp ?? '—'} MW`],['Detections',p.detection_count],['Municipality',p.municipality]])).addTo(map);};
@@ -207,31 +220,43 @@ export function MapboxOperationalLayers(props: Props) {
   },[fireSignature,map,props.canViewFireMonitoring,props.createPopup]);
 
   useEffect(() => {
-    const visible=props.canViewAws&&(activeLayers.has(MapLayer.AWS_PRECIPITATION)||activeLayers.has(MapLayer.AWS_AGRO)||activeLayers.has(MapLayer.AWS_METEO));
+    const visible=props.canViewAws&&(activeLayers.has(MapLayer.AWS_PRECIPITATION)||activeLayers.has(MapLayer.AWS_AGRO)||activeLayers.has(MapLayer.AWS_METEO)||activeLayers.has(MapLayer.AWS_SENSORS));
     if(!visible)return;
     let alive=true;
     const markers:MarkerLike[]=[];
+    const cancelHoverClosers: Array<() => void> = [];
     const addStation=(source:'fbih'|'rs',sourceStation:AnyStation|RsStation,name:string,coordinates:[number,number],color:string)=>{
       const adjustment=awsAdjustments.find(item=>awsStationIdentity(item.source,item.station_type,item.station_key)===awsStationIdentity(source,sourceStation.type,name));
       const station=adjustment?{...sourceStation,...adjustment.values} as AnyStation|RsStation:sourceStation;
       const element=awsMarkerElement(station,color,props.useCyrillicStationNames?toCyrillicScript(name):name);
-      element.addEventListener('click',(event)=>{
-        event.stopPropagation();
+      let closeTimer: ReturnType<typeof setTimeout> | undefined;
+      let stationPopup: PopupLike | null = null;
+      const cancelClose=()=>{if(closeTimer)clearTimeout(closeTimer);closeTimer=undefined;};
+      const scheduleClose=()=>{cancelClose();closeTimer=setTimeout(()=>{if(popupRef.current===stationPopup){stationPopup?.remove();popupRef.current=null;}},180);};
+      cancelHoverClosers.push(cancelClose);
+      const openStationPopup=()=>{
+        cancelClose();
         popupRef.current?.remove();popupRef.current=null;
         if(popupRootRef.current){popupRootRef.current.unmount();popupRootRef.current=null;}
         const container=document.createElement('div');const root=createRoot(container);popupRootRef.current=root;
+        container.addEventListener('mouseenter',cancelClose);
+        container.addEventListener('mouseleave',scheduleClose);
         root.render(<AWSHoverCard station={station} source={source} canAdjust={props.canAdjustAws} useCyrillicStationNames={props.useCyrillicStationNames} adjustment={adjustment} onAdjusted={value=>setAwsAdjustments(current=>[...current.filter(item=>item.id!==value.id),value])}/>);
-        const popup=props.createPopup().setLngLat(coordinates).setDOMContent(container).addTo(map).on('close',()=>{if(popupRootRef.current===root){root.unmount();popupRootRef.current=null;}});popupRef.current=popup;
-      });
+        const popup=props.createPopup().setLngLat(coordinates).setDOMContent(container).addTo(map).on('close',()=>{cancelClose();if(popupRootRef.current===root){root.unmount();popupRootRef.current=null;}});popupRef.current=popup;stationPopup=popup;
+      };
+      element.addEventListener('mouseenter',openStationPopup);
+      element.addEventListener('mouseleave',scheduleClose);
+      element.addEventListener('focus',openStationPopup);
+      element.addEventListener('click',(event)=>{event.stopPropagation();openStationPopup();});
       markers.push(props.createMarker(element).setLngLat(coordinates).addTo(map));
     };
     Promise.all([props.canViewFbih?scrape().catch(()=>null):Promise.resolve(null),props.canViewRs?scrapeRs().catch(()=>null):Promise.resolve(null)]).then(([fbih,rs])=>{
       if(!alive)return;
-      if(props.canViewFbih)(fbih?.all??allFhmzStations).filter(station=>enabledAws(station,activeLayers)).forEach((station:AnyStation)=>{const name=stationName(station),coordinates=FBIH_COORDS[name];if(coordinates)addStation('fbih',station,name,coordinates,station.type==='agro'?'#eab308':station.type==='precipitation'?'#06b6d4':'#10b981');});
+      if(props.canViewFbih)(fbih?.all??allFhmzStations).filter(station=>enabledAws(station,activeLayers)).forEach((station:AnyStation)=>{const name=stationName(station),position=station as AnyStation & {lat?:number;lon?:number},coordinates=Number.isFinite(position.lat)&&Number.isFinite(position.lon)?[position.lon!,position.lat!] as [number,number]:FBIH_COORDS[name];if(coordinates)addStation('fbih',station,name,coordinates,station.type==='unclassified'?'#f59e0b':station.type==='agro'?'#eab308':station.type==='precipitation'?'#06b6d4':'#10b981');});
       if(props.canViewRs&&activeLayers.has(MapLayer.AWS_METEO))(rs?.stations??rsAwsDummyData.stations).forEach((station:RsStation)=>addStation('rs',station,station.name,[station.lon,station.lat],'#818cf8'));
     });
-    return()=>{alive=false;markers.forEach(marker=>marker.remove());};
-  },[awsSignature,awsAdjustments,map,props.canAdjustAws,props.canViewAws,props.canViewFbih,props.canViewRs,props.createMarker,props.createPopup,props.useCyrillicStationNames]);
+    return()=>{alive=false;cancelHoverClosers.forEach(cancel=>cancel());markers.forEach(marker=>marker.remove());};
+  },[awsSignature,awsAdjustments,awsRevision,map,props.canAdjustAws,props.canViewAws,props.canViewFbih,props.canViewRs,props.createMarker,props.createPopup,props.useCyrillicStationNames]);
 
   useEffect(()=>{
     const visible=props.canViewMapLayers&&(activeLayers.has(MapLayer.WIND_VECTOR)||activeLayers.has(MapLayer.WINDY));if(!visible){remove(map,[WIND_LAYER],[WIND_SOURCE]);return;}
@@ -243,7 +268,7 @@ export function MapboxOperationalLayers(props: Props) {
   },[map,meteoblueVisible,props.canViewMapLayers]);
 
   useEffect(()=>{
-    const fwiActive=props.canViewFwi&&[MapLayer.FWI_ANGSTROM,MapLayer.FWI_GFI,MapLayer.FWI_KBDI,MapLayer.FWI_BOSNIAN,MapLayer.FIRE_INTELLIGENCE_FWI].some(layer=>activeLayers.has(layer));if(!fwiActive){remove(map,[FWI_LAYER,FWI_HEAT_LAYER],[FWI_SOURCE,FWI_POINTS_SOURCE]);return;}let release:(()=>void)|null=null;const controller=new AbortController();const load=async()=>{try{const wantsCog=activeLayers.has(MapLayer.FWI_BOSNIAN)||activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI);if(!wantsCog)throw new Error('Use calculated index surface.');let id=props.selectedFwiProductId;if(!id){const products=await fetchFireIntelligenceProducts(controller.signal);id=products.data.filter(p=>p.index_type==='FWI'&&p.forecast_day===0&&p.status==='approved'&&p.artifact_urls?.cog).sort((a,b)=>Date.parse(b.valid_at)-Date.parse(a.valid_at))[0]?.id;}if(!id)throw new Error('No approved FWI product.');const image=await renderFwiCogForMapbox(`/api/fire-intelligence/products/${id}/artifact/cog`,controller.signal);release=image.release;remove(map,[FWI_LAYER],[FWI_SOURCE]);map.addSource(FWI_SOURCE,{type:'image',url:image.url,coordinates:image.coordinates});map.addLayer({id:FWI_LAYER,type:'raster',source:FWI_SOURCE,paint:{'raster-opacity':.78,'raster-resampling':'linear'}});}catch(e){if((e as Error).name==='AbortError')return;const key=activeLayers.has(MapLayer.FWI_ANGSTROM)?'angstrom':activeLayers.has(MapLayer.FWI_GFI)?'gfi':activeLayers.has(MapLayer.FWI_KBDI)?'kbdi':'fwi';const max=key==='angstrom'?6:key==='gfi'?15:key==='kbdi'?800:80;const features=MOCK_FORESTS.filter(f=>f.type!==RegionType.LANDFILL).map(f=>({type:'Feature' as const,geometry:{type:'Point' as const,coordinates:[f.coordinates[1],f.coordinates[0]]},properties:{value:key==='angstrom'?6-f.riskScore*4:key==='gfi'?f.riskScore*15:key==='kbdi'?f.riskScore*700:f.riskScore*80}}));map.addSource(FWI_POINTS_SOURCE,{type:'geojson',data:{type:'FeatureCollection',features}});map.addLayer({id:FWI_HEAT_LAYER,type:'heatmap',source:FWI_POINTS_SOURCE,paint:{'heatmap-weight':['interpolate',['linear'],['get','value'],0,0,max,1],'heatmap-radius':70,'heatmap-opacity':.72,'heatmap-color':['interpolate',['linear'],['heatmap-density'],0,'rgba(34,197,94,0)',.3,'#facc15',.55,'#f97316',.8,'#dc2626',1,'#581c87']}});}};void load();return()=>{controller.abort();release?.();remove(map,[FWI_LAYER,FWI_HEAT_LAYER],[FWI_SOURCE,FWI_POINTS_SOURCE]);};
+    const fwiActive=props.canViewFwi&&[MapLayer.FWI_ANGSTROM,MapLayer.FWI_GFI,MapLayer.FWI_KBDI,MapLayer.FWI_BOSNIAN,MapLayer.FIRE_INTELLIGENCE_FWI].some(layer=>activeLayers.has(layer));if(!fwiActive){remove(map,[FWI_LAYER,FWI_HEAT_LAYER],[FWI_SOURCE,FWI_POINTS_SOURCE]);return;}let release:(()=>void)|null=null;const controller=new AbortController();const load=async()=>{try{const wantsCog=activeLayers.has(MapLayer.FWI_BOSNIAN)||activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI);if(!wantsCog)throw new Error('Use calculated index surface.');let id=props.selectedFwiProductId;if(!id){const products=await fetchFireIntelligenceProducts(controller.signal);id=products.data.filter(p=>p.index_type==='FWI'&&p.forecast_day===0&&p.status==='approved'&&p.artifact_urls?.cog).sort((a,b)=>Date.parse(b.valid_at)-Date.parse(a.valid_at))[0]?.id;}if(!id)throw new Error('No approved FWI product.');const image=await renderFwiCogForMapbox(`/api/fire-intelligence/products/${id}/artifact/cog`,controller.signal);release=image.release;if(controller.signal.aborted)return;remove(map,[FWI_LAYER],[FWI_SOURCE]);map.addSource(FWI_SOURCE,{type:'image',url:image.url,coordinates:image.coordinates});map.addLayer({id:FWI_LAYER,type:'raster',source:FWI_SOURCE,paint:{'raster-opacity':.78,'raster-resampling':'linear'}});}catch(e){if(controller.signal.aborted||(e as Error).name==='AbortError')return;const key=activeLayers.has(MapLayer.FWI_ANGSTROM)?'angstrom':activeLayers.has(MapLayer.FWI_GFI)?'gfi':activeLayers.has(MapLayer.FWI_KBDI)?'kbdi':'fwi';const max=key==='angstrom'?6:key==='gfi'?15:key==='kbdi'?800:80;const features=MOCK_FORESTS.filter(f=>f.type!==RegionType.LANDFILL).map(f=>({type:'Feature' as const,geometry:{type:'Point' as const,coordinates:[f.coordinates[1],f.coordinates[0]]},properties:{value:key==='angstrom'?6-f.riskScore*4:key==='gfi'?f.riskScore*15:key==='kbdi'?f.riskScore*700:f.riskScore*80}}));map.addSource(FWI_POINTS_SOURCE,{type:'geojson',data:{type:'FeatureCollection',features}});map.addLayer({id:FWI_HEAT_LAYER,type:'heatmap',source:FWI_POINTS_SOURCE,paint:{'heatmap-weight':['interpolate',['linear'],['get','value'],0,0,max,1],'heatmap-radius':70,'heatmap-opacity':.72,'heatmap-color':['interpolate',['linear'],['heatmap-density'],0,'rgba(34,197,94,0)',.3,'#facc15',.55,'#f97316',.8,'#dc2626',1,'#581c87']}});}};void load();return()=>{controller.abort();release?.();remove(map,[FWI_LAYER,FWI_HEAT_LAYER],[FWI_SOURCE,FWI_POINTS_SOURCE]);};
   },[fwiSignature,map,props.canViewFwi,props.selectedFwiProductId]);
 
   useEffect(()=>{
@@ -256,9 +281,9 @@ export function MapboxOperationalLayers(props: Props) {
     const vertexFeatures:GeoJSON.Feature<GeoJSON.Point>[] = refs.map((ref,index)=>({type:'Feature',id:`vertex-${index}`,geometry:{type:'Point',coordinates:ref.position},properties:{kind:'vertex',index,key:positionKey(ref.position)}}));
     if(props.geoEditorMode==='edit-single'||props.geoEditorMode==='edit-shared')props.geoEditorFeatures.forEach((feature,featureIndex)=>{if(props.geoEditorMode==='edit-single'&&featureIndex!==selectedIndex)return;outerRings(feature.geometry).forEach((ring,polygonIndex)=>ring.forEach((position,vertexIndex)=>{const next=ring[(vertexIndex+1)%ring.length];vertexFeatures.push({type:'Feature',geometry:{type:'Point',coordinates:[(position[0]+next[0])/2,(position[1]+next[1])/2]},properties:{kind:'midpoint',featureIndex,polygonIndex,vertexIndex}});}));});
     if(vertexFeatures.length){map.addSource(EDIT_VERTEX_SOURCE,{type:'geojson',data:{type:'FeatureCollection',features:vertexFeatures}});map.addLayer({id:EDIT_VERTEX_LAYER,type:'circle',source:EDIT_VERTEX_SOURCE,paint:{'circle-radius':['case',['==',['get','kind'],'midpoint'],5,6],'circle-color':['case',['==',['get','kind'],'midpoint'],'#ffffff','#2563eb'],'circle-stroke-color':['case',['==',['get','kind'],'midpoint'],'#9333ea','#ffffff'],'circle-stroke-width':2}});}
-    const click=(event:FeatureMouseEvent)=>{if(props.geoEditorMode==='draw'){const raw:Position=[event.lngLat.lng,event.lngLat.lat];let point=raw;if(props.geoEditorSnappingEnabled){const candidate=allRefs.map(ref=>({ref,distance:Math.hypot(ref.position[0]-raw[0],ref.position[1]-raw[1])})).sort((a,b)=>a.distance-b.distance)[0];if(candidate&&candidate.distance<.001)point=[...candidate.ref.position];}props.onGeoEditorDrawingChange([...drawing,point]);return;}const hit=map.getLayer(EDIT_VERTEX_LAYER)?map.queryRenderedFeatures(event.point,{layers:[EDIT_VERTEX_LAYER]})[0]:undefined;if(hit?.properties?.kind==='midpoint'){const ref:VertexRef={featureIndex:Number(hit.properties.featureIndex),polygonIndex:Number(hit.properties.polygonIndex),ringIndex:0,vertexIndex:Number(hit.properties.vertexIndex),position:(hit.geometry as GeoJSON.Point).coordinates as Position};props.onGeoEditorFeaturesChange(insertVertex(props.geoEditorFeatures,ref,(hit.geometry as GeoJSON.Point).coordinates as Position,props.geoEditorMode==='edit-shared'));return;}if(hit?.properties?.kind==='vertex'){selectedVertexRef.current=refs[Number(hit.properties.index)]??null;return;}if(selectedVertexRef.current){props.onGeoEditorFeaturesChange(updateVertex(props.geoEditorFeatures,selectedVertexRef.current,[event.lngLat.lng,event.lngLat.lat],props.geoEditorMode==='edit-shared'));selectedVertexRef.current=null;}};
+    const click=(event:FeatureMouseEvent)=>{if(props.geoEditorMode==='draw'){const raw:Position=[event.lngLat.lng,event.lngLat.lat];let point=raw;if(props.geoEditorSnappingEnabled){const candidate=allRefs.map(ref=>({ref,distance:Math.hypot(ref.position[0]-raw[0],ref.position[1]-raw[1])})).sort((a,b)=>a.distance-b.distance)[0];if(candidate&&candidate.distance<.001)point=[...candidate.ref.position];}props.onGeoEditorDrawingChange([...drawing,point]);return;}const hit=(map as GLMap & {style?: unknown}).style&&map.getLayer(EDIT_VERTEX_LAYER)?map.queryRenderedFeatures(event.point,{layers:[EDIT_VERTEX_LAYER]})[0]:undefined;if(hit?.properties?.kind==='midpoint'){const ref:VertexRef={featureIndex:Number(hit.properties.featureIndex),polygonIndex:Number(hit.properties.polygonIndex),ringIndex:0,vertexIndex:Number(hit.properties.vertexIndex),position:(hit.geometry as GeoJSON.Point).coordinates as Position};props.onGeoEditorFeaturesChange(insertVertex(props.geoEditorFeatures,ref,(hit.geometry as GeoJSON.Point).coordinates as Position,props.geoEditorMode==='edit-shared'));return;}if(hit?.properties?.kind==='vertex'){selectedVertexRef.current=refs[Number(hit.properties.index)]??null;return;}if(selectedVertexRef.current){props.onGeoEditorFeaturesChange(updateVertex(props.geoEditorFeatures,selectedVertexRef.current,[event.lngLat.lng,event.lngLat.lat],props.geoEditorMode==='edit-shared'));selectedVertexRef.current=null;}};
     const context=(event:FeatureMouseEvent)=>{const vertex=event.features?.[0];if(!vertex||vertex.properties?.kind!=='vertex')return;event.preventDefault();const ref=refs[Number(vertex.properties?.index)];if(ref)props.onGeoEditorFeaturesChange(removeVertex(props.geoEditorFeatures,ref,props.geoEditorMode==='edit-shared'));};
-    map.on('click',click);if(map.getLayer(EDIT_VERTEX_LAYER))map.on('contextmenu',EDIT_VERTEX_LAYER,context);return()=>{map.off('click',click);if(map.getLayer(EDIT_VERTEX_LAYER))map.off('contextmenu',EDIT_VERTEX_LAYER,context);remove(map,[EDIT_FILL,EDIT_LINE,EDIT_VERTEX_LAYER],[EDIT_SOURCE,EDIT_VERTEX_SOURCE]);};
+    map.on('click',click);if(map.getLayer(EDIT_VERTEX_LAYER))map.on('contextmenu',EDIT_VERTEX_LAYER,context);return()=>{map.off('click',click);if((map as GLMap & {style?: unknown}).style&&map.getLayer(EDIT_VERTEX_LAYER))map.off('contextmenu',EDIT_VERTEX_LAYER,context);remove(map,[EDIT_FILL,EDIT_LINE,EDIT_VERTEX_LAYER],[EDIT_SOURCE,EDIT_VERTEX_SOURCE]);};
   },[map,props.geoEditorDrawing,props.geoEditorFeatures,props.geoEditorMode,props.geoEditorSelectedFeatureId,props.geoEditorShowDraft,props.geoEditorSnappingEnabled,props.onGeoEditorDrawingChange,props.onGeoEditorFeaturesChange]);
 
   return null;

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { Navigation } from '../components/Navigation';
@@ -34,11 +34,11 @@ function renderNavigation(overrides: Partial<React.ComponentProps<typeof Navigat
 }
 
 describe('role-aware navigation', () => {
-  it('renders and invokes allowed report, statistics, layer, language, and logout actions', async () => {
+  it('renders and invokes allowed report creation, statistics, layer, language, and logout actions', async () => {
     const interaction = userEvent.setup();
     const props = renderNavigation();
 
-    expect(screen.getAllByText('Reports').length).toBeGreaterThan(0);
+    expect(within(document.querySelectorAll('nav')[0] as HTMLElement).queryByText('Reports')).not.toBeInTheDocument();
     expect(screen.getAllByText('Statistics').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Layers').length).toBeGreaterThan(0);
     await interaction.click(screen.getByTitle('Report Incident'));
@@ -58,5 +58,21 @@ describe('role-aware navigation', () => {
   it('removes layer controls when the module is forbidden', () => {
     renderNavigation({ canViewLayers: false });
     expect(screen.queryByText('Layers')).not.toBeInTheDocument();
+  });
+
+  it('keeps five mobile positions with fire monitoring but no recent reports', async () => {
+    const interaction = userEvent.setup();
+    const props = renderNavigation({ canViewFireMonitoring: true });
+    const mobileNav = document.querySelectorAll('nav')[1];
+    expect(mobileNav.children).toHaveLength(5);
+    expect(within(mobileNav as HTMLElement).queryByRole('button', { name: 'Reports' })).not.toBeInTheDocument();
+    await interaction.click(within(mobileNav as HTMLElement).getByRole('button', { name: 'Fire monitoring' }));
+    expect(props.onSetView).toHaveBeenCalledWith('fires');
+    expect(props.onSetView).not.toHaveBeenCalledWith('reports');
+  });
+
+  it('shows the desktop AWS upload only for authorized roles', () => {
+    renderNavigation({ user: authUser({ slug: 'hydrometeorological-institute' }) });
+    expect(screen.getByText('Upload AWS data')).toBeInTheDocument();
   });
 });

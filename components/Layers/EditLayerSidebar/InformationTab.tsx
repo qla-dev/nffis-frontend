@@ -3,6 +3,7 @@ import { Pencil, X } from 'lucide-react';
 import type { DatasetLayer } from '../../../services/datasetService';
 import { updateDatasetLayerDataDelivery, updateDatasetLayerMetadata } from '../../../services/datasetService';
 import { ESA_WORLDCOVER_CLASSES, isEsaWorldCoverLayer } from '../../../lib/gis/worldCoverLegend';
+import { VEGETATION_RASTER_SCALES } from '../../../lib/gis/vegetationRasterScales';
 
 interface InformationTabProps {
   layer: DatasetLayer;
@@ -172,9 +173,23 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
             <InfoRow label="Layer kind" value={layer.layer_kind || 'vector'} />
             {layer.layer_kind === 'raster' && (
               <>
-                <InfoRow label="Latest scene" value={layer.latest_scene?.name || 'No approved imagery'} />
-                <InfoRow label="Provider" value={layer.latest_scene?.provider || 'None'} />
-                <InfoRow label="Acquired" value={layer.latest_scene?.acquired_at ? new Date(layer.latest_scene.acquired_at).toLocaleString() : 'None'} />
+                {layer.bounds?.acquisition_date ? (
+                  <>
+                    <InfoRow label="Acquired" value={layer.bounds.acquisition_date} />
+                    <InfoRow label="Resolution" value={`${layer.bounds.resolution_m ?? 'Unknown'} m`} />
+                    <InfoRow label="Meaning" value={{
+                      ndvi: 'Higher means greener vegetation.',
+                      ndii: 'Higher means more vegetation moisture.',
+                      dryness: 'Higher means drier vegetation relative to this acquisition.',
+                    }[layer.style.raster_scale ?? ''] ?? 'Satellite-derived vegetation index.'} />
+                  </>
+                ) : layer.latest_scene ? (
+                  <>
+                    <InfoRow label="Latest scene" value={layer.latest_scene.name} />
+                    <InfoRow label="Provider" value={layer.latest_scene.provider} />
+                    <InfoRow label="Acquired" value={new Date(layer.latest_scene.acquired_at).toLocaleString()} />
+                  </>
+                ) : null}
               </>
             )}
             {layer.geometry_family === 'line' && (
@@ -214,6 +229,10 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
         </Section>
       )}
 
+      {layer.layer_kind === 'raster' && layer.style.raster_scale && (
+        <VegetationLegend layer={layer} scale={layer.style.raster_scale} />
+      )}
+
       {canManageDataDelivery && layer.layer_kind !== 'raster' && (
         <Section title="Data delivery">
           <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-400">
@@ -249,6 +268,40 @@ export const InformationTab: React.FC<InformationTabProps> = ({ layer, canEdit, 
     </div>
   );
 };
+
+function VegetationLegend({ layer, scale }: { layer: DatasetLayer; scale: keyof typeof VEGETATION_RASTER_SCALES }) {
+  const legend = VEGETATION_RASTER_SCALES[scale];
+  const min = Number(layer.style.min);
+  const max = Number(layer.style.max);
+  const hasRange = Number.isFinite(min) && Number.isFinite(max) && max > min;
+
+  return (
+    <Section title="Colour legend">
+      <p className="text-xs font-semibold text-slate-200">{legend.title}</p>
+      <div
+        role="img"
+        aria-label={`${legend.title}: ${legend.low} on the left, ${legend.high} on the right`}
+        className="h-4 w-full rounded-sm border border-white/20"
+        style={{ background: `linear-gradient(to right, ${legend.colors.join(', ')})` }}
+      />
+      {hasRange && (
+        <div className="flex justify-between text-[10px] font-semibold tabular-nums text-slate-400">
+          {legend.colors.map((color, index) => (
+            <span key={color}>{(min + (max - min) * index / (legend.colors.length - 1)).toFixed(3)}</span>
+          ))}
+        </div>
+      )}
+      <div className="flex justify-between gap-3 text-[11px] font-medium text-slate-300">
+        <span>{legend.low}</span>
+        <span className="text-right">{legend.high}</span>
+      </div>
+      <p className="text-[11px] leading-5 text-slate-400">{legend.note}</p>
+      <p className="text-[11px] leading-5 text-slate-500">
+        The colour scale stops at its end values; larger or smaller values use the end colour. Transparent areas have no data.
+      </p>
+    </Section>
+  );
+}
 
 function hasSpatialBounds(bounds: DatasetLayer['bounds']): boolean {
   return Boolean(bounds && [bounds.minx, bounds.miny, bounds.maxx, bounds.maxy].every(value => typeof value === 'number' && Number.isFinite(value)));

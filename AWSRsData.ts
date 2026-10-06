@@ -1,6 +1,7 @@
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 import { toLatinScript } from './lib/text/latinScript';
+import { fetchCurrentAwsDataset } from './services/awsCurrentService';
 
 export interface RsStation {
   type: 'meteo';
@@ -69,6 +70,14 @@ function parseNum(v: string | number | null | undefined): number | null {
 }
 
 export async function scrapeRs(): Promise<RsScrapedData> {
+  const current = await fetchCurrentAwsDataset();
+  if (current) {
+    const payload = current.data;
+    return {
+      scrapedAt: typeof payload.scrapedAt === 'string' ? payload.scrapedAt : current.updated_at,
+      stations: Array.isArray(payload.stations) ? payload.stations as RsStation[] : [],
+    };
+  }
   const res = await fetch(RS_FEED_URL, { credentials: 'include', headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`RHMZ RS fetch failed: HTTP ${res.status}`);
 

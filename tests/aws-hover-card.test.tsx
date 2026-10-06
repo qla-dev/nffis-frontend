@@ -30,6 +30,16 @@ const station = {
 describe('AWSHoverCard', () => {
   beforeEach(() => fetchAwsStationHistory.mockResolvedValue([]));
 
+  it('shows imported raw channels without claiming measurement units', () => {
+    render(<AWSHoverCard station={{ type: 'unclassified', station: 'mp_stolac_1', observedAtLocal: '2024-11-20T00:00:00', sensorValues: { mp_stolac_1: 10.78, mp_stolac_3: 0 }, uploadedByName: 'Uploader' }} source="fbih" canAdjust={false} onAdjusted={vi.fn()} />);
+    expect(screen.getAllByText('mp_stolac_1')).toHaveLength(2);
+    expect(screen.getByText('mp_stolac_3')).toBeInTheDocument();
+    expect(screen.getByText('10.78')).toBeInTheDocument();
+    expect(screen.getByText(/Uploaded by Uploader/)).toBeInTheDocument();
+    expect(screen.queryByText(/units have not been identified/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /adjust/i })).not.toBeInTheDocument();
+  });
+
   it('shows station values and hides adjustment commands from forbidden roles', () => {
     render(<AWSHoverCard station={station} source="fbih" canAdjust={false} onAdjusted={vi.fn()} />);
     expect(screen.getByText('Šeherdžik')).toBeInTheDocument();

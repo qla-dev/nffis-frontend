@@ -6,7 +6,7 @@ import {
   type MapSourceDataEvent,
   type StyleSpecification,
 } from 'maplibre-gl';
-import { ChevronRight, Info, Trees } from 'lucide-react';
+import { ChevronRight, Info, Pause, Play, Trees } from 'lucide-react';
 import { BIH_CENTER, REGION_STYLES, TRANSLATIONS } from '../../constants';
 import { Language, MapLayer, RegionType, type OpenMeteoResponse } from '../../types';
 import { fetchDatasetLayerEditFeatures, fetchDatasetLayerFeatures, type DatasetLayer } from '../../services/datasetService';
@@ -24,14 +24,19 @@ import { shouldUseVectorTiles } from '../../lib/gis/datasetLayerLoading';
 import type { GISMapProps } from './GISMap';
 import { MapControls } from './MapControls';
 import { MapboxOperationalLayers } from './MapboxOperationalLayers';
+import { GLMapScaleControl } from './GLMapScaleControl';
+import { archiveFwiDateRange, defaultFwiDateRange, filterFwiProducts, FwiDateRangePicker, FwiDateTimeline, type FwiDateRange } from './FwiDateTimeline';
 import { fetchFwiAvailability, type FireWeatherProduct } from '../../services/fireMonitoringService';
 import { BH_FWI_CSS_GRADIENT } from '../../lib/fwi/bhFwiColorScale';
+import { FwiScaleLabels, FWI_SCALE_LABELS } from './FwiScaleLabels';
+import { EFFIS_FWI_DISPLAY_MAX } from '../../lib/fwi/effisFwiScale';
 import { recordApiUsage } from '../../services/apiUsageService';
+import { ApiError } from '../../services/api';
+import { fetchLocationWeather } from '../../services/locationWeatherService';
 
 export interface GLEngine {
   createMap: (options: Record<string, unknown>) => MapLibreMap;
   createNavigationControl: () => IControl;
-  createScaleControl: () => IControl;
   createMarker: (element: HTMLElement) => {
     setLngLat: (point: [number, number]) => unknown;
     addTo: (map: MapLibreMap) => unknown;
@@ -118,13 +123,19 @@ function removeLayerAndSource(map: MapLibreMap, layerIds: string[], source: stri
   if (map.getSource(source)) map.removeSource(source);
 }
 
-function removeByPrefix(map: MapLibreMap, layerPrefix: string, sourcePrefix = layerPrefix): void {
+function removeByPrefix(
+  map: MapLibreMap,
+  layerPrefix: string,
+  sourcePrefix = layerPrefix,
+  preserveLayer: (id: string) => boolean = () => false,
+  preserveSource: (id: string) => boolean = () => false,
+): void {
   const style = map.getStyle();
   [...(style.layers || [])].reverse().forEach((layer) => {
-    if (layer.id.startsWith(layerPrefix) && map.getLayer(layer.id)) map.removeLayer(layer.id);
+    if (layer.id.startsWith(layerPrefix) && !preserveLayer(layer.id) && map.getLayer(layer.id)) map.removeLayer(layer.id);
   });
   Object.keys(style.sources || {}).forEach((id) => {
-    if (id.startsWith(sourcePrefix) && map.getSource(id)) map.removeSource(id);
+    if (id.startsWith(sourcePrefix) && !preserveSource(id) && map.getSource(id)) map.removeSource(id);
   });
 }
 
@@ -275,18 +286,24 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
   const interactiveLayersRef = useRef<string[]>([]);
   const datasetByRenderedLayerRef = useRef<Map<string, DatasetLayer>>(new Map());
   const datasetCallbacksRef = useRef({ onDatasetFeaturesLoaded, onDatasetLayerLoadingChange });
+  const focusedDatasetLayerIdsRef = useRef<Set<number>>(new Set());
   const operationalMeasurementArmedRef = useRef(false);
   const clickStateRef = useRef({ isReporting, isPickingWeather: false, geoEditorMode, onReportClick, onDatasetPolygonClick });
   const [mapReady, setMapReady] = useState(false);
   const [fatalError, setFatalError] = useState<string | null>(configurationError);
   const [showLegend, setShowLegend] = useState(true);
-  const [fwiArchive, setFwiArchive] = useState<FireWeatherProduct[]>([]);
+  const [allFwiArchive, setAllFwiArchive] = useState<FireWeatherProduct[]>([]);
+  const [fwiRange, setFwiRange] = useState<FwiDateRange>(defaultFwiDateRange);
+  const fwiArchive = useMemo(() => filterFwiProducts(allFwiArchive, fwiRange), [allFwiArchive, fwiRange]);
   const [fwiIndex, setFwiIndex] = useState(0);
   const [fwiPlaying, setFwiPlaying] = useState(false);
   const [isPickingWeather, setIsPickingWeather] = useState(false);
   const [weatherLocation, setWeatherLocation] = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [weather, setWeather] = useState<OpenMeteoResponse | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [weatherStale, setWeatherStale] = useState(false);
+  const [weatherRetry, setWeatherRetry] = useState(0);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [metrics, setMetrics] = useState<MapPerformanceMetrics>(() => ({
     renderer, startedAt: performance.now(), mapLoadMs: null,
@@ -298,6 +315,41 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
     () => datasetLayers.filter((layer) => activeDatasetLayerIds.has(layer.id)),
     [activeDatasetLayerIds, datasetLayers],
   );
+  const activeRasterLayers = useMemo(
+    () => activeDatasetLayers.filter((layer) => layer.layer_kind === 'raster'),
+    [activeDatasetLayers],
+  );
+  const activeNonRasterLayers = useMemo(
+    () => activeDatasetLayers.filter((layer) => layer.layer_kind !== 'raster'),
+    [activeDatasetLayers],
+  );
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
+    const focused = focusedDatasetLayerIdsRef.current;
+    for (const layerId of focused) {
+      if (!activeDatasetLayerIds.has(layerId)) focused.delete(layerId);
+    }
+    const candidates = datasetLayers.filter((layer) => {
+      if (!activeDatasetLayerIds.has(layer.id) || focused.has(layer.id) || layer.layer_kind !== 'raster') return false;
+      const bounds = layer.bounds;
+      return bounds && [bounds.minx, bounds.miny, bounds.maxx, bounds.maxy]
+        .every((value) => typeof value === 'number' && Number.isFinite(value));
+    });
+    const activated = candidates.find((layer) => layer.bounds?.pilot) ?? candidates[0];
+    if (!activated?.bounds) return;
+    candidates.forEach((layer) => focused.add(layer.id));
+    const bounds = activated.bounds;
+    const viewport = map.getBounds();
+    if (!bounds.pilot && !(viewport.getEast() < bounds.minx! || viewport.getWest() > bounds.maxx!
+      || viewport.getNorth() < bounds.miny! || viewport.getSouth() > bounds.maxy!)) return;
+    map.fitBounds([[bounds.minx!, bounds.miny!], [bounds.maxx!, bounds.maxy!]], {
+      padding: { top: 48, right: 48, bottom: 48, left: 480 },
+      maxZoom: 9,
+      duration: 700,
+    });
+  }, [activeDatasetLayerIds, datasetLayers, mapReady]);
   const datasetSignature = useMemo(
     () => JSON.stringify(activeDatasetLayers.map((layer) => ({
       id: layer.id, delivery: layer.data_delivery, kind: layer.layer_kind,
@@ -326,13 +378,20 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
   useEffect(() => {
     if (!fwiVisible) { setFwiPlaying(false); return; }
     const controller = new AbortController();
-    fetchFwiAvailability(undefined, controller.signal).then(({ data }) => {
-      const products = data.filter(product => product.product_kind === 'historical_reanalysis');
-      setFwiArchive(products);
-      setFwiIndex(Math.max(0, products.length - 1));
+    fetchFwiAvailability(controller.signal).then(({ data }) => {
+      const range = archiveFwiDateRange(data);
+      setAllFwiArchive(data);
+      setFwiRange(range);
+      setFwiIndex(Math.max(0, filterFwiProducts(data, range).length - 1));
     }).catch(error => { if ((error as Error).name !== 'AbortError') console.warn('FWI archive unavailable', error); });
     return () => controller.abort();
   }, [fwiVisible]);
+
+  const changeFwiRange = (range: FwiDateRange) => {
+    setFwiPlaying(false);
+    setFwiRange(range);
+    setFwiIndex(Math.max(0, filterFwiProducts(allFwiArchive, range).length - 1));
+  };
 
   useEffect(() => {
     if (!fwiPlaying || fwiArchive.length < 2) return;
@@ -359,17 +418,25 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
   }, [geoEditorMode, isPickingWeather, isReporting, onDatasetPolygonClick, onReportClick]);
 
   useEffect(() => {
-    if (!weatherLocation) { setWeather(null); return; }
+    if (!weatherLocation) { setWeather(null); setWeatherError(null); setWeatherStale(false); return; }
     const controller = new AbortController();
+    setWeather(null);
+    setWeatherError(null);
+    setWeatherStale(false);
     setWeatherLoading(true);
     const { lat, lng } = weatherLocation;
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,weather_code,uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=auto`, { signal: controller.signal })
-      .then(response => { if (!response.ok) throw new Error(String(response.status)); return response.json(); })
-      .then(setWeather)
-      .catch(error => { if ((error as Error).name !== 'AbortError') console.warn('Weather unavailable', error); })
+    fetchLocationWeather(lat, lng, controller.signal)
+      .then(({ data, stale }) => { setWeather(data); setWeatherStale(stale); })
+      .catch(error => {
+        if ((error as Error).name === 'AbortError') return;
+        console.warn('Weather unavailable', error);
+        setWeatherError(error instanceof ApiError && error.status === 429
+          ? (language === Language.BS ? 'Vremenski servis je dostigao ograničenje zahtjeva (429). Pokušajte kasnije.' : 'The weather service has reached its request limit (429). Try again later.')
+          : (language === Language.BS ? 'Vremenski podaci trenutno nisu dostupni. Pokušajte ponovo.' : 'Weather data is unavailable right now. Please try again.'));
+      })
       .finally(() => { if (!controller.signal.aborted) setWeatherLoading(false); });
     return () => controller.abort();
-  }, [weatherLocation]);
+  }, [weatherLocation, weatherRetry, language]);
 
   useEffect(() => {
     window.__NFFIS_MAP_METRICS__ = metrics;
@@ -408,7 +475,6 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
 
     mapRef.current = map;
     map.addControl(engine.createNavigationControl(), 'bottom-right');
-    map.addControl(engine.createScaleControl(), 'bottom-left');
 
     const onLoad = () => {
       if (renderer === 'mapbox') recordApiUsage('mapbox', 'map_loads');
@@ -553,6 +619,36 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
+
+    // Keep raster sources in the style while panning and zooming. Mapbox then
+    // retains loaded tiles and fetches only tiles newly exposed by the view.
+    const oldRasterLayers = (map.getStyle().layers || [])
+      .filter((layer) => layer.id.startsWith(DATASET_PREFIX) && layer.id.endsWith('-raster'));
+    oldRasterLayers.forEach((layer) => {
+      const source = 'source' in layer && typeof layer.source === 'string' ? layer.source : '';
+      if (source) removeLayerAndSource(map, [layer.id], source);
+    });
+
+    for (const layer of activeRasterLayers) {
+      const source = sourceId(layer.id);
+      const id = `${DATASET_PREFIX}${layer.id}-raster`;
+      const rasterBounds = layer.bounds && [layer.bounds.minx, layer.bounds.miny, layer.bounds.maxx, layer.bounds.maxy]
+        .every((value) => typeof value === 'number' && Number.isFinite(value))
+        ? [layer.bounds.minx!, layer.bounds.miny!, layer.bounds.maxx!, layer.bounds.maxy!] as [number, number, number, number]
+        : undefined;
+      map.addSource(source, {
+        type: 'raster', tiles: [`/api/dataset-layers/${layer.id}/raster-tiles/{z}/{x}/{y}.png?v=${encodeURIComponent(layer.tile_version || '1')}`],
+        tileSize: 256, minzoom: layer.min_zoom ?? 0, maxzoom: 11,
+        ...(rasterBounds ? { bounds: rasterBounds } : {}),
+      });
+      map.addLayer({ id, type: 'raster', source, paint: { 'raster-opacity': layer.style.opacity ?? 0.9 } });
+      datasetCallbacksRef.current.onDatasetLayerLoadingChange(layer.id, false);
+    }
+  }, [activeRasterLayers, datasetLayerRefreshKey, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return;
     let disposed = false;
     let timer: number | null = null;
     let controllers: AbortController[] = [];
@@ -560,11 +656,14 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
     const synchronize = async () => {
       controllers.forEach((controller) => controller.abort());
       controllers = [];
-      removeByPrefix(map, DATASET_PREFIX);
+      const rasterSources = new Set(activeRasterLayers.map((layer) => sourceId(layer.id)));
+      removeByPrefix(map, DATASET_PREFIX, DATASET_PREFIX,
+        (id) => id.endsWith('-raster'),
+        (id) => rasterSources.has(id));
       interactiveLayersRef.current = [];
       datasetByRenderedLayerRef.current.clear();
 
-      for (const layer of activeDatasetLayers) {
+      for (const layer of activeNonRasterLayers) {
         if (disposed || (layer.min_zoom != null && map.getZoom() < layer.min_zoom) || !datasetIntersectsViewport(map, layer)) {
           datasetCallbacksRef.current.onDatasetFeaturesLoaded(layer.id, null);
           datasetCallbacksRef.current.onDatasetLayerLoadingChange(layer.id, false);
@@ -575,14 +674,7 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
         datasetCallbacksRef.current.onDatasetLayerLoadingChange(layer.id, true);
         try {
           let interactiveIds: string[] = [];
-          if (layer.layer_kind === 'raster') {
-            const id = `${DATASET_PREFIX}${layer.id}-raster`;
-            map.addSource(source, {
-              type: 'raster', tiles: [`/api/dataset-layers/${layer.id}/raster-tiles/{z}/{x}/{y}.png`],
-              tileSize: 256, minzoom: layer.min_zoom ?? 0, maxzoom: 22,
-            });
-            map.addLayer({ id, type: 'raster', source, paint: { 'raster-opacity': layer.style.opacity ?? 0.9 } });
-          } else if (shouldUseVectorTiles(layer)) {
+          if (shouldUseVectorTiles(layer)) {
             const query = datasetTileQuery(layer.tile_version || '1', datasetLayerFilters[layer.id]);
             map.addSource(source, {
               type: 'vector',
@@ -635,7 +727,7 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
       controllers.forEach((controller) => controller.abort());
       map.off('moveend', queueSynchronize);
     };
-  }, [activeDatasetLayers, datasetLayerFilters, datasetLayerRefreshKey, datasetSignature, mapReady, renderer]);
+  }, [activeNonRasterLayers, activeRasterLayers, datasetLayerFilters, datasetLayerRefreshKey, datasetSignature, mapReady, renderer]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -772,8 +864,10 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
         canViewAws={canViewAws}
       />
 
+      <GLMapScaleControl map={mapReady ? mapRef.current : null} />
+
       {showLegend && (
-        <div className="pointer-events-none absolute bottom-28 left-4 right-4 z-[1900] flex flex-row gap-2 md:bottom-8 md:left-[4.5rem] md:right-auto md:flex-col">
+        <div className="pointer-events-none absolute bottom-28 left-4 right-4 z-[1900] flex flex-row gap-2 md:bottom-28 md:left-[4.5rem] md:right-auto md:flex-col">
           <div className="pointer-events-auto order-1 min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-950/90 p-3 text-[10px] font-bold text-slate-400 shadow-2xl backdrop-blur-md md:order-2 md:min-w-[160px] md:flex-none">
             <div className="mb-3 flex items-center justify-between gap-2"><div className="flex items-center gap-2"><Info size={14} className="text-blue-500"/><span className="font-black uppercase tracking-widest text-slate-500">{t.gisLegend}</span></div><button type="button" onClick={() => setShowLegend(false)} className="text-slate-600 hover:text-slate-400 md:hidden" aria-label="Close legend"><ChevronRight size={12} className="rotate-90"/></button></div>
             <div className="space-y-2">
@@ -791,13 +885,44 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
       )}
 
       {fwiVisible && (
-        <div className="absolute bottom-8 right-24 z-[1900] hidden w-80 rounded-xl border border-slate-800 bg-slate-950/90 p-4 text-white shadow-2xl backdrop-blur-md md:block">
-          <div className="flex items-center justify-between text-[11px] font-black"><span>NFFIS FWI · EFFIS scale</span><span className="text-slate-400">{fwiArchive[fwiIndex]?.valid_at?.slice(0, 10) ?? 'Current'}</span></div>
-          <div className="mt-3 h-3 rounded-full" style={{ background: BH_FWI_CSS_GRADIENT }} />
-          <div className="mt-3 flex items-center gap-2">
-            <button type="button" onClick={() => setFwiPlaying(value => !value)} className="rounded border border-slate-700 px-3 py-1 text-[10px] font-bold hover:border-orange-400">{fwiPlaying ? 'Pause' : 'Time-lapse'}</button>
-            <input className="min-w-0 flex-1 accent-orange-500" type="range" min={0} max={Math.max(0, fwiArchive.length - 1)} value={Math.min(fwiIndex, Math.max(0, fwiArchive.length - 1))} onChange={event => { setFwiPlaying(false); setFwiIndex(Number(event.target.value)); }} />
+        <div className="absolute bottom-8 right-24 z-[1900] hidden w-[min(560px,calc(100vw_-_8rem))] rounded-xl border border-slate-800 bg-slate-950/90 p-4 text-white shadow-2xl backdrop-blur-md md:block">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-black">NFFIS FWI · EFFIS scale</div>
+            {Number.isFinite(fwiArchive[fwiIndex]?.statistics?.mean) && <div className="shrink-0 text-sm font-black text-orange-300" aria-live="polite">
+              FWI {fwiArchive[fwiIndex].statistics!.mean.toFixed(1)}
+            </div>}
           </div>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="relative min-w-[180px] flex-1 pt-2">
+              {Number.isFinite(fwiArchive[fwiIndex]?.statistics?.mean) && (
+                <div role="img" aria-label={`FWI ${fwiArchive[fwiIndex].statistics!.mean.toFixed(1)}`} title={`FWI ${fwiArchive[fwiIndex].statistics!.mean.toFixed(1)}`}
+                  className="absolute top-0 z-10 -translate-x-1/2 transition-[left] duration-300"
+                  style={{ left: `${Math.max(0, Math.min(100, fwiArchive[fwiIndex].statistics!.mean / EFFIS_FWI_DISPLAY_MAX * 100))}%` }}>
+                  <div className="h-0 w-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-white drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]" />
+                </div>
+              )}
+              <div className="relative h-3 rounded-full" style={{ background: BH_FWI_CSS_GRADIENT }}>
+                {FWI_SCALE_LABELS.map(value => <span key={value} className="absolute top-0 h-full w-px bg-slate-950/40"
+                  style={{ left: `${value / EFFIS_FWI_DISPLAY_MAX * 100}%` }} />)}
+              </div>
+              <FwiScaleLabels />
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {fwiArchive.length > 0 && <button type="button" onClick={() => {
+                if (!fwiPlaying && fwiIndex >= fwiArchive.length - 1) setFwiIndex(0);
+                setFwiPlaying(value => !value);
+              }} className="flex items-center gap-1 rounded border border-slate-700 px-2 py-1.5 text-[10px] font-bold hover:border-orange-400"
+                aria-label={fwiPlaying ? 'Pause FWI animation' : 'Play FWI animation'}
+                title={fwiPlaying ? 'Pause' : 'Play'}>
+                {fwiPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                {fwiPlaying ? 'Pause' : 'Play'}
+              </button>}
+            </div>
+          </div>
+          <div className="mt-3"><FwiDateRangePicker range={fwiRange} onChange={changeFwiRange} language={language}
+            maxDate={defaultFwiDateRange().to} firstAvailableDate={allFwiArchive[0]?.valid_at.slice(0, 10)} /></div>
+          {allFwiArchive.length > 0 && <FwiDateTimeline products={fwiArchive} range={fwiRange} index={fwiIndex}
+            onSelect={(index) => { setFwiPlaying(false); setFwiIndex(index); }} language={language} />}
         </div>
       )}
 
@@ -822,7 +947,17 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
             <div className="text-xs font-black uppercase tracking-[.2em] text-cyan-400">Fire weather location</div>
             <h2 className="mt-2 text-4xl font-black">{weatherLocation.name}</h2>
             <div className="mt-2 font-mono text-sm text-slate-400">{weatherLocation.lat.toFixed(4)}, {weatherLocation.lng.toFixed(4)}</div>
-            {weatherLoading || !weather ? <div className="mt-16 text-slate-400">Loading weather…</div> : <>
+            {weatherStale && <p className="mt-4 text-sm text-amber-300" role="status">
+              {language === Language.BS ? 'Prikazani su posljednji sačuvani vremenski podaci dok servis nije dostupan.' : 'Showing the last saved weather data while the provider is unavailable.'}
+            </p>}
+            {weatherLoading ? <div className="mt-16 text-slate-400">{language === Language.BS ? 'Učitavanje vremena…' : 'Loading weather…'}</div>
+              : weatherError ? <div className="mt-16 text-slate-300" role="alert">
+                <p>{weatherError}</p>
+                <button type="button" onClick={() => setWeatherRetry(value => value + 1)}
+                  className="mt-4 rounded-md border border-slate-600 bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:border-orange-400">
+                  {language === Language.BS ? 'Pokušaj ponovo' : 'Retry'}
+                </button>
+              </div> : !weather ? null : <>
               <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-4">
                 {[
                   ['Temperature', `${Math.round(weather.current.temperature_2m)} °C`],

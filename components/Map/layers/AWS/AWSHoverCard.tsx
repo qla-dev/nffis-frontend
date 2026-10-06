@@ -84,6 +84,21 @@ export const AWSHoverCard: React.FC<AWSHoverCardProps> = ({ station, source, can
     finally { setIsSaving(false); }
   };
 
+  if (station.type === 'unclassified') {
+    return <div className="min-w-[260px] max-w-[340px] rounded-xl border border-amber-500 bg-slate-950/95 p-4 font-sans text-white shadow-2xl">
+      <h3 className="text-sm font-black">{displayName}</h3>
+      <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-amber-400">Unclassified AWS sensor readings</p>
+      <p className="mt-3 text-xs text-slate-400">Observed {station.observedAtLocal.replace('T', ' ')} (local time; time zone unspecified)</p>
+      {station.uploadedByName && <p className="mt-1 text-xs text-slate-400">Uploaded by {station.uploadedByName}</p>}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {Object.entries(station.sensorValues).map(([sensor, value]) => <div key={sensor} className="rounded-lg border border-slate-700 bg-slate-900 p-2">
+          <div className="break-all text-[10px] text-slate-400">{sensor}</div>
+          <div className="mt-1 font-mono text-sm font-bold text-amber-300">{value}</div>
+        </div>)}
+      </div>
+    </div>;
+  }
+
   return (
     <div onClick={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onWheel={event => event.stopPropagation()} className="min-w-[260px] max-w-[340px] rounded-xl border border-slate-700 bg-slate-950/95 p-4 font-sans shadow-2xl backdrop-blur-xl" style={{ borderTopColor: accentColor, borderTopWidth: 2 }}>
       <div className="mb-1 flex items-start justify-between gap-3">

@@ -3,12 +3,13 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { MapContainer, Marker, LayerGroup, GeoJSON, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
-import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar, MapPin, Play, Pause, RotateCcw } from 'lucide-react';
+import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar, MapPin, Play, Pause } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteoResponse, ForestRegion } from '../../types';
 import type { FirefighterStationType } from '../../firefighterData';
 import { MapControls } from './MapControls';
 import { MapScaleControl } from './MapScaleControl';
+import { archiveFwiDateRange, defaultFwiDateRange, filterFwiProducts, FwiDateRangePicker, FwiDateTimeline, type FwiDateRange } from './FwiDateTimeline';
 import { OperationalBaseLayers } from './OperationalBaseLayers';
 import { ForestHoverCard } from './ForestHoverCard';
 import { FIREFIGHTER_STATION_STYLE } from './firefighterStationUi';
@@ -33,6 +34,7 @@ import { fetchDatasetLayerFeatures, type DatasetLayer, type DatasetLayerFilterSt
 import type { GeoEditorMode, Position } from '../../lib/gis/geoEditor';
 import type { MapPerformanceMetrics } from '../../lib/gis/mapRendererPoc';
 import { BH_FWI_CSS_GRADIENT, BH_FWI_RASTER_BOUNDS } from '../../lib/fwi/bhFwiColorScale';
+import { FwiScaleLabels, FWI_SCALE_LABELS } from './FwiScaleLabels';
 import { classifyEffisFwi, EFFIS_FWI_DISPLAY_MAX, EFFIS_FWI_TICKS } from '../../lib/fwi/effisFwiScale';
 import { calculateCanadianFwi } from '../../lib/fwi/canadianFwi';
 import { FOREST_RASTER_LAYERS } from '../../lib/gis/forestRasterLayers';
@@ -302,6 +304,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   onDatasetEditorLoadError,
 }) => {
   const [map, setMap] = useState<L.Map | null>(null);
+  const focusedDatasetLayerIdsRef = useRef<Set<number>>(new Set());
   const mapMetricsStartRef = useRef(performance.now());
   const t = TRANSLATIONS[language];
   const isExtremeFwiTest = useMemo(
@@ -374,6 +377,29 @@ export const GISMap: React.FC<GISMapProps> = ({
       map.off('tileerror', markSourceError);
     };
   }, [map]);
+
+  useEffect(() => {
+    if (!map) return;
+    const focused = focusedDatasetLayerIdsRef.current;
+    for (const layerId of focused) {
+      if (!activeDatasetLayerIds.has(layerId)) focused.delete(layerId);
+    }
+    const candidates = datasetLayers.filter((layer) => {
+      if (!activeDatasetLayerIds.has(layer.id) || focused.has(layer.id) || layer.layer_kind !== 'raster') return false;
+      const bounds = layer.bounds;
+      return bounds && [bounds.minx, bounds.miny, bounds.maxx, bounds.maxy]
+        .every((value) => typeof value === 'number' && Number.isFinite(value));
+    });
+    const activated = candidates.find((layer) => layer.bounds?.pilot) ?? candidates[0];
+    if (!activated?.bounds) return;
+    candidates.forEach((layer) => focused.add(layer.id));
+    const layerBounds = L.latLngBounds(
+      [activated.bounds.miny!, activated.bounds.minx!],
+      [activated.bounds.maxy!, activated.bounds.maxx!],
+    );
+    if (!activated.bounds.pilot && map.getBounds().intersects(layerBounds)) return;
+    map.fitBounds(layerBounds, { padding: [48, 48], maxZoom: 9, animate: true });
+  }, [activeDatasetLayerIds, datasetLayers, map]);
 
   // Helpers
   const fmtTime = (isoString: string) => new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -547,11 +573,12 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [activeFireEvents, setActiveFireEvents] = useState<FireEventProperties[]>([]);
   const [isSpreadLegendExpanded, setIsSpreadLegendExpanded] = useState(false);
   const [isLoadingFwi, setIsLoadingFwi] = useState(false);
-  const [fwiArchive, setFwiArchive] = useState<FireWeatherProduct[]>([]);
+  const [allFwiArchive, setAllFwiArchive] = useState<FireWeatherProduct[]>([]);
+  const [fwiRange, setFwiRange] = useState<FwiDateRange>(defaultFwiDateRange);
+  const fwiArchive = useMemo(() => filterFwiProducts(allFwiArchive, fwiRange), [allFwiArchive, fwiRange]);
   const [selectedFwiArchiveIndex, setSelectedFwiArchiveIndex] = useState(0);
   const [isFwiTimelapsePlaying, setIsFwiTimelapsePlaying] = useState(false);
-  const [isFwiTimelapseFast, setIsFwiTimelapseFast] = useState(false);
-  const [isLoadingFwiArchive, setIsLoadingFwiArchive] = useState(false);
+  const [isLoadingFwiArchive, setIsLoadingFwiArchive] = useState(true);
   const [fwiArchiveError, setFwiArchiveError] = useState<string | null>(null);
   const [isMeteoblueUnavailable, setIsMeteoblueUnavailable] = useState(false);
   const [isPickingLocation, setIsPickingLocation] = useState(false);
@@ -627,22 +654,23 @@ export const GISMap: React.FC<GISMapProps> = ({
         retryTimeoutId = window.setTimeout(() => {
           retryTimeoutId = null;
           loadArchive(false);
-        }, 60_000);
+        }, 15_000);
       }
     };
     const loadArchive = (showLoading: boolean) => {
       if (showLoading) setIsLoadingFwiArchive(true);
-      fetchFwiAvailability(undefined, controller.signal)
+      fetchFwiAvailability(controller.signal)
         .then(({ data }) => {
-          const historical = data.filter((product) => product.product_kind === 'historical_reanalysis');
-          setFwiArchive(historical);
-          setSelectedFwiArchiveIndex(Math.max(0, historical.length - 1));
+          const range = archiveFwiDateRange(data);
+          setAllFwiArchive(data);
+          setFwiRange(range);
+          setSelectedFwiArchiveIndex(Math.max(0, filterFwiProducts(data, range).length - 1));
           setFwiArchiveError(null);
-          if (historical.length === 0) scheduleRetry();
+          if (data.length === 0) scheduleRetry();
         })
         .catch((error) => {
           if (error instanceof DOMException && error.name === 'AbortError') return;
-          setFwiArchiveError(language === Language.BS ? 'Historijski FWI trenutno nije dostupan.' : 'Historical FWI is currently unavailable.');
+          setFwiArchiveError(language === Language.BS ? 'Povezivanje s historijskim FWI podacima, ponovni pokušaj…' : 'Connecting to historical FWI data, retrying…');
           scheduleRetry();
         })
         .finally(() => { if (!controller.signal.aborted) setIsLoadingFwiArchive(false); });
@@ -653,6 +681,11 @@ export const GISMap: React.FC<GISMapProps> = ({
       if (retryTimeoutId !== null) window.clearTimeout(retryTimeoutId);
     };
   }, [isAnyFwiLayerActive, language]);
+  const changeFwiRange = (range: FwiDateRange) => {
+    setIsFwiTimelapsePlaying(false);
+    setFwiRange(range);
+    setSelectedFwiArchiveIndex(Math.max(0, filterFwiProducts(allFwiArchive, range).length - 1));
+  };
   const selectedFwiProduct = fwiArchive[selectedFwiArchiveIndex] ?? null;
   const nextFwiProduct = fwiArchive.length > 1
     ? fwiArchive[(selectedFwiArchiveIndex + 1) % fwiArchive.length]
@@ -661,9 +694,9 @@ export const GISMap: React.FC<GISMapProps> = ({
     if (!isFwiTimelapsePlaying || fwiArchive.length < 2 || !isAnyFwiLayerActive) return;
     const interval = window.setInterval(() => {
       setSelectedFwiArchiveIndex((index) => (index + 1) % fwiArchive.length);
-    }, isFwiTimelapseFast ? 700 : 1400);
+    }, 1400);
     return () => window.clearInterval(interval);
-  }, [fwiArchive.length, isAnyFwiLayerActive, isFwiTimelapseFast, isFwiTimelapsePlaying]);
+  }, [fwiArchive.length, isAnyFwiLayerActive, isFwiTimelapsePlaying]);
   const activeFwiValue = useMemo(() => {
     if (!selectedForest || !forestWeather) return null;
     const hIdx = getCurrentHourIndex(forestWeather);
@@ -1087,18 +1120,6 @@ export const GISMap: React.FC<GISMapProps> = ({
             const hourIdx = getCurrentHourIndex(weather);
             const metrics = computeFireIndexMetrics(weather, hourIdx);
 
-            console.info(FWI_DEBUG_PREFIX, 'forest metrics ready', {
-              forestId: forest.id,
-              forestName: forest.name,
-              lat: forest.coordinates[0],
-              lng: forest.coordinates[1],
-              hourIdx,
-              angstrom: metrics.ai,
-              gfi: metrics.gfi,
-              kbdi: metrics.kbdi,
-              fwi: metrics.fwiBosnian,
-            });
-
             nextData.push({
               id: forest.id,
               lat: forest.coordinates[0],
@@ -1406,7 +1427,8 @@ export const GISMap: React.FC<GISMapProps> = ({
         {/* AWS — FBiH and RS layers, filtered by the three typed sub-layers */}
         {canViewAws && (activeLayers.has('AWS Precipitation' as MapLayer) ||
           activeLayers.has('AWS Agro' as MapLayer) || 
-          activeLayers.has('AWS Meteo' as MapLayer)) && (
+          activeLayers.has('AWS Meteo' as MapLayer) ||
+          activeLayers.has(MapLayer.AWS_SENSORS)) && (
           <>
             {canViewFbih && <AWSFBiHLayer activeTypes={activeLayers} canAdjust={canAdjustAws} useCyrillicStationNames={useCyrillicStationNames} />}
             {canViewRs && <AWSRsLayer activeTypes={activeLayers} canAdjust={canAdjustAws} useCyrillicStationNames={useCyrillicStationNames} />}
@@ -2129,121 +2151,65 @@ export const GISMap: React.FC<GISMapProps> = ({
 
       {/* FWI Legend Scale */}
       {activeFwiLayerInfo && (
-        <div className="absolute bottom-8 right-24 z-[2000] hidden md:flex flex-col bg-slate-950/90 backdrop-blur-md border border-slate-800 p-4 rounded-xl shadow-2xl w-80 animate-in slide-in-from-right-2 duration-300">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
+        <div className="absolute bottom-8 right-24 z-[2000] hidden md:flex flex-col bg-slate-950/90 backdrop-blur-md border border-slate-800 p-4 rounded-xl shadow-2xl w-[min(560px,calc(100vw_-_8rem))] animate-in slide-in-from-right-2 duration-300">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
               <div className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_rgba(249,115,22,0.55)]" style={{ background: activeFwiLayerInfo.iconGradient }} />
               <span className="text-[12px] font-black text-white tracking-wide">{activeFwiLayerInfo.title}</span>
             </div>
-            <span className="text-[10px] font-black text-slate-500 tracking-widest uppercase opacity-80">Index Scale</span>
+            {activeFwiLayerInfo.currentValue !== null && Number.isFinite(activeFwiLayerInfo.currentValue) &&
+              <span className="shrink-0 text-sm font-black text-orange-300" aria-live="polite">FWI {activeFwiLayerInfo.currentValue.toFixed(1)}</span>}
           </div>
-          <div className="relative mt-4 mb-2">
-            {/* Value Indicator Arrow */}
-            {activeFwiLayerInfo.currentValue !== null && (
-              <div 
-                className="absolute -top-3.5 transition-all duration-1000 ease-out z-20"
-                style={{ 
-                  left: `${Math.min(100, (activeFwiLayerInfo.currentValue / EFFIS_FWI_DISPLAY_MAX) * 100)}%`,
-                  transform: 'translateX(-50%)' 
-                }}
-              >
-                <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-white drop-shadow-[0_0_5px_rgba(0,0,0,0.8)]" />
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-[180px] flex-1">
+              <div className="relative mt-4 mb-2">
+                {activeFwiLayerInfo.currentValue !== null && Number.isFinite(activeFwiLayerInfo.currentValue) && (
+                  <div className="absolute -top-3.5 z-20 -translate-x-1/2 transition-[left] duration-300"
+                    style={{ left: `${Math.max(0, Math.min(100, activeFwiLayerInfo.currentValue / EFFIS_FWI_DISPLAY_MAX * 100))}%` }}
+                    title={`FWI ${activeFwiLayerInfo.currentValue.toFixed(1)}`} role="img" aria-label={`FWI ${activeFwiLayerInfo.currentValue.toFixed(1)}`}>
+                    <div className="h-0 w-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-white drop-shadow-[0_0_5px_rgba(0,0,0,0.8)]" />
+                  </div>
+                )}
+                <div className="relative h-4 w-full overflow-hidden rounded-full border border-white/10 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]" style={{ background: activeFwiLayerInfo.gradient }}>
+                  <div className="absolute inset-0 flex justify-between px-[1px]">
+                    {FWI_SCALE_LABELS.map(value => <div key={value} className="absolute h-full w-px bg-slate-950/30"
+                      style={{ left: `${value / EFFIS_FWI_DISPLAY_MAX * 100}%` }} />)}
+                  </div>
+                </div>
               </div>
-            )}
-            
-            {/* Gradient Scale Bar */}
-            <div className="h-4 w-full rounded-full shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)] relative overflow-hidden border border-white/10" style={{ background: activeFwiLayerInfo.gradient }}>
-              {/* Scale Ticks */}
-              <div className="absolute inset-0 flex justify-between px-[1px]">
-                {[...Array(9)].map((_, i) => (
-                  <div key={i} className="w-px h-full bg-slate-950/30" />
-                ))}
-              </div>
+              <FwiScaleLabels />
             </div>
-          </div>
-
-          {/* Scale Labels */}
-          <div className="flex justify-between px-0.5 mt-1">
-            {EFFIS_FWI_TICKS.map(v => (
-              <span key={v} className="text-[10px] font-black text-slate-400 font-mono">
-                {v}
-              </span>
-            ))}
+            {fwiArchive.length > 0 && <div className="flex shrink-0 items-center gap-1.5">
+              <button type="button"
+                onClick={() => {
+                  if (!isFwiTimelapsePlaying && selectedFwiArchiveIndex >= fwiArchive.length - 1) setSelectedFwiArchiveIndex(0);
+                  setIsFwiTimelapsePlaying(playing => !playing);
+                }}
+                className={`flex items-center gap-1 rounded-md border px-2 py-1.5 text-[10px] font-bold transition-colors ${isFwiTimelapsePlaying ? 'border-orange-400/60 bg-orange-500/20 text-orange-200' : 'border-slate-700 bg-slate-900/80 text-slate-300 hover:border-orange-500/50'}`}
+                aria-label={isFwiTimelapsePlaying ? 'Pause FWI animation' : 'Play FWI animation'}
+                title={isFwiTimelapsePlaying ? 'Pause' : 'Play'}>
+                {isFwiTimelapsePlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                {isFwiTimelapsePlaying ? 'Pause' : 'Play'}
+              </button>
+            </div>}
           </div>
           <div className="mt-3 border-t border-slate-800 pt-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="mb-2 flex items-center gap-3">
               <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">
                 {language === Language.BS ? 'Historijski FWI' : 'Historical FWI'}
               </span>
-              <span className="text-[11px] font-black text-white">
-                {selectedFwiProduct ? new Intl.DateTimeFormat(language === Language.BS ? 'bs-BA' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${selectedFwiProduct.valid_at.slice(0, 10)}T12:00:00`)) : '—'}
-              </span>
             </div>
-            {fwiArchive.length > 0 ? <>
-              <div className="mb-2 flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isFwiTimelapsePlaying && selectedFwiArchiveIndex >= fwiArchive.length - 1) {
-                      setSelectedFwiArchiveIndex(0);
-                    }
-                    setIsFwiTimelapsePlaying((playing) => !playing);
-                  }}
-                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-[9px] font-black uppercase tracking-wider transition-colors ${isFwiTimelapsePlaying ? 'border-orange-400/60 bg-orange-500/20 text-orange-200' : 'border-slate-700 bg-slate-900/80 text-slate-300 hover:border-orange-500/50 hover:text-white'}`}
-                  aria-label={isFwiTimelapsePlaying
-                    ? (language === Language.BS ? 'Pauziraj FWI animaciju' : 'Pause FWI animation')
-                    : (language === Language.BS ? 'Pokreni FWI animaciju' : 'Play FWI animation')}
-                >
-                  {isFwiTimelapsePlaying ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
-                  {isFwiTimelapsePlaying
-                    ? (language === Language.BS ? 'Pauza' : 'Pause')
-                    : 'Time-lapse'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsFwiTimelapsePlaying(false);
-                    setSelectedFwiArchiveIndex(0);
-                  }}
-                  className="rounded-md border border-slate-700 bg-slate-900/80 p-1.5 text-slate-400 transition-colors hover:border-orange-500/50 hover:text-white"
-                  title={language === Language.BS ? 'Vrati na prvi datum' : 'Return to first date'}
-                  aria-label={language === Language.BS ? 'Vrati na prvi datum' : 'Return to first date'}
-                >
-                  <RotateCcw size={11} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsFwiTimelapseFast((fast) => !fast)}
-                  className={`min-w-[42px] rounded-md border px-2 py-1.5 font-mono text-[9px] font-black transition-colors ${isFwiTimelapseFast ? 'border-orange-400/60 bg-orange-500/20 text-orange-200' : 'border-slate-700 bg-slate-900/80 text-slate-400 hover:border-orange-500/50 hover:text-white'}`}
-                  title={language === Language.BS ? 'Dvostruka brzina animacije' : 'Double animation speed'}
-                  aria-label={language === Language.BS ? 'Dvostruka brzina animacije' : 'Double animation speed'}
-                  aria-pressed={isFwiTimelapseFast}
-                >
-                  2×
-                </button>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={Math.max(0, fwiArchive.length - 1)}
-                step={1}
-                value={Math.min(selectedFwiArchiveIndex, Math.max(0, fwiArchive.length - 1))}
-                onChange={(event) => {
-                  setIsFwiTimelapsePlaying(false);
-                  setSelectedFwiArchiveIndex(Number(event.target.value));
-                }}
-                className="h-1.5 w-full cursor-pointer accent-orange-500"
-                aria-label={language === Language.BS ? 'Datum historijskog FWI rastera' : 'Historical FWI raster date'}
-              />
-              <div className="mt-1 flex justify-between text-[9px] font-bold text-slate-600">
-                <span>{fwiArchive[0]?.valid_at.slice(0, 10)}</span>
-                <span>{selectedFwiProduct?.product_kind === 'historical_reanalysis' ? 'Reanalysis' : 'Archive'}</span>
-                <span>{fwiArchive.at(-1)?.valid_at.slice(0, 10)}</span>
-              </div>
+            <FwiDateRangePicker range={fwiRange} onChange={changeFwiRange} language={language}
+              maxDate={defaultFwiDateRange().to} firstAvailableDate={allFwiArchive[0]?.valid_at.slice(0, 10)} />
+            {allFwiArchive.length > 0 ? <>
+              <FwiDateTimeline products={fwiArchive} range={fwiRange} index={selectedFwiArchiveIndex} onSelect={(index) => {
+                setIsFwiTimelapsePlaying(false);
+                setSelectedFwiArchiveIndex(index);
+              }} language={language} />
             </> : <div className="text-[10px] text-slate-500">
               {isLoadingFwiArchive
                 ? (language === Language.BS ? 'Učitavanje datuma…' : 'Loading dates…')
-                : (fwiArchiveError ?? (language === Language.BS ? 'Korekcija historijskog FWI je u toku.' : 'Historical FWI reanalysis is being rebuilt.'))}
+                : (fwiArchiveError ?? (language === Language.BS ? 'Još nema sačuvanog historijskog FWI.' : 'No historical FWI has been saved yet.'))}
             </div>}
           </div>
           {isFireSpreadActive && (

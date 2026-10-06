@@ -8,8 +8,10 @@ import {
   ScrapedData,
 } from '../../../../AWSFBiHData';
 import { AWSHoverCard } from './AWSHoverCard';
+import { awsPopupHoverHandlers } from './awsPopupHover';
 import { MapLayer } from '../../../../types';
 import { awsStationIdentity, fetchAwsStationAdjustments, type AwsStationAdjustment } from '../../../../services/awsStationService';
+import { AWS_DATASET_UPDATED_EVENT } from '../../../../services/awsCurrentService';
 
 interface AWSFBiHLayerProps {
   activeTypes: Set<MapLayer>;
@@ -21,6 +23,7 @@ function typeToKey(s: AnyStation): MapLayer | null {
   if (s.type === 'precipitation') return 'AWS Precipitation' as MapLayer;
   if (s.type === 'agro') return 'AWS Agro' as MapLayer;
   if (s.type === 'meteo') return 'AWS Meteo' as MapLayer;
+  if (s.type === 'unclassified') return MapLayer.AWS_SENSORS;
   return null;
 }
 
@@ -44,6 +47,7 @@ const COORDS: Record<string, [number, number]> = {
 };
 
 function getColor(type: string) {
+  if (type === 'unclassified') return '#f59e0b';
   if (type === 'agro') return '#eab308';
   if (type === 'precipitation') return '#06b6d4';
   return '#10b981'; // meteo / air_quality
@@ -51,7 +55,7 @@ function getColor(type: string) {
 
 function makeIcon(station: AnyStation) {
   const color = getColor(station.type);
-  const temp = station.tempC !== null ? `${station.tempC}°` : '–';
+  const temp = station.type === 'unclassified' ? 'RAW' : station.tempC !== null ? `${station.tempC}°` : '–';
   const html = `<div style="width:32px;height:32px;border-radius:50%;border:2px solid ${color};background:rgba(2,6,23,0.92);display:flex;align-items:center;justify-content:center;box-shadow:0 0 8px ${color}55;cursor:pointer;"><span style="font-size:10px;font-weight:700;color:#fff;font-family:monospace;">${temp}</span></div>`;
   return L.divIcon({ html, className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
 }
@@ -59,13 +63,20 @@ function makeIcon(station: AnyStation) {
 export const AWSFBiHLayer: React.FC<AWSFBiHLayerProps> = ({ activeTypes, canAdjust, useCyrillicStationNames }) => {
   const [data, setData] = useState<ScrapedData | null>(null);
   const [adjustments, setAdjustments] = useState<AwsStationAdjustment[]>([]);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => setRevision((value) => value + 1);
+    window.addEventListener(AWS_DATASET_UPDATED_EVENT, refresh);
+    return () => window.removeEventListener(AWS_DATASET_UPDATED_EVENT, refresh);
+  }, []);
 
   useEffect(() => {
     scrape().then(setData).catch(() => setData(null));
     const controller = new AbortController();
     fetchAwsStationAdjustments(controller.signal).then(setAdjustments).catch(() => setAdjustments([]));
     return () => controller.abort();
-  }, []);
+  }, [revision]);
 
   const adjustmentMap = useMemo(() => new Map(adjustments.map((item) => [awsStationIdentity(item.source, item.station_type, item.station_key), item])), [adjustments]);
 
@@ -85,13 +96,16 @@ export const AWSFBiHLayer: React.FC<AWSFBiHLayerProps> = ({ activeTypes, canAdju
         const name = 'city' in sourceStation ? sourceStation.city : sourceStation.station;
         const adjustment = adjustmentMap.get(awsStationIdentity('fbih', sourceStation.type, name));
         const station = adjustment ? { ...sourceStation, ...adjustment.values } as AnyStation : sourceStation;
-        const coords = COORDS[name];
+        const position = sourceStation as AnyStation & { lat?: number; lon?: number };
+        const coords = Number.isFinite(position.lat) && Number.isFinite(position.lon)
+          ? [position.lat!, position.lon!] as [number, number] : COORDS[name];
         if (!coords) return null;
         return (
           <Marker
             key={`fbih-${name}-${i}`}
             position={coords}
             icon={makeIcon(station)}
+            eventHandlers={awsPopupHoverHandlers()}
           >
             <Popup closeButton closeOnClick={false} maxWidth={360} minWidth={280} className="aws-edit-popup">
               <AWSHoverCard station={station} source="fbih" canAdjust={canAdjust} adjustment={adjustment} onAdjusted={handleAdjusted} useCyrillicStationNames={useCyrillicStationNames} />

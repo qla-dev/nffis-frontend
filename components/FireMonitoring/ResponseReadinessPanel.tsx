@@ -28,7 +28,7 @@ export function ResponseReadinessPanel({ eventId, canManage }: { eventId: number
   };
 
   const plan = snapshot?.plan ?? preview;
-  if (!plan) return <section className="rounded-xl border border-slate-700/40 p-4"><Loader2 className="mr-2 inline animate-spin" size={16} /> Building response-readiness preview...</section>;
+  if (!plan) return <section className="rounded-xl border border-slate-700/40 p-4">{error ? <span role="alert" className="text-red-500">Unable to build response-readiness preview: {error}</span> : <><Loader2 className="mr-2 inline animate-spin" size={16} /> Building response-readiness preview...</>}</section>;
 
   return <section className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
     <div className="flex flex-wrap items-start justify-between gap-2">

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, CheckCircle2, Loader2, Trees, UserCheck, X } from 'lucide-react';
 import { createFirePerimeter, fetchBurnSeverity, fetchFireDetails, fetchFireImpacts, fetchFirePerimeters, fetchFireRecovery, fetchFireScenarios, requestBurnSeverity, reviewBurnSeverity, reviewFirePerimeter, runFireScenario, updateFireIncidentCase, type BurnSeverityAssessment, type FireEventDetails, type FirePerimeter, type FirePriority, type FireScenarioRun, type FireWorkflowStatus } from '../../services/fireMonitoringService';
 import { ResponseReadinessPanel } from './ResponseReadinessPanel';
@@ -37,7 +38,7 @@ export function FireEventDetailDrawer({ eventId, canManage, canViewIntelligence,
   };
 
   const panel = isDarkMode ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-slate-200 bg-white text-slate-900';
-  return <div className="fixed inset-0 z-[6000] flex justify-end bg-slate-950/55" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+  return createPortal(<div className="fixed inset-0 z-[6000] flex justify-end bg-slate-950/55" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
     <aside className={`h-full w-full max-w-xl overflow-y-auto border-l shadow-2xl ${panel}`} aria-label="Fire incident details">
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-700/40 bg-inherit p-5">
         <div><div className="text-xs font-bold uppercase tracking-widest text-orange-500">Operational case</div><h2 className="mt-1 text-xl font-black">{event?.external_id || 'Loading event...'}</h2></div>
@@ -80,7 +81,7 @@ export function FireEventDetailDrawer({ eventId, canManage, canViewIntelligence,
         {tab === 'intelligence' && <FireIntelligenceTab event={event} canRun={canRunIntelligence} canReview={canReviewIntelligence} reload={load} />}
       </div>}
     </aside>
-  </div>;
+  </div>, document.body);
 }
 
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-lg bg-slate-500/5 p-3"><div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</div><div className="mt-1 break-words font-semibold">{value}</div></div>; }

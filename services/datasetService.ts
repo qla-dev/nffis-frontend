@@ -39,6 +39,9 @@ export interface DatasetLayerStyle {
   strokeColor?: string;
   weight?: number;
   categorized?: DatasetLayerCategorizedStyle;
+  raster_scale?: 'ndvi' | 'ndii' | 'dryness';
+  min?: number;
+  max?: number;
 }
 
 export interface DatasetLayerField {
@@ -85,6 +88,8 @@ export interface DatasetLayer {
     maxx?: number;
     maxy?: number;
     pilot?: string;
+    canton_number?: number;
+    acquisition_date?: string;
     resolution_m?: number;
   } | null;
   style: DatasetLayerStyle;

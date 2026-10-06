@@ -92,7 +92,8 @@ const App: React.FC = () => {
       MapLayer.ACTIVE_FIRES,
       'AWS Precipitation' as MapLayer,
       'AWS Agro' as MapLayer,
-      'AWS Meteo' as MapLayer
+      'AWS Meteo' as MapLayer,
+      'AWS Sensors' as MapLayer
     ]),
     incidents: INITIAL_INCIDENTS as any,
     view: 'map',
@@ -704,7 +705,7 @@ const App: React.FC = () => {
       />}
       
       <main className="flex-1 relative md:ml-auto h-full min-h-0 min-w-0 overflow-hidden transition-all duration-300">
-        {state.view === 'map' && (
+        {authUser && state.view === 'map' && (
           <Suspense fallback={<ScreenLoader label="Loading map" />}>
           <GISMap 
             incidents={state.incidents} 

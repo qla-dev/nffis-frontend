@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound, Flame } from 'lucide-react';
+import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound, Flame, UploadCloud } from 'lucide-react';
 import { Language, AppState } from '../types';
 import { TRANSLATIONS } from '../constants';
 import type { AuthUser } from '../lib/auth/session';
 import { ApiUsageDashboard } from './Admin/ApiUsageDashboard';
+import { AwsUploadPanel } from './AwsUploadPanel';
+import { canUploadAws } from '../lib/auth/session';
 
 interface NavProps {
   state: AppState;
@@ -39,6 +41,7 @@ export const Navigation: React.FC<NavProps> = ({
   const activeLanguageIndex = languages.indexOf(state.language);
   const nextLanguage = languages[(activeLanguageIndex + 1) % languages.length];
   const [showApiUsage, setShowApiUsage] = useState(false);
+  const [showAwsUpload, setShowAwsUpload] = useState(false);
   const isSuperAdmin = user.role?.slug === 'super-admin';
 
   const NavItem = ({ icon: Icon, label, id, onClick, color = "text-slate-400" }: any) => {
@@ -84,9 +87,9 @@ export const Navigation: React.FC<NavProps> = ({
         <div className="flex-1 py-4 flex flex-col gap-1">
           <NavItem icon={Map} label={t.map} id="map" />
           {canViewFireMonitoring && <NavItem icon={Flame} label="Fire monitoring" id="fires" color="text-orange-500" />}
-          {canViewReports && <NavItem icon={AlertTriangle} label={t.reports} id="reports" />}
           {canViewReports && <NavItem icon={BarChart3} label={t.stats} id="stats" />}
           {canViewLayers && <NavItem icon={ListFilter} label={t.layers} id="layers" onClick={onOpenLayers} />}
+          {canUploadAws(user) && <NavItem icon={UploadCloud} label="Upload AWS data" onClick={() => setShowAwsUpload(true)} />}
           
           <div className="my-2 border-t border-slate-800/30 mx-2" />
           
@@ -116,8 +119,8 @@ export const Navigation: React.FC<NavProps> = ({
         </div>
       </nav>
 
-      {/* Mobile Bottom Navigation - FIXED: High Z-Index, Grid Layout for equal width icons */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 grid grid-cols-6 items-center p-2 pb-[max(1rem,env(safe-area-inset-bottom))] z-[5000] shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
+      {/* Mobile bottom navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-800 grid grid-cols-5 items-center p-2 pb-[max(1rem,env(safe-area-inset-bottom))] z-[5000] shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
         <button 
           onClick={() => onSetView('map')} 
           className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${state.view === 'map' ? 'text-blue-500' : 'text-slate-500'}`}
@@ -126,27 +129,24 @@ export const Navigation: React.FC<NavProps> = ({
           <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.map}</span>
         </button>
         {canViewFireMonitoring ? (
-          <button onClick={() => onSetView('fires')} className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${state.view === 'fires' ? 'text-orange-500' : 'text-slate-500'}`}>
-            <Flame size={20} /><span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">Fires</span>
-          </button>
-        ) : <span />}
-        {canViewReports ? (
           <button
-            onClick={() => onSetView('reports')}
-            className={`flex flex-col items-center justify-center gap-1 transition-colors w-full ${state.view === 'reports' ? 'text-blue-500' : 'text-slate-500'}`}
+            type="button"
+            onClick={() => onSetView('fires')}
+            aria-label="Fire monitoring"
+            className={`flex w-full flex-col items-center justify-center gap-1 transition-colors ${state.view === 'fires' ? 'text-orange-500' : 'text-slate-500'}`}
           >
-            <AlertTriangle size={20} />
-            <span className="text-[10px] font-bold uppercase tracking-widest truncate w-full text-center px-1">{t.reports}</span>
+            <Flame size={20} /><span className="w-full truncate px-1 text-center text-[10px] font-bold uppercase tracking-widest">Fires</span>
           </button>
         ) : <span />}
         
-        {/* Action Button Container - Maintains its center column slot */}
+        {/* Middle action */}
         <div className="flex justify-center w-full">
           {canCreateReports && (
             <button
               onClick={onOpenReport}
               className="bg-red-600 w-14 h-14 rounded-full -mt-10 shadow-2xl text-white border-4 border-slate-900 flex items-center justify-center active:scale-90 transition-transform"
               title={t.reportIncident}
+              aria-label={t.reportIncident}
             >
               <AlertTriangle size={26} fill="currentColor" />
             </button>
@@ -176,13 +176,14 @@ export const Navigation: React.FC<NavProps> = ({
       <button
         type="button"
         onClick={onLogout}
-        className="fixed right-3 top-3 z-[5000] flex h-9 items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/95 px-3 text-[10px] font-black uppercase tracking-wider text-slate-300 shadow-xl md:hidden"
+        className="fixed left-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-[5000] flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-slate-900/95 text-slate-300 shadow-xl md:hidden"
         title={`Sign out ${user.username}`}
+        aria-label={`Sign out ${user.username}`}
       >
         <LogOut size={14} className="text-red-400" />
-        {user.role?.name || user.username}
       </button>
       {showApiUsage && isSuperAdmin && <ApiUsageDashboard onClose={() => setShowApiUsage(false)} />}
+      {showAwsUpload && canUploadAws(user) && <AwsUploadPanel onClose={() => setShowAwsUpload(false)} />}
     </>
   );
 };

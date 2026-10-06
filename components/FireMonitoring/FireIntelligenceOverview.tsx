@@ -7,6 +7,7 @@ import {
   type FireIntelligenceHealth, type FireWeatherProduct, type FuelModelVersion,
 } from '../../services/fireMonitoringService';
 import { classifyEffisFwi, effisFwiGradientColor, EFFIS_FWI_CLASSES } from '../../lib/fwi/effisFwiScale';
+import { selectCurrentFwiForecast } from '../../lib/fwi/selectCurrentFwiForecast';
 
 export function FireIntelligenceOverview({ isDarkMode, canRun, canReview }: { isDarkMode: boolean; canRun: boolean; canReview: boolean }) {
   const [health, setHealth] = useState<FireIntelligenceHealth | null>(null);
@@ -15,7 +16,7 @@ export function FireIntelligenceOverview({ isDarkMode, canRun, canReview }: { is
   const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const [reviewNote, setReviewNote] = useState('');
   const load = (signal?: AbortSignal) => Promise.all([fetchFireIntelligenceHealth(signal), fetchFireIntelligenceProducts(signal), fetchFuelModels(signal)]).then(([h, p, f]) => { setHealth(h); setProducts(p.data); setFuel(f.data); });
   useEffect(() => { const controller = new AbortController(); void load(controller.signal).catch(reason => { if (reason.name !== 'AbortError') setError(reason.message); }); return () => controller.abort(); }, []);
-  const fwi = useMemo(() => products.filter(product => product.index_type === 'FWI').sort((a, b) => a.forecast_day - b.forecast_day).slice(0, 4), [products]);
+  const fwi = useMemo(() => selectCurrentFwiForecast(products), [products]);
   const panel = isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white';
   if (error) return <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-500">Fire Intelligence: {error}</div>;
   if (!health) return <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={16}/>Loading BiH intelligence...</div>;

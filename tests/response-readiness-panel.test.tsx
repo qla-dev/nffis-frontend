@@ -31,4 +31,11 @@ describe('ResponseReadinessPanel', () => {
     await waitFor(() => expect(fireService.createFireResponsePlan).toHaveBeenCalledWith(4));
     expect(await screen.findByText(/Version 1/)).toBeInTheDocument();
   });
+
+  it('shows a failed preview request instead of loading indefinitely', async () => {
+    vi.mocked(fireService.fetchFireResponsePlan).mockRejectedValueOnce(new Error('Server error (500)'));
+    render(<ResponseReadinessPanel eventId={4} canManage />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Server error (500)');
+    expect(screen.queryByText('Building response-readiness preview...')).not.toBeInTheDocument();
+  });
 });

@@ -93,7 +93,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
       {/* HORIZONTAL Control Cluster */}
       <div className="w-full md:w-auto pointer-events-auto">
         <div
-          className="overflow-x-auto overflow-y-hidden px-3 py-2 md:px-0 md:py-0 bg-transparent border-none shadow-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="overflow-x-auto overflow-y-hidden pl-14 pr-3 py-2 md:px-0 md:py-0 bg-transparent border-none shadow-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           style={{ touchAction: 'pan-x', overscrollBehaviorX: 'contain', overscrollBehaviorY: 'none' }}
         >
           <div className="min-w-max bg-slate-950/95 backdrop-blur-md border border-slate-800 rounded-xl md:shadow-2xl p-1 flex items-center gap-1">
@@ -151,7 +151,8 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 activePanel === 'aws' || 
                 activeLayers.has('AWS Precipitation' as MapLayer) || 
                 activeLayers.has('AWS Agro' as MapLayer) || 
-                activeLayers.has('AWS Meteo' as MapLayer)
+                activeLayers.has('AWS Meteo' as MapLayer) ||
+                activeLayers.has(MapLayer.AWS_SENSORS)
                   ? 'bg-blue-600 text-white shadow-lg'
                   : 'text-slate-400 hover:bg-slate-800'
               }`}
@@ -471,6 +472,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 { id: 'AWS Precipitation' as MapLayer, label: (t as any).aws?.precipitation || 'Padavinska', dotColor: '#06b6d4' },
                 { id: 'AWS Agro' as MapLayer, label: (t as any).aws?.agro || 'Agrometeo', dotColor: '#eab308' },
                 { id: 'AWS Meteo' as MapLayer, label: (t as any).aws?.meteo || 'Meteorološka', dotColor: '#10b981' },
+                { id: MapLayer.AWS_SENSORS, label: language === Language.BS ? 'Neklasifikovani senzori' : 'Raw sensors', dotColor: '#f59e0b' },
               ].map(layer => (
                 <button
                   key={layer.id}

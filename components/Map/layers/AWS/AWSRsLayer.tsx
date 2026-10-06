@@ -3,8 +3,10 @@ import { Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import { scrapeRs, rsAwsDummyData, RsStation, RsScrapedData } from '../../../../AWSRsData';
 import { AWSHoverCard } from './AWSHoverCard';
+import { awsPopupHoverHandlers } from './awsPopupHover';
 import { MapLayer } from '../../../../types';
 import { awsStationIdentity, fetchAwsStationAdjustments, type AwsStationAdjustment } from '../../../../services/awsStationService';
+import { AWS_DATASET_UPDATED_EVENT } from '../../../../services/awsCurrentService';
 
 interface AWSRsLayerProps {
   activeTypes: Set<MapLayer>;
@@ -22,6 +24,13 @@ function makeIcon(station: RsStation) {
 export const AWSRsLayer: React.FC<AWSRsLayerProps> = ({ activeTypes, canAdjust, useCyrillicStationNames }) => {
   const [data, setData] = useState<RsScrapedData | null>(null);
   const [adjustments, setAdjustments] = useState<AwsStationAdjustment[]>([]);
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => setRevision((value) => value + 1);
+    window.addEventListener(AWS_DATASET_UPDATED_EVENT, refresh);
+    return () => window.removeEventListener(AWS_DATASET_UPDATED_EVENT, refresh);
+  }, []);
 
   // RS stations are all "meteo" type — only show when AWS_METEO is active
   const visible = activeTypes.has('AWS Meteo' as MapLayer);
@@ -29,7 +38,7 @@ export const AWSRsLayer: React.FC<AWSRsLayerProps> = ({ activeTypes, canAdjust, 
   useEffect(() => {
     if (!visible) return;
     scrapeRs().then(setData).catch(() => setData(null));
-  }, [visible]);
+  }, [visible, revision]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -49,7 +58,7 @@ export const AWSRsLayer: React.FC<AWSRsLayerProps> = ({ activeTypes, canAdjust, 
       {stations.map((sourceStation, i) => {
         const adjustment = adjustmentMap.get(awsStationIdentity('rs', sourceStation.type, sourceStation.name));
         const station = adjustment ? { ...sourceStation, ...adjustment.values } as RsStation : sourceStation;
-        return <Marker key={`rs-${station.name}-${i}`} position={[station.lat, station.lon]} icon={makeIcon(station)}>
+        return <Marker key={`rs-${station.name}-${i}`} position={[station.lat, station.lon]} icon={makeIcon(station)} eventHandlers={awsPopupHoverHandlers()}>
           <Popup closeButton closeOnClick={false} maxWidth={360} minWidth={280} className="aws-edit-popup">
             <AWSHoverCard station={station} source="rs" canAdjust={canAdjust} adjustment={adjustment} onAdjusted={handleAdjusted} useCyrillicStationNames={useCyrillicStationNames} />
           </Popup>

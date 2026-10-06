@@ -11,7 +11,6 @@ const accessToken = (environment.VITE_MAPBOX_ACCESS_TOKEN || '').trim();
 const engine = {
   createMap: (options: Record<string, unknown>) => new mapboxgl.Map({ ...options, accessToken } as mapboxgl.MapOptions),
   createNavigationControl: () => new mapboxgl.NavigationControl({ showCompass: false }),
-  createScaleControl: () => new mapboxgl.ScaleControl({ maxWidth: 120, unit: 'metric' }),
   createMarker: (element: HTMLElement) => new mapboxgl.Marker({ element, anchor: 'center' }),
   createPopup: () => new mapboxgl.Popup({ closeButton: true, closeOnClick: true, maxWidth: '380px', className: 'nffis-operational-popup' }),
 } as unknown as GLEngine;

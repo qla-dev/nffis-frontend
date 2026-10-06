@@ -3,12 +3,16 @@ import { useMap } from 'react-leaflet';
 import * as plotty from 'plotty';
 import { EFFIS_FWI_COLOR_STOPS, EFFIS_FWI_DISPLAY_MAX } from '../../../../lib/fwi/effisFwiScale';
 import { ESA_WORLDCOVER_CLASSES } from '../../../../lib/gis/worldCoverLegend';
+import { VEGETATION_RASTER_SCALES } from '../../../../lib/gis/vegetationRasterScales';
 import { createLeafletRasterOverlay } from '../../../../lib/gis/leafletRasterOverlay';
 import { API_BASE_URL } from '../../../../services/api';
 
 const EFFIS_SCALE = 'effis-fwi-cog-2021';
 const WORLD_COVER_SCALE = 'esa-worldcover-2021';
 const TERRAIN_SCALE = 'nffis-terrain';
+const NDVI_SCALE = 'nffis-ndvi';
+const NDII_SCALE = 'nffis-ndii';
+const DRYNESS_SCALE = 'nffis-vegetation-dryness';
 const RASTER_BUFFER_CACHE_LIMIT = 8;
 const rasterBufferCache = new Map<string, Promise<ArrayBuffer>>();
 
@@ -21,6 +25,9 @@ registerScale(WORLD_COVER_SCALE,
   ESA_WORLDCOVER_CLASSES.map(item => item.color),
   [0, 10 / 90, 20 / 90, 30 / 90, 40 / 90, 50 / 90, 60 / 90, 70 / 90, 80 / 90, 85 / 90, 1]);
 registerScale(TERRAIN_SCALE, ['#0f172a', '#166534', '#a3a36b', '#e2e8f0', '#ffffff'], [0, .18, .45, .75, 1]);
+registerScale(NDVI_SCALE, [...VEGETATION_RASTER_SCALES.ndvi.colors], [0, .25, .5, .75, 1]);
+registerScale(NDII_SCALE, [...VEGETATION_RASTER_SCALES.ndii.colors], [0, .25, .5, .75, 1]);
+registerScale(DRYNESS_SCALE, [...VEGETATION_RASTER_SCALES.dryness.colors], [0, .25, .5, .75, 1]);
 
 function resolveRasterUrl(url: string) {
   return url.startsWith('/api/') ? `${API_BASE_URL}${url.slice('/api'.length)}` : url;
@@ -69,7 +76,7 @@ export function preloadCogRaster(url: string) {
 }
 
 export interface CogRasterStyle {
-  scale: 'fwi' | 'worldcover' | 'terrain';
+  scale: 'fwi' | 'worldcover' | 'terrain' | 'ndvi' | 'ndii' | 'dryness';
   min: number;
   max: number;
   smooth?: boolean;
@@ -98,7 +105,10 @@ export function CogRasterLayer({ url, pane, style, opacity = .78, boundaryMask, 
     fetchRasterBuffer(url)
       .then(async buffer => {
         if (cancelled || requestVersion !== requestVersionRef.current) return;
-        const colorScale = style.scale === 'fwi' ? EFFIS_SCALE : style.scale === 'worldcover' ? WORLD_COVER_SCALE : TERRAIN_SCALE;
+        const colorScale = {
+          fwi: EFFIS_SCALE, worldcover: WORLD_COVER_SCALE, terrain: TERRAIN_SCALE,
+          ndvi: NDVI_SCALE, ndii: NDII_SCALE, dryness: DRYNESS_SCALE,
+        }[style.scale];
         const rendered = await createLeafletRasterOverlay(buffer, {
           colorScale, displayMin: style.min, displayMax: style.max, pane, opacity,
           boundaryMask, smooth: style.smooth,

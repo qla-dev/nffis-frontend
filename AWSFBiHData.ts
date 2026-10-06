@@ -1,3 +1,5 @@
+import { fetchCurrentAwsDataset } from './services/awsCurrentService';
+
 export const fhmzRealDummyData = {
   scrapedAt: "2026-05-15T18:00:00.000Z",
   reportDate: "15.05.2026",
@@ -160,11 +162,22 @@ export interface AirQualityStation {
   humidityPct: number | null;
 }
 
+export interface RawAwsStation {
+  type: 'unclassified';
+  station: string;
+  lat?: number;
+  lon?: number;
+  observedAtLocal: string;
+  sensorValues: Record<string, number>;
+  uploadedByName?: string;
+}
+
 export type AnyStation =
   | PrecipitationStation
   | AgroStation
   | MeteoStation
-  | AirQualityStation;
+  | AirQualityStation
+  | RawAwsStation;
 
 export interface ScrapedData {
   scrapedAt: string;
@@ -211,6 +224,22 @@ function dataRows(table: Element | undefined): Element[] {
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 export async function scrape(): Promise<ScrapedData> {
+  const current = await fetchCurrentAwsDataset();
+  if (current) {
+    const payload = current.data;
+    const precipitation = Array.isArray(payload.precipitation) ? payload.precipitation as PrecipitationStation[] : [];
+    const agro = Array.isArray(payload.agro) ? payload.agro as AgroStation[] : [];
+    const meteo = Array.isArray(payload.meteo) ? payload.meteo as MeteoStation[] : [];
+    const airQuality = Array.isArray(payload.airQuality) ? payload.airQuality as AirQualityStation[] : [];
+    const all = Array.isArray(payload.all) ? (payload.all as AnyStation[]).map((station) => station.type === 'unclassified'
+      ? { ...station, uploadedByName: current.uploaded_by_name ?? undefined } : station)
+      : [...precipitation, ...agro, ...meteo, ...airQuality];
+    return {
+      scrapedAt: typeof payload.scrapedAt === 'string' ? payload.scrapedAt : current.updated_at,
+      reportDate: typeof payload.reportDate === 'string' ? payload.reportDate : null,
+      precipitation, agro, meteo, airQuality, all,
+    };
+  }
   const res = await fetch(FHMZ_FEED_URL, { credentials: "include", headers: { Accept: "text/html" } });
   if (!res.ok) throw new Error(`FHMZ fetch failed: HTTP ${res.status}`);
 

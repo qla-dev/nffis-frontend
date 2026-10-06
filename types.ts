@@ -44,7 +44,8 @@ export enum MapLayer {
   PROTECTED_AREAS = 'Protected Areas (Heatmap)',
   AWS_PRECIPITATION = 'AWS Precipitation',
   AWS_AGRO = 'AWS Agro',
-  AWS_METEO = 'AWS Meteo'
+  AWS_METEO = 'AWS Meteo',
+  AWS_SENSORS = 'AWS Sensors'
 }
 
 export enum IncidentType {

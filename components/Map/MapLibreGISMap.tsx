@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Map,
   NavigationControl,
-  ScaleControl,
   Popup,
   Marker,
   setWorkerUrl,
@@ -17,7 +16,6 @@ setWorkerUrl(workerUrl);
 const engine: GLEngine = {
   createMap: (options) => new Map(options as ConstructorParameters<typeof Map>[0]),
   createNavigationControl: () => new NavigationControl({ showCompass: false }),
-  createScaleControl: () => new ScaleControl({ maxWidth: 120, unit: 'metric' }),
   createMarker: (element) => new Marker({ element, anchor: 'center' }),
   createPopup: () => new Popup({ closeButton: true, closeOnClick: true, maxWidth: '380px', className: 'nffis-operational-popup' }),
 };
