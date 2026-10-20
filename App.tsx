@@ -52,6 +52,7 @@ const DatasetLayerOverlay = lazy(() => import('./components/Layers/DatasetLayerO
 const StatisticsDashboard = lazy(() => import('./components/Statistics/StatisticsDashboard'));
 const FireMonitoringDashboard = lazy(() => import('./components/FireMonitoring/OperationalFireDashboard'));
 const PdrModule = lazy(() => import('./components/Pdr/PdrModule'));
+const UserManagement = lazy(() => import('./components/Admin/UserManagement'));
 
 const BASE_LAYER_IDS = [
   MapLayer.SATELLITE,
@@ -154,6 +155,7 @@ const App: React.FC = () => {
   const canViewPdr = hasPermission(authUser, 'pdr-reports', 'view');
   const canCreatePdr = hasPermission(authUser, 'pdr-reports', 'create');
   const canReviewPdr = hasPermission(authUser, 'pdr-methodology', 'update');
+  const canViewUsers = hasPermission(authUser, 'users', 'view');
   const hasEntityScope = hasPermission(authUser, 'fbih', 'view') || hasPermission(authUser, 'rs', 'view');
   const canViewFbih = !hasEntityScope || hasPermission(authUser, 'fbih', 'view');
   const canViewRs = !hasEntityScope || hasPermission(authUser, 'rs', 'view');
@@ -183,6 +185,7 @@ const App: React.FC = () => {
     if (view === 'fires' && !canViewFireMonitoring) return;
     if (view === 'layers' && !canViewDatasetLayers) return;
     if (view === 'pdr' && !canViewPdr) return;
+    if (view === 'admin' && !canViewUsers) return;
     if (view !== 'pdr' && window.location.hash.startsWith('#/pdr')) window.history.replaceState(null, '', window.location.pathname + window.location.search);
 
     setIsDatasetLayerPanelOpen(false);
@@ -719,6 +722,7 @@ const App: React.FC = () => {
         canViewLayers={canViewDatasetLayers}
         canViewFireMonitoring={canViewFireMonitoring}
         canViewPdr={canViewPdr}
+        canViewUsers={canViewUsers}
         onLogout={handleLogout}
       />}
       
@@ -776,7 +780,7 @@ const App: React.FC = () => {
                     <Database size={14} /> {t.systemCoreData}
                   </div>
                   <h1 className={`text-3xl font-bold tracking-tight ${state.isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                    {state.view === 'reports' ? t.recentReports : state.view === 'layers' ? t.layers : state.view === 'fires' ? 'Fire monitoring' : state.view === 'pdr' ? pdrText(state.language).module : t.stats}
+                    {state.view === 'reports' ? t.recentReports : state.view === 'layers' ? t.layers : state.view === 'fires' ? 'Fire monitoring' : state.view === 'pdr' ? pdrText(state.language).module : state.view === 'admin' ? (state.language === Language.BS ? 'Administracija korisnika' : 'User administration') : t.stats}
                   </h1>
                 </div>
                 {state.view === 'fires' && <div id="fire-monitoring-header-actions" className="relative flex items-center" />}
@@ -788,6 +792,9 @@ const App: React.FC = () => {
               )}
               {state.view === 'pdr' && canViewPdr && (
                 <Suspense fallback={<ScreenLoader label="Loading damage reports" />}><PdrModule language={state.language} isDarkMode={state.isDarkMode} canCreate={canCreatePdr} canReview={canReviewPdr} /></Suspense>
+              )}
+              {state.view === 'admin' && canViewUsers && authUser && (
+                <Suspense fallback={<ScreenLoader label="Loading users" />}><UserManagement language={state.language} isDarkMode={state.isDarkMode} currentUserId={authUser.id} canCreate={hasPermission(authUser, 'users', 'create')} canUpdate={hasPermission(authUser, 'users', 'update')} /></Suspense>
               )}
               {state.view === 'fires' && canViewFireMonitoring && (
                 <Suspense fallback={<ScreenLoader label="Loading fire operations" />}><FireMonitoringDashboard isDarkMode={state.isDarkMode} canManage={canManageFireMonitoring} canViewIntelligence={canViewFireIntelligence} canRunIntelligence={canRunFireIntelligence} canReviewIntelligence={canReviewFireIntelligence} /></Suspense>

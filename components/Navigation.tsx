@@ -21,6 +21,7 @@ interface NavProps {
   canViewLayers: boolean;
   canViewFireMonitoring?: boolean;
   canViewPdr?: boolean;
+  canViewUsers?: boolean;
   onLogout: () => void;
 }
 
@@ -37,6 +38,7 @@ export const Navigation: React.FC<NavProps> = ({
   canViewLayers,
   canViewFireMonitoring = false,
   canViewPdr = false,
+  canViewUsers = false,
   onLogout,
 }) => {
   const t = TRANSLATIONS[state.language];
@@ -116,7 +118,7 @@ export const Navigation: React.FC<NavProps> = ({
                label={`${t.activeLanguage}: ${state.language.toUpperCase()}`}
                onClick={() => onSetLang(nextLanguage)}
              />
-             <NavItem icon={Settings} label={t.system} onClick={() => {}} />
+             <NavItem icon={Settings} label={t.system} id="admin" onClick={canViewUsers ? undefined : () => {}} />
              <NavItem icon={HelpCircle} label={t.support} onClick={() => {}} />
              <NavItem icon={UserRound} label={`${user.username} · ${user.role?.name || 'No role'}${isSuperAdmin ? ' · API usage' : ''}`} onClick={() => isSuperAdmin && setShowApiUsage(true)} />
              <NavItem icon={LogOut} label="Sign out" onClick={onLogout} color="text-red-400" />

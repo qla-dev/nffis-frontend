@@ -87,7 +87,7 @@ export interface AppState {
   language: Language;
   activeLayers: Set<MapLayer>;
   incidents: IncidentReport[];
-  view: 'map' | 'reports' | 'stats' | 'fires' | 'info' | 'layers' | 'pdr';
+  view: 'map' | 'reports' | 'stats' | 'fires' | 'info' | 'layers' | 'pdr' | 'admin';
   isReporting: boolean;
   isDarkMode: boolean;
 }
