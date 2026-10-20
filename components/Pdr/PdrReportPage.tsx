@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, FileUp, Loader2, PenLine, Send, Undo2, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Download, FileUp, Loader2, PenLine, Send, Undo2, XCircle } from 'lucide-react';
 import { Language } from '../../types';
 import {
-  calculatePdrReport, createPdrReport, getPdrReport, previewPerimeter, reviewPdrReport, savePerimeter, submitPdrReport, updatePdrReport,
+  calculatePdrReport, createPdrReport, getPdrReport, pdrExportUrl, previewPerimeter, reviewPdrReport, savePerimeter, submitPdrReport, updatePdrReport,
   type PdrJurisdiction, type PdrMetadata, type PdrPermissions, type PdrReport, type PerimeterPreview,
 } from '../../services/pdrService';
 import { formatNumber, pdrText } from '../../lib/pdr/i18n';
@@ -140,7 +140,15 @@ function ReportHeader({ report, t, language }: { report: PdrReport; t: ReturnTyp
         <h2 className="text-2xl font-black">{report.title}</h2>
         <div className="text-sm text-slate-500">{t.jurisdiction[report.jurisdiction]}{report.perimeter_area_ha ? ` · ${formatNumber(report.perimeter_area_ha, 2, language)} ha` : ''}</div>
       </div>
-      <StatusBadge status={report.status} t={t} />
+      <div className="flex flex-col items-end gap-2">
+        <StatusBadge status={report.status} t={t} />
+        {report.calculated_at && (
+          <div className="flex gap-2">
+            <a href={pdrExportUrl(report.id, 'pdf')} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-bold text-white"><Download size={13} />{t.exportPdf}</a>
+            <a href={pdrExportUrl(report.id, 'json')} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-slate-500/15 px-3 py-1.5 text-xs font-bold"><Download size={13} />{t.exportJson}</a>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

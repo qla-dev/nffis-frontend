@@ -1,4 +1,4 @@
-import { apiRequest } from './api';
+import { API_BASE_URL, apiRequest } from './api';
 
 export type PdrStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 export type PdrJurisdiction = 'fbih' | 'rs' | 'shared';
@@ -124,6 +124,10 @@ interface Paginated<T> { data: T[]; total: number; current_page: number; last_pa
 export function listPdrReports(filters: { status?: string; jurisdiction?: string; q?: string } = {}, signal?: AbortSignal) {
   const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value) as [string, string][]).toString();
   return apiRequest<Paginated<PdrReport>>(`/pdr-reports${query ? `?${query}` : ''}`, { signal });
+}
+
+export function pdrExportUrl(id: number, format: 'pdf' | 'json'): string {
+  return `${API_BASE_URL}/pdr-reports/${id}/export.${format}`;
 }
 
 export function getPdrReport(id: number, signal?: AbortSignal) {
