@@ -797,7 +797,7 @@ const App: React.FC = () => {
                 <Suspense fallback={<ScreenLoader label="Loading users" />}><UserManagement language={state.language} isDarkMode={state.isDarkMode} currentUserId={authUser.id} canCreate={hasPermission(authUser, 'users', 'create')} canUpdate={hasPermission(authUser, 'users', 'update')} /></Suspense>
               )}
               {state.view === 'fires' && canViewFireMonitoring && (
-                <Suspense fallback={<ScreenLoader label="Loading fire operations" />}><FireMonitoringDashboard isDarkMode={state.isDarkMode} canManage={canManageFireMonitoring} canViewIntelligence={canViewFireIntelligence} canRunIntelligence={canRunFireIntelligence} canReviewIntelligence={canReviewFireIntelligence} /></Suspense>
+                <Suspense fallback={<ScreenLoader label="Loading fire operations" />}><FireMonitoringDashboard isDarkMode={state.isDarkMode} canViewPdr={canViewPdr} language={state.language} canManage={canManageFireMonitoring} canViewIntelligence={canViewFireIntelligence} canRunIntelligence={canRunFireIntelligence} canReviewIntelligence={canReviewFireIntelligence} /></Suspense>
               )}
             </div>
           </div>

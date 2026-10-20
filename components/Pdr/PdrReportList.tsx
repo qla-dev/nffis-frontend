@@ -4,6 +4,7 @@ import { Language } from '../../types';
 import { listPdrReports, type PdrReport, type PdrStatus } from '../../services/pdrService';
 import { formatNumber, pdrText, type PdrText } from '../../lib/pdr/i18n';
 import { navigatePdr } from './pdrRoute';
+import { PdrDashboardSummary } from './PdrDashboardSummary';
 
 const STATUS_STYLES: Record<PdrStatus, string> = {
   draft: 'bg-slate-500/15 text-slate-500',
@@ -38,6 +39,7 @@ export function PdrReportList({ language, isDarkMode, canCreate }: { language: L
 
   return (
     <div className="space-y-4" data-testid="pdr-report-list">
+      <PdrDashboardSummary language={language} isDarkMode={isDarkMode} compact />
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-56 flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />

@@ -137,6 +137,17 @@ export function pdrExportUrl(id: number, format: 'pdf' | 'json'): string {
   return `${API_BASE_URL}/pdr-reports/${id}/export.${format}`;
 }
 
+export interface PdrSummary {
+  by_status: Partial<Record<PdrStatus, number>>;
+  approved_this_year: { reports: number; burnt_area_ha: number; damage_total: number; currency: string };
+  latest: Pick<PdrReport, 'id' | 'reference' | 'title' | 'status' | 'jurisdiction' | 'perimeter_area_ha' | 'updated_at'>[];
+  sync_failures_24h: number;
+}
+
+export function getPdrSummary(signal?: AbortSignal) {
+  return apiRequest<PdrSummary>('/pdr-reports/summary', { signal });
+}
+
 export function getPdrReport(id: number, signal?: AbortSignal) {
   return apiRequest<{ data: PdrReport; permissions: PdrPermissions }>(`/pdr-reports/${id}`, { signal });
 }
