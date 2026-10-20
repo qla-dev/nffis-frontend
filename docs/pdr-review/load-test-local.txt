@@ -1,0 +1,13 @@
+3 virtual users · 17.1 s · http://127.0.0.1:8001
+
+endpoint                                          req   p50 ms   p95 ms   max ms  errors
+GET /api/dataset-layers                             9      696      899      899       0
+GET /api/fire-intelligence/products                 9      658      778      778       0
+GET /api/fires/active                               9      651      661      661       0
+GET /api/me                                         7      682      940      940       0
+GET /api/pdr-reports                                8      668      767      767       0
+GET /api/pdr-reports/1                              8      766      874      874       0
+GET /api/pdr-reports/1/export.json                  8      734      907      907       0
+POST /api/pdr-reports/aoi-statistics                7      807      877      877       0
+
+throughput 3.8 req/s · error rate 0.00%

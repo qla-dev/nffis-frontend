@@ -41,9 +41,9 @@ Source: *NFFIS PDR Client Requirement Document v1.1* (April 2026), compared with
 | B17 | ✅ **Brčko District jurisdiction**: add `bd` entity/module, region classification, scope reports/incidents/layers | FC_PDR08, C6 |
 | B18 | ✅ **Strict entity scoping**: users with no jurisdiction module must not fall back to all entities; apply scope to fires, perimeters, PDR reports | C6, PDR8 |
 | B19 | ✅ **PDR roles**: map Role 2 operational / Role 3 methodological / Role 5 decision maker (read-only approved PDRs) to modules/permissions | §4 |
-| B20 | **User management API** (super-admin): list/create/update/disable users, assign role | FC_PDR15 |
+| B20 | ✅ **User management API** (super-admin): list/create/update/disable users, assign role | FC_PDR15 |
 | B21 | **Incident attributes**: extend incident with intervention details, affected area, casualties, dangerous substances, required assistance | FC_PDR13 |
-| B22 | **Load test** script (k6) for main API endpoints | PDR11 |
+| B22 | ✅ **Load test** script (k6) for main API endpoints | PDR11 |
 
 ### Frontend
 
@@ -57,9 +57,9 @@ Source: *NFFIS PDR Client Requirement Document v1.1* (April 2026), compared with
 | F6 | ✅ **AOI tool**: draw polygon on map → statistics panel | FC_PDR12 |
 | F7 | **Fire-risk layers from server rasters**: Angström/GFI/KBDI/FWI separate toggles + timeline | FC_PDR06, FC_PDR11 |
 | F8 | **Historical timeline for hotspots and VDM** (not only FWI) | FC_PDR11 |
-| F9 | **Real-time monitoring dashboard**: incidents status, recent detections, PDR summaries | FC_PDR09 |
+| F9 | ✅ **Real-time monitoring dashboard**: incidents status, recent detections, PDR summaries | FC_PDR09 |
 | F10 | **Full BS/EN translation** of fire monitoring, reports, admin, PDR screens | FC_PDR14 |
-| F11 | **User management UI** | FC_PDR15 |
+| F11 | ✅ **User management UI** | FC_PDR15 |
 | F12 | ✅ **Sync status / data source preview panel** | FC_PDR05, PDR4 |
 | F13 | **Incident attribute form** extension | FC_PDR13 |
 
@@ -67,8 +67,8 @@ Source: *NFFIS PDR Client Requirement Document v1.1* (April 2026), compared with
 
 | ID | Task | Req |
 |----|------|-----|
-| D1 | Data-source evaluation: inventory of EU/global (CLC 2018, DEM GLO-30, WorldCover) vs local high-resolution (entity forest maps, cadastre) and which replaces which | §6 |
-| D2 | Methodology note template for Role 3 coefficient approval | PDR04 |
+| D1 | ✅ Data-source evaluation: inventory of EU/global (CLC 2018, DEM GLO-30, WorldCover) vs local high-resolution (entity forest maps, cadastre) and which replaces which | §6 |
+| D2 | ✅ Methodology note template for Role 3 coefficient approval | PDR04 |
 
 ## Suggested order
 

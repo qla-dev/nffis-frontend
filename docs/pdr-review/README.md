@@ -142,15 +142,63 @@ Poslije slanja operater vidi izvještaj samo za čitanje: ![](screenshots/11-ope
 
 ![sync](screenshots/20-data-sync-status.png)
 
+### B20 / F11 — Upravljanje korisnicima (FC_PDR15)
+- API `/api/admin/users`: lista, kreiranje, izmjena, onemogući/omogući (modul `users`).
+- Jaka lozinka (min. 12, slova i brojevi).
+- Samo super-admin može dodijeliti ulogu super-admina ili mijenjati super-admin naloge.
+- Korisnik ne može onemogućiti sebe niti promijeniti vlastitu ulogu.
+- Onemogućen nalog se ne može ulogovati, a postojeća sesija mu se odmah prekida (middleware `active-user`).
+- **Test:**
+  1. Uloguj se kao `pdr.admin` i klikni zupčanik (**System**) u lijevom meniju.
+  2. **New user** → popuni formu → **Create account**.
+  3. Klikni **Disable** pored novog naloga.
+  4. Probaj se ulogovati tim nalogom: treba pisati „This account has been disabled.“
+
+| Lista | Novi korisnik | Kreiran i onemogućen |
+|---|---|---|
+| ![](screenshots/21-users-list.png) | ![](screenshots/22-users-create-form.png) | ![](screenshots/23-users-created-and-disabled.png) |
+
+### F9 — Dashboard praćenja: PDR sažetak (FC_PDR09)
+- `GET /api/pdr-reports/summary`: broj izvještaja po statusu, odobrena površina i šteta ove godine, posljednji izvještaji i greške sinhronizacije u 24 h. Uvijek je ograničeno na entitet korisnika.
+- Prikazuje se na **Fire monitoring** dashboardu i na vrhu liste PDR izvještaja. MODIS je dodan u indikatore zdravlja izvora.
+- **Test:**
+  1. Uloguj se kao `pdr.methodologist` i klikni ikonu plamena (**Fire monitoring**).
+  2. Otvori http://localhost:3000/#/pdr.
+
+| Fire monitoring | PDR lista |
+|---|---|
+| ![](screenshots/24-fire-dashboard-pdr-summary.png) | ![](screenshots/25-pdr-list-with-summary.png) |
+
+### B22 — Load test (PDR11)
+- `nffis-backend/scripts/load/pdr-load-test.mjs` nema zavisnosti.
+- Svaki virtualni korisnik ima vlastitu Sanctum sesiju. Mjere se p50/p95, propusnost i stopa grešaka. Opcije: `--report=1` (detalj + JSON export), `--aoi=1` (puna PostGIS analiza).
+- Lokalni rezultat (3 korisnika, `artisan serve` je jednonitni) je u [load-test-local.txt](load-test-local.txt): **0 % grešaka**.
+- Za stvarnu mjeru pokreni na staging serveru (php-fpm), npr. sa `--users=50 --duration=120`. Login je ograničen na 5 pokušaja u minuti po IP adresi.
+
+```bash
+NFFIS_BASE_URL=https://api.nffis.com:81 NFFIS_ORIGIN=https://nffis.com NFFIS_LOGIN=... NFFIS_PASSWORD=... node scripts/load/pdr-load-test.mjs --users=20 --duration=60 --aoi=1
+```
+
+### D1/D2 — Evaluacija izvora podataka i šablon metodološke napomene
+- `nffis-backend/docs/PDR_DATA_SOURCES.md` sadrži:
+  - EU/globalne izvore naspram lokalnih izvora visoke rezolucije (sastojine, katastar, registri);
+  - kako se lokalni izvor uključuje preko env varijabli;
+  - checklistu za metodološki tim;
+  - `gdal_rasterize` recept za CLC 100 m;
+  - šablon napomene za odobravanje koeficijenata.
+
+### Sigurnosna ispravka
+- SHP/KMZ upload provjerava veličinu svake datoteke u arhivi prije raspakivanja (maks. 50 MB), kao zaštitu od zip-bomb napada. Ima i test.
+
 ---
 
 ## Automatski testovi
 
 | Repo | Rezultat |
 |---|---|
-| Backend: PDR + MODIS (`php artisan test --filter='Pdr\|Modis'`) | **24/24 prolazi**, uključujući 4 PostGIS testa sa poligonom poznate površine |
+| Backend: PDR + MODIS + korisnici (`php artisan test --filter='Pdr\|Modis\|UserManagement'`) | **29/29 prolazi**, uključujući 4 PostGIS testa sa poligonom poznate površine |
 | Backend: cijeli suite | 13 padova koji su postojali **i prije mojih izmjena** (nema `../gis/forest/bih-boundary.geojson`, `host.docker.internal:5432` nedostupan) |
-| Frontend (`npx vitest run`) | **145/145 prolazi** |
+| Frontend (`npx vitest run`) | **147/147 prolazi** |
 | `vite build` | prolazi; PDR je zaseban lazy chunk od 47 kB |
 
 ## Commitovi (lokalno, nisu pushani)
@@ -163,15 +211,26 @@ Grana `feature/pdr-module`:
   - ERCC PDF/JSON export
   - Brčko i strogo razdvajanje
   - MODIS i log sinhronizacije
+  - upravljanje korisnicima
+  - dashboard sažetak
+  - load test i dokumentacija
+  - zip zaštita
 - **Frontend:**
   - PDR UI (wizard, rezultati, verifikacija, matrica, AOI)
   - export dugmad
   - opcija Brčko distrikt
   - tab za sinhronizaciju
+  - administracija korisnika
+  - PDR sažetak na dashboardu
 
 ## Ostaje / ograničenja
 - **Board api.bosancica.ai:82:** port je otvoren, ali svaki HTTP zahtjev iz terminala ili iz novog Chrome taba dobija *connection reset*. Taskove treba unijeti ručno iz `PDR_GAP_TASKS.md`, ili provjeriti firewall ili whitelist na serveru.
 - Koeficijenti su placeholder. Formule i stope mora definisati i odobriti metodološki tim (PDR04).
 - Demo podaci pokrivaju samo područje Sarajeva. Za cijelu BiH pokreni `pdr:import-layers` bez `--bbox` (CLC brzo, OSM objekti ~1–2 h).
 - Stanovništvo je procjena iz broja objekata. Bolje bi bilo koristiti GHS-POP raster ili popisne krugove.
-- Nije urađeno: B13 (server-side Angström/GFI/KBDI rasteri), B14 (FWI iz AWS interpolacije), B15, B20/F11 (upravljanje korisnicima), B21/F13, B22 (load test), F7–F9, D1/D2.
+- Nije urađeno:
+  - **B13/B14**: server-side Angström/GFI/KBDI rasteri i FWI iz AWS interpolacije. Treba novo masovno preuzimanje meteo podataka s upravljanjem API kvotom, pa nisam htio pokretati bez tebe.
+    Napomena: postojeće KBDI/GFI formule u `GISMap.tsx` su gruba heuristika, a ne standardni Keetch–Byram ili McArthur.
+  - **B15**: registar slojeva kao vremenska serija.
+  - **F7/F8**: rasteri indeksa iz servera i timeline za hotspote i VDM.
+  - **B21/F13** je u praksi pokriven PDR metapodacima (stradali, opasne materije, intervencija, tražena pomoć). Postojeći obrazac incidenta nije proširivan.
