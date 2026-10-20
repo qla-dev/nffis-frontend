@@ -26,6 +26,8 @@ import {
   shouldUseVectorTiles,
 } from './lib/gis/datasetLayerLoading';
 import { installExternalApiUsageTracker } from './services/apiUsageService';
+import { parsePdrHash } from './components/Pdr/pdrRoute';
+import { pdrText } from './lib/pdr/i18n';
 
 const mapEnvironment = (import.meta as ImportMeta & { env: Record<string, string | boolean | undefined> }).env;
 const mapboxAccessToken = String(mapEnvironment.VITE_MAPBOX_ACCESS_TOKEN || '');
@@ -49,6 +51,7 @@ const GISMap = lazy(() => {
 const DatasetLayerOverlay = lazy(() => import('./components/Layers/DatasetLayerOverlay').then(module => ({ default: module.DatasetLayerOverlay })));
 const StatisticsDashboard = lazy(() => import('./components/Statistics/StatisticsDashboard'));
 const FireMonitoringDashboard = lazy(() => import('./components/FireMonitoring/OperationalFireDashboard'));
+const PdrModule = lazy(() => import('./components/Pdr/PdrModule'));
 
 const BASE_LAYER_IDS = [
   MapLayer.SATELLITE,
@@ -96,7 +99,7 @@ const App: React.FC = () => {
       'AWS Sensors' as MapLayer
     ]),
     incidents: INITIAL_INCIDENTS as any,
-    view: 'map',
+    view: parsePdrHash(window.location.hash) ? 'pdr' : 'map',
     isReporting: false,
     isDarkMode: false,
   });
@@ -148,6 +151,9 @@ const App: React.FC = () => {
   const canRunFireIntelligence = hasPermission(authUser, 'fire-intelligence', 'create');
   const canReviewFireIntelligence = hasPermission(authUser, 'fire-intelligence', 'update');
   const canViewAws = hasPermission(authUser, 'aws-monitoring', 'view');
+  const canViewPdr = hasPermission(authUser, 'pdr-reports', 'view');
+  const canCreatePdr = hasPermission(authUser, 'pdr-reports', 'create');
+  const canReviewPdr = hasPermission(authUser, 'pdr-methodology', 'update');
   const hasEntityScope = hasPermission(authUser, 'fbih', 'view') || hasPermission(authUser, 'rs', 'view');
   const canViewFbih = !hasEntityScope || hasPermission(authUser, 'fbih', 'view');
   const canViewRs = !hasEntityScope || hasPermission(authUser, 'rs', 'view');
@@ -176,6 +182,8 @@ const App: React.FC = () => {
     if ((view === 'reports' || view === 'stats') && !canViewReports) return;
     if (view === 'fires' && !canViewFireMonitoring) return;
     if (view === 'layers' && !canViewDatasetLayers) return;
+    if (view === 'pdr' && !canViewPdr) return;
+    if (view !== 'pdr' && window.location.hash.startsWith('#/pdr')) window.history.replaceState(null, '', window.location.pathname + window.location.search);
 
     setIsDatasetLayerPanelOpen(false);
     setIsDatasetFilterPanelOpen(false);
@@ -183,6 +191,15 @@ const App: React.FC = () => {
     setDatasetFeatureSaveError(null);
     setState(prev => ({ ...prev, view }));
   };
+  useEffect(() => {
+    // PDR deep links (#/pdr/...) open the module from anywhere in the app.
+    const openPdrFromHash = () => {
+      if (parsePdrHash(window.location.hash)) setState(prev => prev.view === 'pdr' ? prev : { ...prev, view: 'pdr' });
+    };
+    window.addEventListener('hashchange', openPdrFromHash);
+    return () => window.removeEventListener('hashchange', openPdrFromHash);
+  }, []);
+
   const handleSetLang = (language: Language) => setState(prev => ({ ...prev, language }));
   const handleToggleTheme = () => setState(prev => ({ ...prev, isDarkMode: !prev.isDarkMode }));
 
@@ -701,6 +718,7 @@ const App: React.FC = () => {
         canCreateReports={canCreateReports}
         canViewLayers={canViewDatasetLayers}
         canViewFireMonitoring={canViewFireMonitoring}
+        canViewPdr={canViewPdr}
         onLogout={handleLogout}
       />}
       
@@ -758,7 +776,7 @@ const App: React.FC = () => {
                     <Database size={14} /> {t.systemCoreData}
                   </div>
                   <h1 className={`text-3xl font-bold tracking-tight ${state.isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                    {state.view === 'reports' ? t.recentReports : state.view === 'layers' ? t.layers : state.view === 'fires' ? 'Fire monitoring' : t.stats}
+                    {state.view === 'reports' ? t.recentReports : state.view === 'layers' ? t.layers : state.view === 'fires' ? 'Fire monitoring' : state.view === 'pdr' ? pdrText(state.language).module : t.stats}
                   </h1>
                 </div>
                 {state.view === 'fires' && <div id="fire-monitoring-header-actions" className="relative flex items-center" />}
@@ -767,6 +785,9 @@ const App: React.FC = () => {
               {state.view === 'reports' && <IncidentReportGrid incidents={state.incidents} dark={state.isDarkMode} fireLabel={t.fireAlert} floodLabel={t.floodAlert} />}
               {state.view === 'stats' && (
                 <Suspense fallback={<ScreenLoader label="Loading statistics" />}><StatisticsDashboard language={state.language} isDarkMode={state.isDarkMode} /></Suspense>
+              )}
+              {state.view === 'pdr' && canViewPdr && (
+                <Suspense fallback={<ScreenLoader label="Loading damage reports" />}><PdrModule language={state.language} isDarkMode={state.isDarkMode} canCreate={canCreatePdr} canReview={canReviewPdr} /></Suspense>
               )}
               {state.view === 'fires' && canViewFireMonitoring && (
                 <Suspense fallback={<ScreenLoader label="Loading fire operations" />}><FireMonitoringDashboard isDarkMode={state.isDarkMode} canManage={canManageFireMonitoring} canViewIntelligence={canViewFireIntelligence} canRunIntelligence={canRunFireIntelligence} canReviewIntelligence={canReviewFireIntelligence} /></Suspense>

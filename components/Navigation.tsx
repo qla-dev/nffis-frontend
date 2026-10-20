@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound, Flame, UploadCloud } from 'lucide-react';
+import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound, Flame, UploadCloud, FileSpreadsheet } from 'lucide-react';
+import { pdrText } from '../lib/pdr/i18n';
 import { Language, AppState } from '../types';
 import { TRANSLATIONS } from '../constants';
 import type { AuthUser } from '../lib/auth/session';
@@ -19,6 +20,7 @@ interface NavProps {
   canCreateReports: boolean;
   canViewLayers: boolean;
   canViewFireMonitoring?: boolean;
+  canViewPdr?: boolean;
   onLogout: () => void;
 }
 
@@ -34,6 +36,7 @@ export const Navigation: React.FC<NavProps> = ({
   canCreateReports,
   canViewLayers,
   canViewFireMonitoring = false,
+  canViewPdr = false,
   onLogout,
 }) => {
   const t = TRANSLATIONS[state.language];
@@ -49,6 +52,7 @@ export const Navigation: React.FC<NavProps> = ({
     return (
       <button
         onClick={() => onClick ? onClick() : onSetView(id)}
+        aria-label={typeof label === 'string' ? label : undefined}
         className={`group relative flex items-center w-full h-10 transition-all duration-150 ${
           isActive 
             ? 'bg-blue-600/10 text-blue-400' 
@@ -87,6 +91,7 @@ export const Navigation: React.FC<NavProps> = ({
         <div className="flex-1 py-4 flex flex-col gap-1">
           <NavItem icon={Map} label={t.map} id="map" />
           {canViewFireMonitoring && <NavItem icon={Flame} label="Fire monitoring" id="fires" color="text-orange-500" />}
+          {canViewPdr && <NavItem icon={FileSpreadsheet} label={pdrText(state.language).module} id="pdr" color="text-amber-500" />}
           {canViewReports && <NavItem icon={BarChart3} label={t.stats} id="stats" />}
           {canViewLayers && <NavItem icon={ListFilter} label={t.layers} id="layers" onClick={onOpenLayers} />}
           {canUploadAws(user) && <NavItem icon={UploadCloud} label="Upload AWS data" onClick={() => setShowAwsUpload(true)} />}
