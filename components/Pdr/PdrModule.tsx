@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Calculator, FileText, Map as MapIcon } from 'lucide-react';
+import { Calculator, FileText, Map as MapIcon, RefreshCw } from 'lucide-react';
 import { Language } from '../../types';
 import { pdrText } from '../../lib/pdr/i18n';
 import { AoiTool } from './AoiTool';
 import { CoefficientMatrix } from './CoefficientMatrix';
+import { DataSyncStatus } from './DataSyncStatus';
 import { PdrReportList } from './PdrReportList';
 import { PdrReportPage } from './PdrReportPage';
 import { navigatePdr, parsePdrHash, type PdrRoute } from './pdrRoute';
@@ -46,11 +47,13 @@ export default function PdrModule({ language, isDarkMode, canCreate, canReview }
         {tab('list', t.reports, FileText, '/pdr')}
         {tab('coefficients', t.coefficients, Calculator, '/pdr/coefficients')}
         {tab('aoi', t.aoi, MapIcon, '/pdr/aoi')}
+        {tab('sync', t.sync, RefreshCw, '/pdr/sync')}
       </nav>
       {route.page === 'list' && <PdrReportList language={language} isDarkMode={isDarkMode} canCreate={canCreate} />}
       {route.page === 'report' && <PdrReportPage key={`${route.id}`} reportId={route.id} step={route.step} language={language} isDarkMode={isDarkMode} />}
       {route.page === 'coefficients' && <CoefficientMatrix language={language} isDarkMode={isDarkMode} canEdit={canReview} />}
       {route.page === 'aoi' && <AoiTool language={language} isDarkMode={isDarkMode} />}
+      {route.page === 'sync' && <DataSyncStatus language={language} isDarkMode={isDarkMode} />}
     </div>
   );
 }
