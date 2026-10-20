@@ -51,6 +51,7 @@ export function PdrReportList({ language, isDarkMode, canCreate }: { language: L
           <option value="">{t.allEntities}</option>
           <option value="fbih">{t.jurisdiction.fbih}</option>
           <option value="rs">{t.jurisdiction.rs}</option>
+          <option value="bd">{t.jurisdiction.bd}</option>
           <option value="shared">{t.jurisdiction.shared}</option>
         </select>
         {canCreate && <button type="button" onClick={() => navigatePdr('/pdr/new')} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white"><Plus size={15} />{t.newReport}</button>}

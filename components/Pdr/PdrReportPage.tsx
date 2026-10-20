@@ -184,6 +184,7 @@ function IncidentStep({ t, panel, busy, error, onSave, initialTitle = '', initia
           <option value="">{t.jurisdiction.shared}</option>
           <option value="fbih">{t.jurisdiction.fbih}</option>
           <option value="rs">{t.jurisdiction.rs}</option>
+          <option value="bd">{t.jurisdiction.bd}</option>
         </select>
       </Field>
       <button type="submit" disabled={busy || !title.trim()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-60">{initialTitle ? t.next : t.createDraft}</button>

@@ -1,7 +1,7 @@
 import { API_BASE_URL, apiRequest } from './api';
 
 export type PdrStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
-export type PdrJurisdiction = 'fbih' | 'rs' | 'shared';
+export type PdrJurisdiction = 'fbih' | 'rs' | 'bd' | 'shared';
 export type Bilingual = { en: string; bs: string };
 
 export interface MultiPolygon {
