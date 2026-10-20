@@ -4,6 +4,7 @@ import { Sun, Moon, Wind, Thermometer, Trees, Settings2, Info, Satellite, X, Map
 import { MapLayer, Language, RegionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { FOREST_RASTER_LAYERS, FOREST_WMS_URL } from '../../lib/gis/forestRasterLayers';
+import { SUPPLEMENTARY_INDICES } from '../../lib/fwi/supplementaryIndices';
 
 const FirefighterIcon = ({ size = 24, className = '', color = 'currentColor' }: { size?: number | string; className?: string; color?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 512 512" fill={color} className={className}>
@@ -384,6 +385,9 @@ export const MapControls: React.FC<MapControlsProps> = ({
                 { id: null, label: 'Off', icon: X, color: 'text-slate-400' },
                 { id: MapLayer.FWI_BOSNIAN, label: 'NFFIS FWI (EFFIS scale)', icon: Flame, color: 'text-purple-500' },
                 { id: MapLayer.FIRE_INTELLIGENCE_FWI, label: 'BiH FWI COG (EFFIS scale)', icon: Flame, color: 'text-orange-500' },
+                { id: MapLayer.FWI_ANGSTROM, label: SUPPLEMENTARY_INDICES.ANGSTROM.label[language === Language.BS ? 'bs' : 'en'], icon: Flame, color: 'text-red-400' },
+                { id: MapLayer.FWI_GFI, label: SUPPLEMENTARY_INDICES.GFDI.label[language === Language.BS ? 'bs' : 'en'], icon: Flame, color: 'text-amber-400' },
+                { id: MapLayer.FWI_KBDI, label: SUPPLEMENTARY_INDICES.KBDI.label[language === Language.BS ? 'bs' : 'en'], icon: Flame, color: 'text-yellow-600' },
               ].map((layer) => (
                 <button
                   key={layer.id ?? 'fwi-off'}

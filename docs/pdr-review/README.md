@@ -187,6 +187,38 @@ NFFIS_BASE_URL=https://api.nffis.com:81 NFFIS_ORIGIN=https://nffis.com NFFIS_LOG
   - `gdal_rasterize` recept za CLC 100 m;
   - šablon napomene za odobravanje koeficijenata.
 
+### B13 — Angström, GFDI i KBDI kao dnevni serverski proizvodi · F7 — zasebni slojevi s timeline-om (FC_PDR06, FC_PDR11)
+- Fire Intelligence worker (`scripts/fire-intelligence-worker.py`) uz FWI sada računa još tri dnevna indeksa za cijelu BiH (mreža 0,1°). Svaki se čuva kao zaseban zapis u `fire_weather_products` (`index_type` = `ANGSTROM`, `GFDI`, `KBDI`), s COG i GeoJSON artefaktom, i ima historiju kao FWI.
+- **Nema novog povlačenja s Open-Meteo.** Indeksi koriste iste satne podatke (temperatura, vlažnost, padavine, vjetar) koje FWI već preuzima, u prognozi i u historijskom backfillu. Test to provjerava (jedan zahtjev po batchu).
+- Standardne formule umjesto heuristika iz `GISMap.tsx`:
+  - **Angström** (Chandler i sar. 1983): `I = H/20 + (27 − T)/10`, s T i RH u 13:00. Klase: < 2,0 vrlo vjerovatan požar, 2,0–2,5 povoljno, 2,5–4,0 nepovoljno, > 4,0 malo vjerovatno. Niža vrijednost znači veću opasnost.
+  - **GFDI** (McArthur Mark 3, Noble, Bary i Gill 1980): `F = 2,0·exp(−23,6 + 5,01·ln C + 0,0281·T − 0,226·√H + 0,633·√V)`, s T, RH i vjetrom u podne. Stepen sušenja trave `C` je konfigurisana mjesečna pretpostavka (nema mjerenja). Klase: 5 / 12 / 25 / 50.
+  - **KBDI** (Keetch i Byram 1968, metrički oblik, 0–203,2 mm): dnevni korak iz maksimalne dnevne temperature, 24-satnih padavina i prosječne godišnje količine padavina (1250 mm, konfigurabilno). Prvih 5,08 mm kišnog niza se ne računa. KBDI je **stateful** kao FFMC/DMC/DC: stanje po tački ide u `state_grid` i sljedeća prognoza nastavlja od njega. Klase: 50 / 100 / 150 mm.
+- Pretpostavke (stepen sušenja trave, godišnje padavine, inicijalni KBDI) su u `config/fire_intelligence.php` → `weather.supplementary_indices`. Svaki GFDI/KBDI proizvod nosi upozorenje o tome.
+- API (modul `fire-intelligence`, pravo `view`):
+  - `GET /api/fire-intelligence/availability/{FWI|ANGSTROM|GFDI|KBDI}?days=&date=`: jedan odobreni proizvod po datumu (historijska reanaliza ima prednost nad prognozom). `fwi-availability` ostaje kao alias.
+  - `GET /api/fire-intelligence/availability?days=365`: koji indeksi postoje za koji datum.
+- Frontend: meni **FWI** ima tri nova sloja (Angströmov indeks, Indeks požara trave (GFDI), Keetch–Byram indeks suše). U jednom trenutku je uključen jedan sloj opasnosti, a svi dijele isti timeline datuma. Legenda prikazuje skalu i klase tog indeksa i srednju vrijednost za izabrani datum. Novi slojevi ne pokreću klijentsko povlačenje s Open-Meteo kao stari heuristički.
+- **Lokalni demo podaci (sintetički):** na ovoj mašini nema GDAL-a, a nisam htio trošiti Open-Meteo kvotu. Zato `scripts/dev/fire-indices-demo-worker.py` pušta pravi worker i pravi job nad **sintetičkim** vremenom (bez mrežnih poziva) i piše COG preko rasterio. Brojevi na screenshotovima zato **nisu stvarno vrijeme**, samo pokazuju da lanac radi.
+- **Test:**
+  1. Generiši 30 dana demo podataka (Python s `numpy`, `requests` i `rasterio`, ili GDAL):
+     ```bash
+     cd nffis-backend
+     APP_ENV=pdrdev FI_DEMO_PYTHON=/putanja/do/python php artisan tinker --execute="require base_path('scripts/dev/seed-fire-indices-demo.php');"
+     ```
+     Očekivano: `{"status":"approved"}` i po 30 proizvoda za FWI, ANGSTROM, GFDI i KBDI.
+  2. Uloguj se kao `pdr.admin`, na mapi klikni **FWI** u gornjoj traci → **Keetch–Byram indeks suše**. Raster pokriva BiH, legenda pokazuje 0–203,2 mm i vrijednost za zadnji datum.
+  3. U timeline-u izaberi 7. 10. 2026. (dan nakon sintetičke kiše): KBDI pada (≈ 8,5 mm naspram ≈ 35 mm 19. 10.) i karta postaje zelenija. **Play** animira sve datume.
+  4. Prebaci na **Angströmov indeks** i **Indeks požara trave (GFDI)**: svaki ima svoju skalu, a timeline ostaje isti.
+  5. `GET /api/fire-intelligence/availability/kbdi` vraća 30 datuma s `method_version` „Keetch-Byram drought index, metric…“.
+
+![KBDI raster](screenshots/26-kbdi-server-raster.png)
+![Angström raster](screenshots/27-angstrom-server-raster.png)
+![GFDI raster](screenshots/28-gfdi-server-raster.png)
+![KBDI timeline 7. 10.](screenshots/29-kbdi-timeline-7-oct.png)
+
+- **Produkcija:** novi indeksi nastaju automatski uz svaku šestosatnu prognozu. Datumi koji su već arhivirani imaju samo FWI. Popunjavanje historije za ostale indekse (`fire-intelligence:backfill-fwi`) ponovo povlači historijske podatke s Open-Meteo, pa to treba isplanirati prema kvoti. Nisam ga pokretao.
+
 ### Sigurnosna ispravka
 - SHP/KMZ upload provjerava veličinu svake datoteke u arhivi prije raspakivanja (maks. 50 MB), kao zaštitu od zip-bomb napada. Ima i test.
 
@@ -198,7 +230,8 @@ NFFIS_BASE_URL=https://api.nffis.com:81 NFFIS_ORIGIN=https://nffis.com NFFIS_LOG
 |---|---|
 | Backend: PDR + MODIS + korisnici (`php artisan test --filter='Pdr\|Modis\|UserManagement'`) | **29/29 prolazi**, uključujući 4 PostGIS testa sa poligonom poznate površine |
 | Backend: cijeli suite | 13 padova koji su postojali **i prije mojih izmjena** (nema `../gis/forest/bih-boundary.geojson`, `host.docker.internal:5432` nedostupan) |
-| Frontend (`npx vitest run`) | **147/147 prolazi** |
+| Backend: indeksi B13 (`php artisan test --filter='FireSupplementaryIndices\|FireIndexAvailability'`) | **9/9 prolazi**: formule prema objavljenim jednačinama, KBDI kiša/granice, worker bez dodatnih zahtjeva, API |
+| Frontend (`npx vitest run`) | **155/155 prolazi** (uključujući `tests/supplementary-indices.test.tsx`) |
 | `vite build` | prolazi; PDR je zaseban lazy chunk od 47 kB |
 
 ## Commitovi (lokalno, nisu pushani)
@@ -229,8 +262,8 @@ Grana `feature/pdr-module`:
 - Demo podaci pokrivaju samo područje Sarajeva. Za cijelu BiH pokreni `pdr:import-layers` bez `--bbox` (CLC brzo, OSM objekti ~1–2 h).
 - Stanovništvo je procjena iz broja objekata. Bolje bi bilo koristiti GHS-POP raster ili popisne krugove.
 - Nije urađeno:
-  - **B13/B14**: server-side Angström/GFI/KBDI rasteri i FWI iz AWS interpolacije. Treba novo masovno preuzimanje meteo podataka s upravljanjem API kvotom, pa nisam htio pokretati bez tebe.
-    Napomena: postojeće KBDI/GFI formule u `GISMap.tsx` su gruba heuristika, a ne standardni Keetch–Byram ili McArthur.
+  - **B14**: FWI iz IDW interpolacije AWS osmatranja. B13 je urađen (vidi gore).
+    Napomena: popup šume u `GISMap.tsx` (`computeFireIndexMetrics`) i dalje prikazuje stare heurističke KBDI/GFI vrijednosti. Slojevi na karti ih više ne koriste.
   - **B15**: registar slojeva kao vremenska serija.
-  - **F7/F8**: rasteri indeksa iz servera i timeline za hotspote i VDM.
+  - **F8**: timeline za hotspote i VDM. F7 je urađen u sklopu B13.
   - **B21/F13** je u praksi pokriven PDR metapodacima (stradali, opasne materije, intervencija, tražena pomoć). Postojeći obrazac incidenta nije proširivan.

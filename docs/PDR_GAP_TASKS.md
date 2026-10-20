@@ -34,7 +34,7 @@ Source: *NFFIS PDR Client Requirement Document v1.1* (April 2026), compared with
 | B10 | ✅ **AOI statistics endpoint**: same analysis for an ad-hoc polygon without creating a report | FC_PDR12, PDR7 |
 | B11 | ✅ **ERCC bilingual PDF + JSON export**: mandatory UCPM fields, CLC table, infrastructure, population, protected areas, damage, data sources, affected-area map image, BS + EN | FC_PDR02, C1, PDR3 |
 | B12 | ✅ **MODIS MOD14/MYD14 hotspots**: add FIRMS MODIS_NRT source (Terra/Aqua flagged) to FireWatch polling | PDR07 |
-| B13 | **Server-side Angström, GFI, KBDI rasters**: compute from AWS on schedule, store as historized COG products like FWI | FC_PDR06, PDR6, PDR06 |
+| B13 | ✅ **Server-side Angström, GFI, KBDI rasters**: compute from AWS on schedule, store as historized COG products like FWI | FC_PDR06, PDR6, PDR06 |
 | B14 | **FWI from AWS observations**: interpolate station observations (IDW) into FWI grid (currently Open-Meteo model grid) | PDR09 |
 | B15 | **Layer registry / time series**: register every generated product (FWI, VDM, hotspots, indices) as a time-series layer with an availability API | PDR10, PDR5 |
 | B16 | ✅ **Sync log**: persist each cron/sync run (source, status, records, errors) and expose admin API | PDR4, PDR05 |
@@ -55,7 +55,7 @@ Source: *NFFIS PDR Client Requirement Document v1.1* (April 2026), compared with
 | F4 | ✅ **Coefficient matrix admin UI** | PDR2 |
 | F5 | ✅ **PDR report list** filterable by entity (FBiH/RS/BD) and status; PDF/JSON download; Role 5 read-only | FC_PDR02/08 |
 | F6 | ✅ **AOI tool**: draw polygon on map → statistics panel | FC_PDR12 |
-| F7 | **Fire-risk layers from server rasters**: Angström/GFI/KBDI/FWI separate toggles + timeline | FC_PDR06, FC_PDR11 |
+| F7 | ✅ **Fire-risk layers from server rasters**: Angström/GFI/KBDI/FWI separate toggles + timeline | FC_PDR06, FC_PDR11 |
 | F8 | **Historical timeline for hotspots and VDM** (not only FWI) | FC_PDR11 |
 | F9 | ✅ **Real-time monitoring dashboard**: incidents status, recent detections, PDR summaries | FC_PDR09 |
 | F10 | **Full BS/EN translation** of fire monitoring, reports, admin, PDR screens | FC_PDR14 |

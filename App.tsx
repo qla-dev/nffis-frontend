@@ -66,9 +66,13 @@ const BASE_LAYER_IDS = [
   MapLayer.WINDY
 ];
 
+// One fire-danger raster at a time; they share the date timeline.
 const FWI_LAYER_IDS = [
   MapLayer.FWI_BOSNIAN,
   MapLayer.FIRE_INTELLIGENCE_FWI,
+  MapLayer.FWI_ANGSTROM,
+  MapLayer.FWI_GFI,
+  MapLayer.FWI_KBDI,
 ];
 
 const FWI_DEBUG_PREFIX = '[FWI DEBUG]';

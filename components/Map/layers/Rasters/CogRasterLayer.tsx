@@ -4,6 +4,7 @@ import * as plotty from 'plotty';
 import { EFFIS_FWI_COLOR_STOPS, EFFIS_FWI_DISPLAY_MAX } from '../../../../lib/fwi/effisFwiScale';
 import { ESA_WORLDCOVER_CLASSES } from '../../../../lib/gis/worldCoverLegend';
 import { VEGETATION_RASTER_SCALES } from '../../../../lib/gis/vegetationRasterScales';
+import { indexColorStops, SUPPLEMENTARY_INDICES, SUPPLEMENTARY_INDEX_TYPES, type SupplementaryIndexType } from '../../../../lib/fwi/supplementaryIndices';
 import { createLeafletRasterOverlay } from '../../../../lib/gis/leafletRasterOverlay';
 import { API_BASE_URL } from '../../../../services/api';
 
@@ -28,6 +29,11 @@ registerScale(TERRAIN_SCALE, ['#0f172a', '#166534', '#a3a36b', '#e2e8f0', '#ffff
 registerScale(NDVI_SCALE, [...VEGETATION_RASTER_SCALES.ndvi.colors], [0, .25, .5, .75, 1]);
 registerScale(NDII_SCALE, [...VEGETATION_RASTER_SCALES.ndii.colors], [0, .25, .5, .75, 1]);
 registerScale(DRYNESS_SCALE, [...VEGETATION_RASTER_SCALES.dryness.colors], [0, .25, .5, .75, 1]);
+const indexScaleName = (type: SupplementaryIndexType) => `nffis-${type.toLowerCase()}`;
+for (const type of SUPPLEMENTARY_INDEX_TYPES) {
+  const stops = indexColorStops(type);
+  registerScale(indexScaleName(type), stops.map(stop => stop.color), stops.map(stop => stop.position));
+}
 
 function resolveRasterUrl(url: string) {
   return url.startsWith('/api/') ? `${API_BASE_URL}${url.slice('/api'.length)}` : url;
@@ -76,7 +82,7 @@ export function preloadCogRaster(url: string) {
 }
 
 export interface CogRasterStyle {
-  scale: 'fwi' | 'worldcover' | 'terrain' | 'ndvi' | 'ndii' | 'dryness';
+  scale: 'fwi' | 'worldcover' | 'terrain' | 'ndvi' | 'ndii' | 'dryness' | 'angstrom' | 'gfdi' | 'kbdi';
   min: number;
   max: number;
   smooth?: boolean;
@@ -108,6 +114,7 @@ export function CogRasterLayer({ url, pane, style, opacity = .78, boundaryMask, 
         const colorScale = {
           fwi: EFFIS_SCALE, worldcover: WORLD_COVER_SCALE, terrain: TERRAIN_SCALE,
           ndvi: NDVI_SCALE, ndii: NDII_SCALE, dryness: DRYNESS_SCALE,
+          angstrom: indexScaleName('ANGSTROM'), gfdi: indexScaleName('GFDI'), kbdi: indexScaleName('KBDI'),
         }[style.scale];
         const rendered = await createLeafletRasterOverlay(buffer, {
           colorScale, displayMin: style.min, displayMax: style.max, pane, opacity,
@@ -140,3 +147,8 @@ export function CogRasterLayer({ url, pane, style, opacity = .78, boundaryMask, 
 }
 
 export const FWI_COG_STYLE: CogRasterStyle = { scale: 'fwi', min: 0, max: EFFIS_FWI_DISPLAY_MAX, smooth: true };
+
+export function supplementaryIndexCogStyle(type: SupplementaryIndexType): CogRasterStyle {
+  const { displayMin, displayMax } = SUPPLEMENTARY_INDICES[type];
+  return { scale: type.toLowerCase() as CogRasterStyle['scale'], min: displayMin, max: displayMax, smooth: true };
+}

@@ -29,12 +29,13 @@ import { DatasetEditorDataLoader } from './layers/Datasets/DatasetEditorDataLoad
 import { LiveWindVectorLayer } from './layers/Wind/LiveWindVectorLayer';
 import { FireMonitoringLayer } from '../Layers/Incidents/FireMonitoringLayer';
 import { PyretechnicsScenarioLayer } from '../Layers/Incidents/PyretechnicsScenarioLayer';
-import { fetchFwiAvailability, type FireEventProperties, type FireWeatherProduct } from '../../services/fireMonitoringService';
+import { fetchDailyIndexAvailability, type FireEventProperties, type FireWeatherProduct } from '../../services/fireMonitoringService';
+import { indexCssGradient, indexTicks, SUPPLEMENTARY_INDICES, timelineIndexType } from '../../lib/fwi/supplementaryIndices';
 import { fetchDatasetLayerFeatures, type DatasetLayer, type DatasetLayerFilterState } from '../../services/datasetService';
 import type { GeoEditorMode, Position } from '../../lib/gis/geoEditor';
 import type { MapPerformanceMetrics } from '../../lib/gis/mapRendererPoc';
 import { BH_FWI_CSS_GRADIENT, BH_FWI_RASTER_BOUNDS } from '../../lib/fwi/bhFwiColorScale';
-import { FwiScaleLabels, FWI_SCALE_LABELS } from './FwiScaleLabels';
+import { FwiScaleLabels, FWI_LEGEND_SCALE, IndexScaleLabels } from './FwiScaleLabels';
 import { classifyEffisFwi, EFFIS_FWI_DISPLAY_MAX, EFFIS_FWI_TICKS } from '../../lib/fwi/effisFwiScale';
 import { calculateCanadianFwi } from '../../lib/fwi/canadianFwi';
 import { FOREST_RASTER_LAYERS } from '../../lib/gis/forestRasterLayers';
@@ -63,15 +64,6 @@ const METEOBLUE_OVERLAY_PANE = 'meteoblue-overlay-pane';
 const DATASET_LAYER_PANE = 'dataset-layer-pane';
 const FOREST_RASTER_PANE = 'forest-raster-pane';
 const WORLD_COUNTRIES_SERVICE_URL = 'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Countries/FeatureServer/0/query';
-const toRasterBounds = (bounds: L.LatLngBounds) => {
-  const paddedBounds = bounds.pad(0.12);
-  return {
-    west: paddedBounds.getWest(),
-    east: paddedBounds.getEast(),
-    south: paddedBounds.getSouth(),
-    north: paddedBounds.getNorth(),
-  };
-};
 
 const CountryBorderReference: React.FC<{ visible: boolean }> = ({ visible }) => {
   const map = useMap();
@@ -582,12 +574,6 @@ export const GISMap: React.FC<GISMapProps> = ({
   const [fwiArchiveError, setFwiArchiveError] = useState<string | null>(null);
   const [isMeteoblueUnavailable, setIsMeteoblueUnavailable] = useState(false);
   const [isPickingLocation, setIsPickingLocation] = useState(false);
-  const [heatViewportBounds, setHeatViewportBounds] = useState<{
-    west: number;
-    east: number;
-    south: number;
-    north: number;
-  } | null>(null);
   // -- METEOBLUE DYNAMIC STATE --
   const [meteoblueUrl, setMeteoblueUrl] = useState<string>('');
 
@@ -639,9 +625,16 @@ export const GISMap: React.FC<GISMapProps> = ({
     () => activeLayers.has(MapLayer.FWI_BOSNIAN) || activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI),
     [activeLayers]
   );
+  // FWI, Angström, GFDI and KBDI share one date timeline; the active layer's
+  // daily availability decides which dates it offers.
+  const dailyIndexType = useMemo(() => timelineIndexType(activeLayers), [activeLayers]);
+  const dailyIndexName = dailyIndexType && dailyIndexType !== 'FWI'
+    ? SUPPLEMENTARY_INDICES[dailyIndexType].label[language === Language.BS ? 'bs' : 'en']
+    : 'FWI';
   useEffect(() => {
-    if (!isAnyFwiLayerActive) {
+    if (!dailyIndexType) {
       setIsFwiTimelapsePlaying(false);
+      setAllFwiArchive([]);
       return;
     }
     const controller = new AbortController();
@@ -659,7 +652,7 @@ export const GISMap: React.FC<GISMapProps> = ({
     };
     const loadArchive = (showLoading: boolean) => {
       if (showLoading) setIsLoadingFwiArchive(true);
-      fetchFwiAvailability(controller.signal)
+      fetchDailyIndexAvailability(dailyIndexType, controller.signal)
         .then(({ data }) => {
           const range = archiveFwiDateRange(data);
           setAllFwiArchive(data);
@@ -670,7 +663,7 @@ export const GISMap: React.FC<GISMapProps> = ({
         })
         .catch((error) => {
           if (error instanceof DOMException && error.name === 'AbortError') return;
-          setFwiArchiveError(language === Language.BS ? 'Povezivanje s historijskim FWI podacima, ponovni pokušaj…' : 'Connecting to historical FWI data, retrying…');
+          setFwiArchiveError(language === Language.BS ? `Povezivanje s historijskim podacima (${dailyIndexName}), ponovni pokušaj…` : `Connecting to historical ${dailyIndexName} data, retrying…`);
           scheduleRetry();
         })
         .finally(() => { if (!controller.signal.aborted) setIsLoadingFwiArchive(false); });
@@ -680,7 +673,7 @@ export const GISMap: React.FC<GISMapProps> = ({
       controller.abort();
       if (retryTimeoutId !== null) window.clearTimeout(retryTimeoutId);
     };
-  }, [isAnyFwiLayerActive, language]);
+  }, [dailyIndexType, dailyIndexName, language]);
   const changeFwiRange = (range: FwiDateRange) => {
     setIsFwiTimelapsePlaying(false);
     setFwiRange(range);
@@ -691,12 +684,12 @@ export const GISMap: React.FC<GISMapProps> = ({
     ? fwiArchive[(selectedFwiArchiveIndex + 1) % fwiArchive.length]
     : null;
   useEffect(() => {
-    if (!isFwiTimelapsePlaying || fwiArchive.length < 2 || !isAnyFwiLayerActive) return;
+    if (!isFwiTimelapsePlaying || fwiArchive.length < 2 || !dailyIndexType) return;
     const interval = window.setInterval(() => {
       setSelectedFwiArchiveIndex((index) => (index + 1) % fwiArchive.length);
     }, 1400);
     return () => window.clearInterval(interval);
-  }, [fwiArchive.length, isAnyFwiLayerActive, isFwiTimelapsePlaying]);
+  }, [fwiArchive.length, dailyIndexType, isFwiTimelapsePlaying]);
   const activeFwiValue = useMemo(() => {
     if (!selectedForest || !forestWeather) return null;
     const hIdx = getCurrentHourIndex(forestWeather);
@@ -712,7 +705,8 @@ export const GISMap: React.FC<GISMapProps> = ({
         max: EFFIS_FWI_DISPLAY_MAX,
         gradient: BH_FWI_CSS_GRADIENT,
         iconGradient: BH_FWI_CSS_GRADIENT,
-        currentValue: selectedFwiProduct?.statistics?.mean ?? activeFwiValue
+        currentValue: selectedFwiProduct?.statistics?.mean ?? activeFwiValue,
+        ...FWI_LEGEND_SCALE,
       };
     }
     if (activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI)) {
@@ -723,10 +717,25 @@ export const GISMap: React.FC<GISMapProps> = ({
         gradient: BH_FWI_CSS_GRADIENT,
         iconGradient: BH_FWI_CSS_GRADIENT,
         currentValue: selectedFwiProduct?.statistics?.mean ?? null,
+        ...FWI_LEGEND_SCALE,
+      };
+    }
+    if (dailyIndexType && dailyIndexType !== 'FWI') {
+      const index = SUPPLEMENTARY_INDICES[dailyIndexType];
+      const gradient = indexCssGradient(dailyIndexType);
+      return {
+        title: `${index.label[language === Language.BS ? 'bs' : 'en']} · ${index.method}`,
+        min: index.displayMin,
+        max: index.displayMax,
+        gradient,
+        iconGradient: gradient,
+        currentValue: selectedFwiProduct?.statistics?.mean ?? null,
+        valueLabel: dailyIndexType === 'ANGSTROM' ? 'Angström' : dailyIndexType,
+        ticks: indexTicks(dailyIndexType),
       };
     }
     return null;
-  }, [activeLayers, t, activeFwiValue, selectedFwiProduct]);
+  }, [activeLayers, t, activeFwiValue, selectedFwiProduct, dailyIndexType, language]);
   const fwiSourceForests = useMemo(
     () => MOCK_FORESTS.filter((forest) => forest.type !== RegionType.LANDFILL),
     []
@@ -819,27 +828,6 @@ export const GISMap: React.FC<GISMapProps> = ({
     ensurePane(FOREST_RASTER_PANE, 350);
     ensurePane(FWI_OVERLAY_PANE, 360);
     ensurePane(METEOBLUE_OVERLAY_PANE, 380);
-  }, [map]);
-
-  useEffect(() => {
-    if (!map) {
-      return;
-    }
-
-    const syncHeatViewportBounds = () => {
-      setHeatViewportBounds(toRasterBounds(map.getBounds()));
-    };
-
-    syncHeatViewportBounds();
-    map.on('moveend', syncHeatViewportBounds);
-    map.on('zoomend', syncHeatViewportBounds);
-    map.on('resize', syncHeatViewportBounds);
-
-    return () => {
-      map.off('moveend', syncHeatViewportBounds);
-      map.off('zoomend', syncHeatViewportBounds);
-      map.off('resize', syncHeatViewportBounds);
-    };
   }, [map]);
 
   // Fetch Weather from Open-Meteo with Advanced Params
@@ -1386,24 +1374,24 @@ export const GISMap: React.FC<GISMapProps> = ({
           blur={28}
           visible={activeLayers.has(MapLayer.FLOOD_RISK)}
         />
-        <AngstromHeatLayer
-          points={forestFwiData}
-          rasterBounds={heatViewportBounds ?? undefined}
+        {canViewFwi && <AngstromHeatLayer
           pane={FWI_OVERLAY_PANE}
-          visible={activeLayers.has(MapLayer.FWI_ANGSTROM)}
-        />
-        <GFIHeatLayer
-          points={forestFwiData}
-          rasterBounds={heatViewportBounds ?? undefined}
+          visible={dailyIndexType === 'ANGSTROM'}
+          productId={dailyIndexType === 'ANGSTROM' ? selectedFwiProduct?.id : null}
+          prefetchProductId={nextFwiProduct?.id}
+        />}
+        {canViewFwi && <GFIHeatLayer
           pane={FWI_OVERLAY_PANE}
-          visible={activeLayers.has(MapLayer.FWI_GFI)}
-        />
-        <KBDIHeatLayer
-          points={forestFwiData}
-          rasterBounds={heatViewportBounds ?? undefined}
+          visible={dailyIndexType === 'GFDI'}
+          productId={dailyIndexType === 'GFDI' ? selectedFwiProduct?.id : null}
+          prefetchProductId={nextFwiProduct?.id}
+        />}
+        {canViewFwi && <KBDIHeatLayer
           pane={FWI_OVERLAY_PANE}
-          visible={activeLayers.has(MapLayer.FWI_KBDI)}
-        />
+          visible={dailyIndexType === 'KBDI'}
+          productId={dailyIndexType === 'KBDI' ? selectedFwiProduct?.id : null}
+          prefetchProductId={nextFwiProduct?.id}
+        />}
         {canViewFwi && <BosnianFWIHeatLayer
           points={forestFwiData}
           rasterBounds={BH_FWI_RASTER_BOUNDS}
@@ -2158,26 +2146,26 @@ export const GISMap: React.FC<GISMapProps> = ({
               <span className="text-[12px] font-black text-white tracking-wide">{activeFwiLayerInfo.title}</span>
             </div>
             {activeFwiLayerInfo.currentValue !== null && Number.isFinite(activeFwiLayerInfo.currentValue) &&
-              <span className="shrink-0 text-sm font-black text-orange-300" aria-live="polite">FWI {activeFwiLayerInfo.currentValue.toFixed(1)}</span>}
+              <span className="shrink-0 text-sm font-black text-orange-300" aria-live="polite">{activeFwiLayerInfo.valueLabel} {activeFwiLayerInfo.currentValue.toFixed(1)}</span>}
           </div>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-[180px] flex-1">
               <div className="relative mt-4 mb-2">
                 {activeFwiLayerInfo.currentValue !== null && Number.isFinite(activeFwiLayerInfo.currentValue) && (
                   <div className="absolute -top-3.5 z-20 -translate-x-1/2 transition-[left] duration-300"
-                    style={{ left: `${Math.max(0, Math.min(100, activeFwiLayerInfo.currentValue / EFFIS_FWI_DISPLAY_MAX * 100))}%` }}
-                    title={`FWI ${activeFwiLayerInfo.currentValue.toFixed(1)}`} role="img" aria-label={`FWI ${activeFwiLayerInfo.currentValue.toFixed(1)}`}>
+                    style={{ left: `${Math.max(0, Math.min(100, (activeFwiLayerInfo.currentValue - activeFwiLayerInfo.min) / (activeFwiLayerInfo.max - activeFwiLayerInfo.min) * 100))}%` }}
+                    title={`${activeFwiLayerInfo.valueLabel} ${activeFwiLayerInfo.currentValue.toFixed(1)}`} role="img" aria-label={`${activeFwiLayerInfo.valueLabel} ${activeFwiLayerInfo.currentValue.toFixed(1)}`}>
                     <div className="h-0 w-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-white drop-shadow-[0_0_5px_rgba(0,0,0,0.8)]" />
                   </div>
                 )}
                 <div className="relative h-4 w-full overflow-hidden rounded-full border border-white/10 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]" style={{ background: activeFwiLayerInfo.gradient }}>
                   <div className="absolute inset-0 flex justify-between px-[1px]">
-                    {FWI_SCALE_LABELS.map(value => <div key={value} className="absolute h-full w-px bg-slate-950/30"
-                      style={{ left: `${value / EFFIS_FWI_DISPLAY_MAX * 100}%` }} />)}
+                    {activeFwiLayerInfo.ticks.map(tick => <div key={tick.value} className="absolute h-full w-px bg-slate-950/30"
+                      style={{ left: `${tick.position * 100}%` }} />)}
                   </div>
                 </div>
               </div>
-              <FwiScaleLabels />
+              {activeFwiLayerInfo.valueLabel === 'FWI' ? <FwiScaleLabels /> : <IndexScaleLabels ticks={activeFwiLayerInfo.ticks} label={activeFwiLayerInfo.title} />}
             </div>
             {fwiArchive.length > 0 && <div className="flex shrink-0 items-center gap-1.5">
               <button type="button"
@@ -2196,7 +2184,7 @@ export const GISMap: React.FC<GISMapProps> = ({
           <div className="mt-3 border-t border-slate-800 pt-3">
             <div className="mb-2 flex items-center gap-3">
               <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">
-                {language === Language.BS ? 'Historijski FWI' : 'Historical FWI'}
+                {language === Language.BS ? `Historijski ${dailyIndexName}` : `Historical ${dailyIndexName}`}
               </span>
             </div>
             <FwiDateRangePicker range={fwiRange} onChange={changeFwiRange} language={language}
@@ -2209,7 +2197,7 @@ export const GISMap: React.FC<GISMapProps> = ({
             </> : <div className="text-[10px] text-slate-500">
               {isLoadingFwiArchive
                 ? (language === Language.BS ? 'Učitavanje datuma…' : 'Loading dates…')
-                : (fwiArchiveError ?? (language === Language.BS ? 'Još nema sačuvanog historijskog FWI.' : 'No historical FWI has been saved yet.'))}
+                : (fwiArchiveError ?? (language === Language.BS ? `Još nema sačuvanih dnevnih proizvoda (${dailyIndexName}).` : `No daily ${dailyIndexName} products have been saved yet.`))}
             </div>}
           </div>
           {isFireSpreadActive && (
