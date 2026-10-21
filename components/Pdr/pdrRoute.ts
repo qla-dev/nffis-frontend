@@ -3,7 +3,8 @@ export type PdrRoute =
   | { page: 'report'; id: number | 'new'; step?: number }
   | { page: 'coefficients' }
   | { page: 'aoi' }
-  | { page: 'sync' };
+  | { page: 'sync' }
+  | { page: 'history' };
 
 /** Deep links: #/pdr, #/pdr/new, #/pdr/12, #/pdr/12/step/3, #/pdr/coefficients, #/pdr/aoi */
 export function parsePdrHash(hash: string): PdrRoute | null {
@@ -14,6 +15,7 @@ export function parsePdrHash(hash: string): PdrRoute | null {
   if (parts[0] === 'coefficients') return { page: 'coefficients' };
   if (parts[0] === 'aoi') return { page: 'aoi' };
   if (parts[0] === 'sync') return { page: 'sync' };
+  if (parts[0] === 'history') return { page: 'history' };
   if (parts[0] === 'new') return { page: 'report', id: 'new' };
   const id = Number(parts[0]);
   if (!Number.isInteger(id) || id <= 0) return { page: 'list' };

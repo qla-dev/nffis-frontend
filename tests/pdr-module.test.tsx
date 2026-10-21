@@ -41,6 +41,7 @@ describe('PDR deep links', () => {
     expect(parsePdrHash('#/pdr/coefficients')).toEqual({ page: 'coefficients' });
     expect(parsePdrHash('#/pdr/aoi')).toEqual({ page: 'aoi' });
     expect(parsePdrHash('#/pdr/sync')).toEqual({ page: 'sync' });
+    expect(parsePdrHash('#/pdr/history')).toEqual({ page: 'history' });
     expect(parsePdrHash('#/map')).toBeNull();
   });
 });
