@@ -33,6 +33,10 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        watch: {
+          // Verification artifacts can be locked while Windows writes them.
+          ignored: ['**/.fwi-live-*'],
+        },
         proxy: {
           '/api': {
             target: proxyTarget,

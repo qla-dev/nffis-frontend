@@ -224,22 +224,39 @@ function dataRows(table: Element | undefined): Element[] {
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 export async function scrape(): Promise<ScrapedData> {
-  const current = await fetchCurrentAwsDataset();
-  if (current) {
-    const payload = current.data;
-    const precipitation = Array.isArray(payload.precipitation) ? payload.precipitation as PrecipitationStation[] : [];
-    const agro = Array.isArray(payload.agro) ? payload.agro as AgroStation[] : [];
-    const meteo = Array.isArray(payload.meteo) ? payload.meteo as MeteoStation[] : [];
-    const airQuality = Array.isArray(payload.airQuality) ? payload.airQuality as AirQualityStation[] : [];
-    const all = Array.isArray(payload.all) ? (payload.all as AnyStation[]).map((station) => station.type === 'unclassified'
-      ? { ...station, uploadedByName: current.uploaded_by_name ?? undefined } : station)
-      : [...precipitation, ...agro, ...meteo, ...airQuality];
-    return {
-      scrapedAt: typeof payload.scrapedAt === 'string' ? payload.scrapedAt : current.updated_at,
-      reportDate: typeof payload.reportDate === 'string' ? payload.reportDate : null,
-      precipitation, agro, meteo, airQuality, all,
-    };
+  const [feed, current] = await Promise.all([
+    scrapeFeed().catch(() => ({
+      ...fhmzRealDummyData, all: allFhmzStations,
+    } as ScrapedData)),
+    fetchCurrentAwsDataset().catch(() => null),
+  ]);
+  if (!current) return feed;
+  const payload = current.data;
+  const precipitation = Array.isArray(payload.precipitation) ? payload.precipitation as PrecipitationStation[] : [];
+  const agro = Array.isArray(payload.agro) ? payload.agro as AgroStation[] : [];
+  const meteo = Array.isArray(payload.meteo) ? payload.meteo as MeteoStation[] : [];
+  const airQuality = Array.isArray(payload.airQuality) ? payload.airQuality as AirQualityStation[] : [];
+  const all = Array.isArray(payload.all) ? (payload.all as AnyStation[]).map((station) => station.type === 'unclassified'
+    ? { ...station, uploadedByName: current.uploaded_by_name ?? undefined } : station)
+    : [...precipitation, ...agro, ...meteo, ...airQuality];
+  // Uploaded stations supplement the feed; matching typed stations override it.
+  const merged = new Map<string, AnyStation>();
+  for (const station of [...feed.all, ...all]) {
+    const name = 'city' in station ? station.city : station.station;
+    merged.set(`${station.type}:${name}`, station);
   }
+  const combined = [...merged.values()];
+  return {
+    ...feed,
+    all: combined,
+    precipitation: combined.filter((s): s is PrecipitationStation => s.type === 'precipitation'),
+    agro: combined.filter((s): s is AgroStation => s.type === 'agro'),
+    meteo: combined.filter((s): s is MeteoStation => s.type === 'meteo'),
+    airQuality: combined.filter((s): s is AirQualityStation => s.type === 'air_quality'),
+  };
+}
+
+async function scrapeFeed(): Promise<ScrapedData> {
   const res = await fetch(FHMZ_FEED_URL, { credentials: "include", headers: { Accept: "text/html" } });
   if (!res.ok) throw new Error(`FHMZ fetch failed: HTTP ${res.status}`);
 

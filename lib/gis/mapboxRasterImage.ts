@@ -2,6 +2,20 @@ import { fromArrayBuffer } from 'geotiff';
 import * as plotty from 'plotty';
 import { EFFIS_FWI_COLOR_STOPS, EFFIS_FWI_DISPLAY_MAX } from '../fwi/effisFwiScale';
 import { API_BASE_URL } from '../../services/api';
+import { createFwiRasterSurface, FWI_NO_DATA_VALUE } from '../fwi/fwiRasterSurface';
+import { BH_FWI_RASTER_BOUNDS } from '../fwi/bhFwiColorScale';
+
+export async function renderBosnianFwiForMapbox(points: Array<{ id: string; lat: number; lng: number; fwi: number }>, mask?: GeoJSON.FeatureCollection): Promise<MapboxRasterImage> {
+  const surface = createFwiRasterSurface(points, point => point.fwi, 0.42, BH_FWI_RASTER_BOUNDS, mask);
+  const canvas = document.createElement('canvas');
+  canvas.width = surface.width; canvas.height = surface.height;
+  new plotty.plot({ canvas, data: surface.data, width: surface.width, height: surface.height,
+    domain: [0, EFFIS_FWI_DISPLAY_MAX], colorScale: SCALE, clampLow: true, clampHigh: true,
+    noDataValue: FWI_NO_DATA_VALUE, useWebGL: false,
+  }).render();
+  const objectUrl = URL.createObjectURL(await blob(canvas));
+  return { url: objectUrl, coordinates: [[surface.west, surface.north], [surface.east, surface.north], [surface.east, surface.south], [surface.west, surface.south]], release: () => URL.revokeObjectURL(objectUrl) };
+}
 
 const SCALE = 'nffis-mapbox-fwi';
 plotty.addColorScale(SCALE, EFFIS_FWI_COLOR_STOPS.map(stop => stop.color), EFFIS_FWI_COLOR_STOPS.map(stop => stop.position));

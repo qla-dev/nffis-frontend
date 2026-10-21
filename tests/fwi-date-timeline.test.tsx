@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { archiveFwiDateRange, defaultFwiDateRange, filterFwiProducts, FwiDateRangePicker, FwiDateTimeline } from '../components/Map/FwiDateTimeline';
+import { BosnianFwiDateControls, archiveFwiDateRange, defaultFwiDateRange, filterFwiProducts, FwiDateRangePicker, FwiDateTimeline } from '../components/Map/FwiDateTimeline';
 import type { FireWeatherProduct } from '../services/fireMonitoringService';
 
 const products = ['2025-12-05', '2026-06-15', '2026-10-05'].map((date, index) => ({
@@ -12,6 +12,19 @@ const products = ['2025-12-05', '2026-06-15', '2026-10-05'].map((date, index) =>
 afterEach(() => vi.useRealTimers());
 
 describe('FWI date range', () => {
+  it('offers the same timeline for Bosnian calculations without any Canadian products', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-09T12:00:00Z'));
+    const onChange = vi.fn();
+    render(<BosnianFwiDateControls date="2026-10-09" onChange={onChange} language="en" />);
+    expect(screen.getByLabelText('Date shown on map')).toHaveValue('2026-10-09');
+    fireEvent.click(screen.getByRole('button', { name: 'Previous FWI date' }));
+    expect(onChange).toHaveBeenCalledWith('2026-10-08');
+    fireEvent.change(screen.getByLabelText('Date shown on map'), { target: { value: '2026-09-01' } });
+    expect(onChange).toHaveBeenCalledWith('2026-09-01');
+    expect(screen.getByLabelText('FWI from date')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Play FWI animation' })).toBeInTheDocument();
+  });
   it('defaults to the last 90 calendar days and filters saved products inclusively', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-06T12:00:00Z'));

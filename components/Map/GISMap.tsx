@@ -3,13 +3,13 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { MapContainer, Marker, LayerGroup, GeoJSON, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
-import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar, MapPin, Play, Pause } from 'lucide-react';
+import { Layers, Waves, Flame, Globe2, Sun, Moon, Wind, Thermometer, Loader2, Navigation as NavIcon, Settings2, Info, ChevronRight, Check, Settings, Map as MapIcon, Satellite, Mountain, Leaf, X, Trash2, Trees, ShieldCheck, LandPlot, ThermometerSun, Snowflake, CloudRain, Droplets, Zap, Umbrella, Cloud, CloudLightning, Eye, ArrowUp, Calendar, Clock, AlertTriangle, Sunrise, Sunset, Gauge, Navigation, Fan, Layers as LayersIcon, Sprout, SunDim, MoveUp, Radar, MapPin } from 'lucide-react';
 import { BIH_CENTER, MOCK_FORESTS, TRANSLATIONS, REGION_STYLES, PROTECTED_AREAS_DATA } from '../../constants';
 import { IncidentReport, IncidentType, MapLayer, Language, RegionType, OpenMeteoResponse, ForestRegion } from '../../types';
 import type { FirefighterStationType } from '../../firefighterData';
 import { MapControls } from './MapControls';
 import { MapScaleControl } from './MapScaleControl';
-import { archiveFwiDateRange, defaultFwiDateRange, filterFwiProducts, FwiDateRangePicker, FwiDateTimeline, type FwiDateRange } from './FwiDateTimeline';
+import { BosnianFwiDateControls, archiveFwiDateRange, defaultFwiDateRange, filterFwiProducts, FwiDateRangePicker, FwiDateTimeline, type FwiDateRange } from './FwiDateTimeline';
 import { OperationalBaseLayers } from './OperationalBaseLayers';
 import { ForestHoverCard } from './ForestHoverCard';
 import { FIREFIGHTER_STATION_STYLE } from './firefighterStationUi';
@@ -36,7 +36,8 @@ import type { MapPerformanceMetrics } from '../../lib/gis/mapRendererPoc';
 import { BH_FWI_CSS_GRADIENT, BH_FWI_RASTER_BOUNDS } from '../../lib/fwi/bhFwiColorScale';
 import { FwiScaleLabels, FWI_SCALE_LABELS } from './FwiScaleLabels';
 import { classifyEffisFwi, EFFIS_FWI_DISPLAY_MAX, EFFIS_FWI_TICKS } from '../../lib/fwi/effisFwiScale';
-import { calculateCanadianFwi } from '../../lib/fwi/canadianFwi';
+import { calculateBosnianFwi } from '../../lib/fwi/bosnianFwi';
+import { fetchBosnianFwiSurface, sarajevoDate } from '../../services/fwiCalculationService';
 import { FOREST_RASTER_LAYERS } from '../../lib/gis/forestRasterLayers';
 import { ValidatedForestWmsLayer } from '../Layers/Forest/ValidatedForestWmsLayer';
 import {
@@ -220,6 +221,11 @@ export interface GISMapProps {
   canViewRs: boolean;
   useCyrillicStationNames: boolean;
   canAdjustAws: boolean;
+  isSuperAdmin?: boolean;
+  fwiDate?: string;
+  onFwiDateChange?: (date: string) => void;
+  isPickingFwiLocation?: boolean;
+  onFwiLocationSelect?: (location: { name: string; lat: number; lng: number }) => void;
   geoEditorMode: GeoEditorMode;
   geoEditorLayerId: number | null;
   geoEditorFeatures: GeoJSON.Feature[];
@@ -290,6 +296,7 @@ export const GISMap: React.FC<GISMapProps> = ({
   canViewRs,
   useCyrillicStationNames,
   canAdjustAws,
+  isSuperAdmin, fwiDate, onFwiDateChange, isPickingFwiLocation, onFwiLocationSelect,
   geoEditorMode,
   geoEditorLayerId,
   geoEditorFeatures,
@@ -438,10 +445,10 @@ export const GISMap: React.FC<GISMapProps> = ({
     if (kbdi < 0) kbdi = 0;
     kbdi = Math.min(800, kbdi + (dryDays * 50));
     
-    const canadianFwi = calculateCanadianFwi(weather);
-    const isi = canadianFwi?.isi ?? 0;
-    const bui = canadianFwi?.bui ?? 0;
-    const fwiBosnian = canadianFwi?.fwi ?? 0;
+    const original = calculateBosnianFwi({ temperatureC: temp, humidityPct: humidity, windKmh, dryDays });
+    const isi = original?.isi ?? 0;
+    const bui = original?.bui ?? 0;
+    const fwiBosnian = original?.fwi ?? 0;
 
     return { ai, gfi, kbdi, fwiBosnian, isi, bui };
   };
@@ -636,7 +643,7 @@ export const GISMap: React.FC<GISMapProps> = ({
     [incidents]
   );
   const isAnyFwiLayerActive = useMemo(
-    () => activeLayers.has(MapLayer.FWI_BOSNIAN) || activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI),
+    () => activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI),
     [activeLayers]
   );
   useEffect(() => {
@@ -684,19 +691,30 @@ export const GISMap: React.FC<GISMapProps> = ({
   const changeFwiRange = (range: FwiDateRange) => {
     setIsFwiTimelapsePlaying(false);
     setFwiRange(range);
-    setSelectedFwiArchiveIndex(Math.max(0, filterFwiProducts(allFwiArchive, range).length - 1));
+    const products = filterFwiProducts(allFwiArchive, range);
+    setSelectedFwiArchiveIndex(Math.max(0, products.length - 1));
+    onFwiDateChange?.(products.at(-1)?.valid_at.slice(0, 10) ?? range.to);
   };
-  const selectedFwiProduct = fwiArchive[selectedFwiArchiveIndex] ?? null;
+  const selectedFwiProduct = fwiDate ? allFwiArchive.find(product => product.valid_at.slice(0, 10) === fwiDate) ?? null : fwiArchive[selectedFwiArchiveIndex] ?? null;
+  useEffect(() => {
+    if (!fwiDate) return;
+    setFwiRange(current => fwiDate < current.from ? { ...current, from: fwiDate }
+      : fwiDate > current.to ? { ...current, to: fwiDate } : current);
+    const index = fwiArchive.findIndex(product => product.valid_at.slice(0, 10) === fwiDate);
+    if (index >= 0) setSelectedFwiArchiveIndex(index);
+  }, [fwiDate, fwiArchive]);
   const nextFwiProduct = fwiArchive.length > 1
     ? fwiArchive[(selectedFwiArchiveIndex + 1) % fwiArchive.length]
     : null;
   useEffect(() => {
     if (!isFwiTimelapsePlaying || fwiArchive.length < 2 || !isAnyFwiLayerActive) return;
-    const interval = window.setInterval(() => {
-      setSelectedFwiArchiveIndex((index) => (index + 1) % fwiArchive.length);
+    const interval = window.setTimeout(() => {
+      const next = (selectedFwiArchiveIndex + 1) % fwiArchive.length;
+      setSelectedFwiArchiveIndex(next);
+      onFwiDateChange?.(fwiArchive[next].valid_at.slice(0, 10));
     }, 1400);
-    return () => window.clearInterval(interval);
-  }, [fwiArchive.length, isAnyFwiLayerActive, isFwiTimelapsePlaying]);
+    return () => window.clearTimeout(interval);
+  }, [fwiArchive, selectedFwiArchiveIndex, isFwiTimelapsePlaying, onFwiDateChange, isAnyFwiLayerActive]);
   const activeFwiValue = useMemo(() => {
     if (!selectedForest || !forestWeather) return null;
     const hIdx = getCurrentHourIndex(forestWeather);
@@ -707,17 +725,17 @@ export const GISMap: React.FC<GISMapProps> = ({
   const activeFwiLayerInfo = useMemo(() => {
     if (activeLayers.has(MapLayer.FWI_BOSNIAN)) {
       return { 
-        title: 'NFFIS FWI · EFFIS scale',
+        title: 'Bosnian NFFIS FWI · original formula',
         min: 0, 
         max: EFFIS_FWI_DISPLAY_MAX,
         gradient: BH_FWI_CSS_GRADIENT,
         iconGradient: BH_FWI_CSS_GRADIENT,
-        currentValue: selectedFwiProduct?.statistics?.mean ?? activeFwiValue
+        currentValue: forestFwiData.length ? forestFwiData.reduce((sum, point) => sum + point.fwiBosnian, 0) / forestFwiData.length : activeFwiValue
       };
     }
     if (activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI)) {
       return {
-        title: 'BiH FWI COG · EFFIS scale',
+        title: 'Canadian FWI COG · EFFIS scale',
         min: 0,
         max: EFFIS_FWI_DISPLAY_MAX,
         gradient: BH_FWI_CSS_GRADIENT,
@@ -726,7 +744,7 @@ export const GISMap: React.FC<GISMapProps> = ({
       };
     }
     return null;
-  }, [activeLayers, t, activeFwiValue, selectedFwiProduct]);
+  }, [activeLayers, t, activeFwiValue, selectedFwiProduct, forestFwiData]);
   const fwiSourceForests = useMemo(
     () => MOCK_FORESTS.filter((forest) => forest.type !== RegionType.LANDFILL),
     []
@@ -1056,127 +1074,23 @@ export const GISMap: React.FC<GISMapProps> = ({
     [activeLayers]
   );
 
+  const bosnianVisible = canViewFwi && activeLayers.has(MapLayer.FWI_BOSNIAN);
   useEffect(() => {
-
-    console.info(FWI_DEBUG_PREFIX, 'effect check', {
-      activeFwiLayers,
-      isAnyFwiLayerActive,
-      isLoadingFwi,
-      forestFwiDataLength: forestFwiData.length,
-      availableForests: fwiSourceForests.length,
-    });
-
-    if (!isAnyFwiLayerActive) {
-      console.info(FWI_DEBUG_PREFIX, 'skip fetch: no active FWI layer');
-      return;
-    }
-
-    if (isLoadingFwi) {
-      console.info(FWI_DEBUG_PREFIX, 'skip fetch: already loading');
-      return;
-    }
-
-    if (forestFwiData.length > 0) {
-      console.info(FWI_DEBUG_PREFIX, 'skip fetch: cached FWI data already present');
-      return;
-    }
-
-    let isCancelled = false;
-    const controller = new AbortController();
-
-    const fetchFwiData = async () => {
-      console.info(FWI_DEBUG_PREFIX, 'starting FWI fetch', {
-        forestCount: fwiSourceForests.length,
-      });
-      setIsLoadingFwi(true);
-
-      try {
-        const nextData: ForestFireIndexSnapshot[] = [];
-
-        for (const forest of fwiSourceForests) {
-          try {
-            const url =
-              `https://api.open-meteo.com/v1/forecast?latitude=${forest.coordinates[0]}` +
-              `&longitude=${forest.coordinates[1]}` +
-              // `time` is not a weather variable - asking for it 400s the whole request.
-              // Open-Meteo always returns current.time alongside whatever variable is
-              // requested, and current.time is the only field this fetch actually reads.
-              '&current=temperature_2m' +
-              '&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation' +
-              '&daily=precipitation_sum' +
-              '&past_days=30' +
-              '&timezone=auto';
-
-            const response = await fetch(url, { signal: controller.signal });
-            if (!response.ok) {
-              throw new Error(`FWI fetch failed for ${forest.name}`);
-            }
-
-            const weather = (await response.json()) as FireIndexWeatherData & { error?: boolean; reason?: string };
-            if (weather.error || !weather.current?.time || !weather.hourly?.time?.length) {
-              throw new Error(weather.reason || `FWI weather payload invalid for ${forest.name}`);
-            }
-
-            const hourIdx = getCurrentHourIndex(weather);
-            const metrics = computeFireIndexMetrics(weather, hourIdx);
-
-            nextData.push({
-              id: forest.id,
-              lat: forest.coordinates[0],
-              lng: forest.coordinates[1],
-              angstrom: metrics.ai,
-              gfi: metrics.gfi,
-              kbdi: metrics.kbdi,
-              fwiBosnian: metrics.fwiBosnian,
-              isi: metrics.isi,
-              bui: metrics.bui,
-            });
-          } catch (error) {
-            if (error instanceof DOMException && error.name === 'AbortError') {
-              throw error;
-            }
-
-            const fallbackSnapshot = buildFallbackFwiSnapshot(forest);
-            console.warn(FWI_DEBUG_PREFIX, 'forest fetch failed, using fallback snapshot', {
-              forestId: forest.id,
-              forestName: forest.name,
-              error,
-              fallbackSnapshot,
-            });
-            nextData.push(fallbackSnapshot);
-          }
-        }
-
-        if (isCancelled) {
-          return;
-        }
-
-        setForestFwiData(nextData);
-        console.info(FWI_DEBUG_PREFIX, 'FWI fetch completed', {
-          receivedPoints: nextData.length,
-          pointIds: nextData.map((point) => point.id),
-        });
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          console.info(FWI_DEBUG_PREFIX, 'FWI fetch aborted');
-          return;
-        }
-        console.error('Unable to load FWI heatmap data.', error);
-      } finally {
-        if (!isCancelled) {
-          setIsLoadingFwi(false);
-        }
-      }
-    };
-
-    fetchFwiData();
-
-    return () => {
-      isCancelled = true;
-      console.info(FWI_DEBUG_PREFIX, 'cleanup/abort pending FWI fetch');
-      controller.abort();
-    };
-  }, [activeFwiLayers, forestFwiData.length, fwiSourceForests, isAnyFwiLayerActive]);
+    if (!bosnianVisible) return;
+    let alive = true;
+    setForestFwiData([]);
+    setIsLoadingFwi(true);
+    fetchBosnianFwiSurface(fwiDate ?? sarajevoDate()).then(points => {
+      if (alive) setForestFwiData(points.map(point => ({
+        ...point, fwiBosnian: point.fwi,
+        angstrom: point.humidityPct / 20 + (27 - point.temperatureC) / 10,
+        gfi: Math.max(0, point.temperatureC) * (100 - point.humidityPct) * point.windKmh / 1000 * (1 + point.dryDays / 20) * 1.2,
+        kbdi: Math.min(800, Math.max(0, point.temperatureC * 10) + point.dryDays * 50),
+      })));
+    }).catch(error => { if (alive) console.error('Bosnian FWI inputs unavailable', error); })
+      .finally(() => { if (alive) setIsLoadingFwi(false); });
+    return () => { alive = false; };
+  }, [bosnianVisible, fwiDate]);
 
   const getIncidentIntensity = (incident: IncidentReport) => {
     if (incident.urgency === 'high') return 1;
@@ -1364,6 +1278,7 @@ export const GISMap: React.FC<GISMapProps> = ({
       >
         <ReportLocationPicker />
         <CustomLocationPicker />
+        <FwiLocationPicker picking={Boolean(isPickingFwiLocation)} onSelect={onFwiLocationSelect} />
         <OperationalBaseLayers activeBaseLayerId={activeBaseLayerId} activeLayers={activeLayers} meteoblueUrl={meteoblueUrl} meteoblueAvailable={isMeteoblueActive && !isMeteoblueUnavailable} gibsDate={gibsDate} onMeteoblueTileError={handleMeteoblueTileError} />
         <FireMonitoringLayer
           visible={canViewFireMonitoring && activeLayers.has(MapLayer.ACTIVE_FIRES)}
@@ -1411,13 +1326,14 @@ export const GISMap: React.FC<GISMapProps> = ({
           activeFires={activeFireEvents}
           fireSpreadVisible={false}
           pane={FWI_OVERLAY_PANE}
-          visible={activeLayers.has(MapLayer.FWI_BOSNIAN) && !selectedFwiProduct}
+          visible={activeLayers.has(MapLayer.FWI_BOSNIAN)}
         />}
         <PyretechnicsScenarioLayer visible={isFireSpreadActive} events={activeFireEvents} pane={FWI_OVERLAY_PANE} />
         {canViewFwi && <FireIntelligenceCogLayer
-          visible={activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI) || (activeLayers.has(MapLayer.FWI_BOSNIAN) && Boolean(selectedFwiProduct))}
+          visible={activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI)}
           pane={FWI_OVERLAY_PANE}
           productId={selectedFwiProduct?.id}
+          allowLatestFallback={!fwiDate}
           prefetchProductId={nextFwiProduct?.id}
         />}
         {canViewMapLayers && administrativeBoundaryData && <LiveWindVectorLayer
@@ -1425,10 +1341,7 @@ export const GISMap: React.FC<GISMapProps> = ({
           mask={administrativeBoundaryData}
         />}
         {/* AWS — FBiH and RS layers, filtered by the three typed sub-layers */}
-        {canViewAws && (activeLayers.has('AWS Precipitation' as MapLayer) ||
-          activeLayers.has('AWS Agro' as MapLayer) || 
-          activeLayers.has('AWS Meteo' as MapLayer) ||
-          activeLayers.has(MapLayer.AWS_SENSORS)) && (
+        {canViewAws && (
           <>
             {canViewFbih && <AWSFBiHLayer activeTypes={activeLayers} canAdjust={canAdjustAws} useCyrillicStationNames={useCyrillicStationNames} />}
             {canViewRs && <AWSRsLayer activeTypes={activeLayers} canAdjust={canAdjustAws} useCyrillicStationNames={useCyrillicStationNames} />}
@@ -1914,8 +1827,8 @@ export const GISMap: React.FC<GISMapProps> = ({
                                                         <p className="text-[9px] text-slate-400 leading-relaxed italic">
                                                             <span className="text-blue-400 font-black not-italic mr-1">MODEL:</span>
                                                             {language === Language.BS
-                                                                ? "NFFIS FWI koristi standardne Canadian FWI jednačine (ISI + BUI), a rezultat prikazuje kroz aktuelne EFFIS Europe klase opasnosti."
-                                                                : "NFFIS FWI uses the standard Canadian FWI equations (ISI + BUI) and displays the result with the current EFFIS Europe danger classes."}
+                                                                ? "Bosnian NFFIS FWI koristi originalne procjene ISI i BUI iz temperature, vlažnosti, vjetra i broja suhih dana. Canadian FWI je zaseban COG sloj."
+                                                                : "Bosnian NFFIS FWI uses the original ISI and BUI estimates from temperature, humidity, wind and dry-day count. Canadian FWI is available as a separate COG layer."}
                                                         </p>
                                                         <div className="h-px bg-white/5 w-full"></div>
                                                         <p className="text-[9px] text-slate-500 leading-relaxed italic">
@@ -2062,6 +1975,7 @@ export const GISMap: React.FC<GISMapProps> = ({
         showLegend={showLegend}
         onToggleLegend={() => setShowLegend(!showLegend)}
         language={language}
+        isSuperAdmin={isSuperAdmin}
         onStartPickingLocation={() => setIsPickingLocation(true)}
         onFitBosnia={fitBosnia}
         canViewMapLayers={canViewMapLayers}
@@ -2179,21 +2093,10 @@ export const GISMap: React.FC<GISMapProps> = ({
               </div>
               <FwiScaleLabels />
             </div>
-            {fwiArchive.length > 0 && <div className="flex shrink-0 items-center gap-1.5">
-              <button type="button"
-                onClick={() => {
-                  if (!isFwiTimelapsePlaying && selectedFwiArchiveIndex >= fwiArchive.length - 1) setSelectedFwiArchiveIndex(0);
-                  setIsFwiTimelapsePlaying(playing => !playing);
-                }}
-                className={`flex items-center gap-1 rounded-md border px-2 py-1.5 text-[10px] font-bold transition-colors ${isFwiTimelapsePlaying ? 'border-orange-400/60 bg-orange-500/20 text-orange-200' : 'border-slate-700 bg-slate-900/80 text-slate-300 hover:border-orange-500/50'}`}
-                aria-label={isFwiTimelapsePlaying ? 'Pause FWI animation' : 'Play FWI animation'}
-                title={isFwiTimelapsePlaying ? 'Pause' : 'Play'}>
-                {isFwiTimelapsePlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
-                {isFwiTimelapsePlaying ? 'Pause' : 'Play'}
-              </button>
-            </div>}
+
           </div>
-          <div className="mt-3 border-t border-slate-800 pt-3">
+          {activeLayers.has(MapLayer.FWI_BOSNIAN) && <BosnianFwiDateControls date={fwiDate} onChange={onFwiDateChange} language={language} />}
+          {activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI) && <div className="mt-3 border-t border-slate-800 pt-3">
             <div className="mb-2 flex items-center gap-3">
               <span className="text-[9px] font-black uppercase tracking-wider text-slate-500">
                 {language === Language.BS ? 'Historijski FWI' : 'Historical FWI'}
@@ -2202,16 +2105,24 @@ export const GISMap: React.FC<GISMapProps> = ({
             <FwiDateRangePicker range={fwiRange} onChange={changeFwiRange} language={language}
               maxDate={defaultFwiDateRange().to} firstAvailableDate={allFwiArchive[0]?.valid_at.slice(0, 10)} />
             {allFwiArchive.length > 0 ? <>
-              <FwiDateTimeline products={fwiArchive} range={fwiRange} index={selectedFwiArchiveIndex} onSelect={(index) => {
+              <FwiDateTimeline products={fwiDate && !selectedFwiProduct ? [] : fwiArchive} range={fwiRange} index={selectedFwiArchiveIndex}
+                playing={isFwiTimelapsePlaying} onTogglePlaying={() => {
+                  if (!isFwiTimelapsePlaying && fwiArchive.length) {
+                    const next = selectedFwiArchiveIndex >= fwiArchive.length - 1 ? 0 : selectedFwiArchiveIndex;
+                    setSelectedFwiArchiveIndex(next);
+                    onFwiDateChange?.(fwiArchive[next].valid_at.slice(0, 10));
+                  }
+                  setIsFwiTimelapsePlaying(playing => !playing);
+                }} onSelect={(index) => {
                 setIsFwiTimelapsePlaying(false);
-                setSelectedFwiArchiveIndex(index);
+                setSelectedFwiArchiveIndex(index); onFwiDateChange?.(fwiArchive[index]?.valid_at.slice(0, 10));
               }} language={language} />
             </> : <div className="text-[10px] text-slate-500">
               {isLoadingFwiArchive
                 ? (language === Language.BS ? 'Učitavanje datuma…' : 'Loading dates…')
                 : (fwiArchiveError ?? (language === Language.BS ? 'Još nema sačuvanog historijskog FWI.' : 'No historical FWI has been saved yet.'))}
             </div>}
-          </div>
+          </div>}
           {isFireSpreadActive && (
             <div className="mt-3 border-t border-slate-800 pt-2">
               <button
@@ -2312,3 +2223,8 @@ export const GISMap: React.FC<GISMapProps> = ({
     </div>
   );
 };
+
+function FwiLocationPicker({ picking, onSelect }: { picking: boolean; onSelect?: (location: { name: string; lat: number; lng: number }) => void }) {
+  useMapEvents({ click: event => { if (picking) onSelect?.({ name: 'Selected location', lat: event.latlng.lat, lng: event.latlng.lng }); } });
+  return null;
+}

@@ -1,5 +1,7 @@
 
 import React, { lazy, Suspense, useState, useCallback, useEffect, useRef } from 'react';
+import { FwiCalculationSidebar } from './components/Map/FwiCalculationSidebar';
+import { sarajevoDate, type FwiLocation } from './services/fwiCalculationService';
 import { Navigation } from './components/Navigation';
 import { ReportModal } from './components/Report/ReportModal';
 import { IncidentReportGrid } from './components/Report/IncidentReportGrid';
@@ -139,6 +141,14 @@ const App: React.FC = () => {
   const canCreateDatasetLayers = hasPermission(authUser, 'dataset-layers', 'create');
   const canManageLayerRoleAccess = hasPermission(authUser, 'layer-visibility', 'update');
   const isSuperAdmin = authUser?.role?.slug === 'super-admin';
+  const [fwiDetailsOpen, setFwiDetailsOpen] = useState(false);
+  const [fwiCalculationDate, setFwiCalculationDate] = useState(sarajevoDate);
+  const [fwiMapDate, setFwiMapDate] = useState<string | undefined>();
+  const [fwiLocation, setFwiLocation] = useState<FwiLocation | null>(null);
+  const [isPickingFwiLocation, setIsPickingFwiLocation] = useState(false);
+  const changeFwiDate = (date: string) => { setFwiCalculationDate(date); setFwiMapDate(date); };
+  const selectFwiLocation = (location: FwiLocation) => { setFwiLocation(location); setIsPickingFwiLocation(false); setFwiDetailsOpen(true); };
+
   const useCyrillicStationNames = authUser?.role?.slug === 'ministry-of-rs';
   const canViewMapLayers = hasPermission(authUser, 'map-layers', 'view');
   const canViewFwi = hasPermission(authUser, 'fire-weather-indices', 'view');
@@ -696,6 +706,12 @@ const App: React.FC = () => {
         onOpenReport={startReporting}
         onOpenLayers={toggleDatasetLayersPanel}
         isLayersOpen={isDatasetLayerPanelOpen}
+        isFwiCalculationsOpen={state.view === 'map' && fwiDetailsOpen}
+        onOpenFwiCalculations={() => {
+          handleSetView('map');
+          setIsDatasetLayerPanelOpen(false);
+          setFwiDetailsOpen(open => !open);
+        }}
         user={authUser}
         canViewReports={canViewReports}
         canCreateReports={canCreateReports}
@@ -733,6 +749,11 @@ const App: React.FC = () => {
             canViewRs={canViewRs}
             useCyrillicStationNames={useCyrillicStationNames}
             canAdjustAws={canAdjustAws}
+            isSuperAdmin={isSuperAdmin}
+            fwiDate={fwiMapDate}
+            onFwiDateChange={changeFwiDate}
+            isPickingFwiLocation={isSuperAdmin && isPickingFwiLocation}
+            onFwiLocationSelect={selectFwiLocation}
             geoEditorMode={geoEditorMode}
             geoEditorLayerId={selectedDatasetLayerId}
             geoEditorFeatures={geoEditorFeatures}
@@ -749,6 +770,10 @@ const App: React.FC = () => {
           </Suspense>
         )}
 
+        {authUser && isSuperAdmin && state.view === 'map' && fwiDetailsOpen && !isPickingFwiLocation && <FwiCalculationSidebar
+          isSuperAdmin={isSuperAdmin} date={fwiCalculationDate} location={fwiLocation} onDateChange={changeFwiDate}
+          onPickLocation={() => setIsPickingFwiLocation(true)} onClose={() => { setFwiDetailsOpen(false); setIsPickingFwiLocation(false); }} />}
+        {authUser && isSuperAdmin && state.view === 'map' && isPickingFwiLocation && <div className="absolute left-20 top-24 z-[2600] rounded-xl bg-purple-700 px-4 py-3 text-sm text-white">Select an FWI location on the map.<button onClick={() => setIsPickingFwiLocation(false)} className="ml-4 rounded border border-white/40 px-2 py-1">Cancel</button></div>}
         {state.view !== 'map' && (
           <div className={`h-full w-full overflow-y-auto p-8 ${state.isDarkMode ? 'bg-slate-950' : 'bg-slate-50'}`}>
             <div className="max-w-6xl mx-auto">

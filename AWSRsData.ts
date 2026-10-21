@@ -70,14 +70,17 @@ function parseNum(v: string | number | null | undefined): number | null {
 }
 
 export async function scrapeRs(): Promise<RsScrapedData> {
-  const current = await fetchCurrentAwsDataset();
-  if (current) {
-    const payload = current.data;
-    return {
-      scrapedAt: typeof payload.scrapedAt === 'string' ? payload.scrapedAt : current.updated_at,
-      stations: Array.isArray(payload.stations) ? payload.stations as RsStation[] : [],
-    };
-  }
+  const [feed, current] = await Promise.all([
+    scrapeRsFeed().catch(() => rsAwsDummyData),
+    fetchCurrentAwsDataset().catch(() => null),
+  ]);
+  const uploaded = Array.isArray(current?.data.stations) ? current.data.stations as RsStation[] : [];
+  const merged = new Map<string, RsStation>();
+  for (const station of [...feed.stations, ...uploaded]) merged.set(`${station.type}:${station.name}`, station);
+  return { ...feed, stations: [...merged.values()] };
+}
+
+async function scrapeRsFeed(): Promise<RsScrapedData> {
   const res = await fetch(RS_FEED_URL, { credentials: 'include', headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`RHMZ RS fetch failed: HTTP ${res.status}`);
 

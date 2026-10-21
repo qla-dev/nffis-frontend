@@ -1,4 +1,6 @@
 import type { FireWeatherProduct } from '../../services/fireMonitoringService';
+import { useEffect, useMemo, useState } from 'react';
+import { Pause, Play } from 'lucide-react';
 
 export interface FwiDateRange { from: string; to: string }
 const DAY_MS = 86_400_000;
@@ -51,11 +53,41 @@ export function FwiDateRangePicker({ range, onChange, language, maxDate, firstAv
 }
 
 interface Props {
-  products: FireWeatherProduct[]; range: FwiDateRange; index: number;
+  products: Pick<FireWeatherProduct, 'valid_at'>[]; range: FwiDateRange; index: number;
   onSelect: (index: number) => void; language: string;
+  playing?: boolean; onTogglePlaying?: () => void;
 }
 
-export function FwiDateTimeline({ products, index, onSelect, language }: Props) {
+export function BosnianFwiDateControls({ date, onChange, language }: {
+  date?: string; onChange?: (date: string) => void; language: string;
+}) {
+  const [range, setRange] = useState(defaultFwiDateRange);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    if (date) setRange(current => date < current.from ? { ...current, from: date } : date > current.to ? { ...current, to: date } : current);
+  }, [date]);
+  const dates = useMemo(() => {
+    const start = Date.parse(`${range.from}T12:00:00Z`);
+    const end = Date.parse(`${range.to}T12:00:00Z`);
+    return Array.from({ length: Math.max(0, Math.min(36600, Math.floor((end - start) / DAY_MS) + 1)) },
+      (_, index) => ({ valid_at: new Date(start + index * DAY_MS).toISOString() }));
+  }, [range]);
+  const index = Math.max(0, dates.findIndex(item => item.valid_at.slice(0, 10) === (date ?? defaultFwiDateRange().to)));
+  useEffect(() => {
+    if (!playing || dates.length < 2) return;
+    const timer = window.setTimeout(() => onChange?.(dates[(index + 1) % dates.length].valid_at.slice(0, 10)), 3000);
+    return () => window.clearTimeout(timer);
+  }, [playing, dates, index, onChange]);
+  return <>
+    <div className="mt-3"><FwiDateRangePicker range={range} language={language} maxDate={defaultFwiDateRange().to}
+      onChange={next => { setPlaying(false); setRange(next); onChange?.(next.to); }} /></div>
+    <FwiDateTimeline products={dates} range={range} index={index} language={language}
+      playing={playing} onTogglePlaying={() => setPlaying(value => !value)}
+      onSelect={next => { setPlaying(false); onChange?.(dates[next].valid_at.slice(0, 10)); }} />
+  </>;
+}
+
+export function FwiDateTimeline({ products, index, onSelect, language, playing, onTogglePlaying }: Props) {
   const bosnian = language === 'bs';
   const selectedIndex = Math.max(0, Math.min(index, products.length - 1));
   if (!products.length) return <p className="mt-2 rounded-md border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300" role="status">
@@ -87,6 +119,12 @@ export function FwiDateTimeline({ products, index, onSelect, language }: Props) 
         <button type="button" onClick={() => onSelect(selectedIndex - 1)} disabled={selectedIndex === 0}
           aria-label={bosnian ? 'Prethodni FWI datum' : 'Previous FWI date'}
           className="rounded-md border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-xs font-bold text-white hover:border-orange-400 disabled:cursor-not-allowed disabled:opacity-40">←</button>
+        {onTogglePlaying && <button type="button" onClick={onTogglePlaying}
+          aria-label={playing ? 'Pause FWI animation' : 'Play FWI animation'}
+          title={playing ? 'Pause' : 'Play'}
+          className="flex items-center justify-center rounded-md border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-white hover:border-orange-400">
+          {playing ? <Pause size={14} fill="currentColor" aria-hidden="true" /> : <Play size={14} fill="currentColor" aria-hidden="true" />}
+        </button>}
         <button type="button" onClick={() => onSelect(selectedIndex + 1)} disabled={selectedIndex === products.length - 1}
           aria-label={bosnian ? 'Sljedeći FWI datum' : 'Next FWI date'}
           className="rounded-md border border-slate-600 bg-slate-900 px-2.5 py-1.5 text-xs font-bold text-white hover:border-orange-400 disabled:cursor-not-allowed disabled:opacity-40">→</button>

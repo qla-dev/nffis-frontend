@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound, Flame, UploadCloud } from 'lucide-react';
+import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound, Flame, UploadCloud, Calculator } from 'lucide-react';
 import { Language, AppState } from '../types';
 import { TRANSLATIONS } from '../constants';
 import type { AuthUser } from '../lib/auth/session';
@@ -14,6 +14,8 @@ interface NavProps {
   onOpenReport: () => void;
   onOpenLayers: () => void;
   isLayersOpen: boolean;
+  onOpenFwiCalculations?: () => void;
+  isFwiCalculationsOpen?: boolean;
   user: AuthUser;
   canViewReports: boolean;
   canCreateReports: boolean;
@@ -29,6 +31,8 @@ export const Navigation: React.FC<NavProps> = ({
   onOpenReport,
   onOpenLayers,
   isLayersOpen,
+  onOpenFwiCalculations,
+  isFwiCalculationsOpen = false,
   user,
   canViewReports,
   canCreateReports,
@@ -45,7 +49,7 @@ export const Navigation: React.FC<NavProps> = ({
   const isSuperAdmin = user.role?.slug === 'super-admin';
 
   const NavItem = ({ icon: Icon, label, id, onClick, color = "text-slate-400" }: any) => {
-    const isActive = id === 'layers' ? isLayersOpen : state.view === id && !onClick;
+    const isActive = id === 'layers' ? isLayersOpen : id === 'fwi-calculations' ? isFwiCalculationsOpen : state.view === id && !onClick;
     return (
       <button
         onClick={() => onClick ? onClick() : onSetView(id)}
@@ -89,6 +93,7 @@ export const Navigation: React.FC<NavProps> = ({
           {canViewFireMonitoring && <NavItem icon={Flame} label="Fire monitoring" id="fires" color="text-orange-500" />}
           {canViewReports && <NavItem icon={BarChart3} label={t.stats} id="stats" />}
           {canViewLayers && <NavItem icon={ListFilter} label={t.layers} id="layers" onClick={onOpenLayers} />}
+          {isSuperAdmin && onOpenFwiCalculations && <NavItem icon={Calculator} label="FWI calculations" id="fwi-calculations" onClick={onOpenFwiCalculations} />}
           {canUploadAws(user) && <NavItem icon={UploadCloud} label="Upload AWS data" onClick={() => setShowAwsUpload(true)} />}
           
           <div className="my-2 border-t border-slate-800/30 mx-2" />

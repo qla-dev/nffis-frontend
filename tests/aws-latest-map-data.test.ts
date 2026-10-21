@@ -1,35 +1,63 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { scrape as scrapeFbih } from '../AWSFBiHData';
 import { scrapeRs } from '../AWSRsData';
 
-describe('latest uploaded AWS map data', () => {
-  beforeEach(() => vi.restoreAllMocks());
+const raw = { type: 'unclassified', station: 'Tuzla', sensorValues: { temperature: 10 }, observedAtLocal: '2024-12-09T13:56:00' };
+function mockSources(data: Record<string, unknown>, failFeed = false, failUpload = false) {
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url === '/api/aws') {
+      if (failUpload) throw new Error('Upload unavailable');
+      return { ok: true, status: 200, json: async () => ({ data, uploaded_by_name: 'Station uploader' }) };
+    }
+    if (failFeed) throw new Error('Feed unavailable');
+    if (url.endsWith('/fbih')) return { ok: true, text: async () => `
+      <table><tr><td>12:00</td><td>Rain station</td><td>12</td><td>60</td><td>3</td></tr></table>
+      <table><tr><td>12:00</td><td>Agro station</td><td>N</td><td>2</td><td>1000</td><td>15</td><td>50</td><td>0</td></tr></table>
+      <table><tr><td>09.10.2026</td><td>12:00</td><td>Tuzla</td><td>N</td><td>2</td><td>1000</td><td>16</td><td>50</td><td>0</td></tr></table>` };
+    return { ok: true, json: async () => ({ countries: { country: [{ '@name': 'Bosnia', location_id: [
+      { name: 'Banja Luka', lat: '44.82', lon: '17.21', observations: { observation: [{ temperature: '18' }] } },
+    ] }] } }) };
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
 
-  it('uses the newest stored JSON instead of external feeds', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true, status: 200,
-      json: async () => ({ history_id: 2, updated_at: '2026-10-02T10:00:00Z', data: {
-        scrapedAt: '2026-10-02T09:00:00Z',
-        meteo: [{ type: 'meteo', station: 'Test FBiH', tempC: 17 }],
-        stations: [{ type: 'meteo', name: 'Test RS', lat: 44, lon: 18, tempC: 16 }],
-      } }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
+describe('AWS feeds alongside uploaded map data', () => {
+  afterEach(() => vi.unstubAllGlobals());
 
-    expect((await scrapeFbih()).all[0]).toMatchObject({ station: 'Test FBiH', tempC: 17 });
-    expect((await scrapeRs()).stations[0]).toMatchObject({ name: 'Test RS', tempC: 16 });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls.every(([url]) => url === '/api/aws')).toBe(true);
+  it('preserves all original categories and RS stations when a raw dataset is uploaded', async () => {
+    mockSources({ all: [raw], stations: [] });
+    const fbih = await scrapeFbih();
+    expect(fbih.precipitation).toHaveLength(1);
+    expect(fbih.agro).toHaveLength(1);
+    expect(fbih.meteo).toHaveLength(1);
+    expect(fbih.all).toHaveLength(4);
+    expect(fbih.all.find(s => s.type === 'unclassified')).toMatchObject({ station: 'Tuzla', uploadedByName: 'Station uploader' });
+    expect((await scrapeRs()).stations).toMatchObject([{ name: 'Banja Luka', tempC: 18 }]);
   });
 
-  it('keeps unclassified channels and uploader attribution from the latest file', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true, status: 200,
-      json: async () => ({ history_id: 3, updated_at: '2026-10-02T10:00:00Z', uploaded_by_name: 'Station uploader', data: {
-        all: [{ type: 'unclassified', station: 'mp_stolac_1', observedAtLocal: '2024-11-20T00:00:00', sensorValues: { mp_stolac_1: 10.78, mp_stolac_3: 0 }, lat: 43.0753, lon: 17.954 }],
-      } }),
-    }));
-    const station = (await scrapeFbih()).all[0];
-    expect(station).toMatchObject({ type: 'unclassified', station: 'mp_stolac_1', uploadedByName: 'Station uploader' });
+  it('lets matching typed uploads override measurements without removing other feed categories', async () => {
+    mockSources({ meteo: [{ type: 'meteo', station: 'Tuzla', tempC: 20 }], stations: [{ type: 'meteo', name: 'Banja Luka', lat: 44.82, lon: 17.21, tempC: 21 }] });
+    const fbih = await scrapeFbih();
+    expect(fbih.meteo).toMatchObject([{ station: 'Tuzla', tempC: 20 }]);
+    expect(fbih.precipitation).toHaveLength(1);
+    expect(fbih.agro).toHaveLength(1);
+    expect((await scrapeRs()).stations).toMatchObject([{ name: 'Banja Luka', tempC: 21 }]);
+  });
+
+  it('preserves the existing feed fallback and uploaded raw stations when feeds fail', async () => {
+    mockSources({ all: [raw] }, true);
+    const fbih = await scrapeFbih();
+    expect(fbih.precipitation.length).toBeGreaterThan(0);
+    expect(fbih.agro.length).toBeGreaterThan(0);
+    expect(fbih.meteo.length).toBeGreaterThan(0);
+    expect(fbih.all.some(s => s.type === 'unclassified')).toBe(true);
+    expect((await scrapeRs()).stations.length).toBeGreaterThan(0);
+  });
+
+  it('still loads the original feeds when the uploaded dataset request fails', async () => {
+    mockSources({}, false, true);
+    expect((await scrapeFbih()).meteo).toMatchObject([{ station: 'Tuzla', tempC: 16 }]);
+    expect((await scrapeRs()).stations).toMatchObject([{ name: 'Banja Luka', tempC: 18 }]);
   });
 });

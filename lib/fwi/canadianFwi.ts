@@ -18,6 +18,13 @@ export interface CanadianFwiResult {
   fwi: number;
   observationTime: string;
   observationCount: number;
+  steps: CanadianFwiStep[];
+}
+
+export interface CanadianFwiStep {
+  time: string; temperatureC: number; humidityPct: number; windKmh: number; rainMm: number; month: number;
+  previousFfmc: number; previousDmc: number; previousDc: number;
+  ffmc: number; dmc: number; dc: number; isi: number; bui: number; fwi: number;
 }
 
 const DMC_DAY_LENGTH = [6.5, 7.5, 9, 12.8, 13.9, 13.9, 12.4, 10.9, 9.4, 8, 7, 6];
@@ -103,7 +110,7 @@ export const deriveFwi = (ffmc: number, dmc: number, dc: number, windKmh: number
   const fwi = initialSpread <= 1
     ? initialSpread
     : Math.exp(2.72 * (0.434 * Math.log(initialSpread)) ** 0.647);
-  return { isi, bui, fwi };
+  return { isi, bui, fwi, fineFuelMoisture, windFunction, fuelFunction, droughtFunction, initialSpread };
 };
 
 // The Canadian system is stateful. Replaying local-noon observations gives the
@@ -127,6 +134,7 @@ export const calculateCanadianFwi = (
   let dmc = 6;
   let dc = 15;
   let lastResult: CanadianFwiResult | null = null;
+  const steps: CanadianFwiStep[] = [];
 
   for (const { time, index } of observations) {
     const temperature = hourly?.temperature_2m?.[index];
@@ -138,11 +146,13 @@ export const calculateCanadianFwi = (
       .slice(Math.max(0, index - 23), index + 1)
       .reduce((sum, value) => sum + (Number.isFinite(value) ? Math.max(0, value) : 0), 0);
     const month = clamp(Number(time.slice(5, 7)) - 1, 0, 11);
+    const previous = { previousFfmc: ffmc, previousDmc: dmc, previousDc: dc };
     ffmc = updateFfmc(ffmc, temperature!, humidity!, windKmh!, rainMm);
     dmc = updateDmc(dmc, temperature!, humidity!, rainMm, month);
     dc = updateDc(dc, temperature!, rainMm, month);
     const derived = deriveFwi(ffmc, dmc, dc, windKmh!);
-    lastResult = { ffmc, dmc, dc, ...derived, observationTime: time, observationCount: observations.length };
+    steps.push({ time, temperatureC: temperature!, humidityPct: humidity!, windKmh: windKmh!, rainMm, month: month + 1, ...previous, ffmc, dmc, dc, ...derived });
+    lastResult = { ffmc, dmc, dc, ...derived, observationTime: time, observationCount: steps.length, steps };
   }
 
   return lastResult;

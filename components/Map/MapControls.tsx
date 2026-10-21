@@ -27,6 +27,7 @@ interface MapControlsProps {
   canViewFwi: boolean;
   canViewFireMonitoring: boolean;
   canViewAws: boolean;
+  isSuperAdmin?: boolean;
 }
 
 export const MapControls: React.FC<MapControlsProps> = ({
@@ -44,7 +45,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
   canViewMapLayers,
   canViewFwi,
   canViewFireMonitoring,
-  canViewAws,
+  canViewAws, isSuperAdmin,
 }) => {
   const [activePanel, setActivePanel] = useState<'assets' | 'layers' | 'satellite' | 'fwi' | 'aws' | null>(null);
   const localRef = useRef<HTMLDivElement>(null);
@@ -79,6 +80,9 @@ export const MapControls: React.FC<MapControlsProps> = ({
     MapLayer.SENTINEL, MapLayer.INFRARED, MapLayer.NASA_FIRMS,
     MapLayer.THERMAL, MapLayer.WINDY, MapLayer.TERRAIN
   ].some(l => activeLayers.has(l));
+  const isAnyAssetLayerActive = [MapLayer.FORESTS, MapLayer.LANDFILLS, MapLayer.PROTECTED_AREAS]
+    .some(layer => activeLayers.has(layer)) || FOREST_RASTER_LAYERS
+    .some(layer => layer.dataType === 'forest_type' && activeLayers.has(layer.id));
   const activeFwiLayer = [
     MapLayer.FWI_ANGSTROM,
     MapLayer.FWI_GFI,
@@ -167,7 +171,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
             <button 
               hidden={!canViewMapLayers}
               onClick={() => togglePanel('assets')} 
-              className={`p-2.5 rounded-lg transition-colors ${activePanel === 'assets' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+              className={`p-2.5 rounded-lg transition-colors ${activePanel === 'assets' || isAnyAssetLayerActive ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
               title={t.assetsRegions}
             >
               <Trees size={18} />
@@ -222,7 +226,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
       </div>
 
       {/* Dropdown Panels Container */}
-      <div className="relative w-64 mr-4 md:mr-0 pointer-events-auto">
+      <div className={`relative mr-4 md:mr-0 pointer-events-auto ${activePanel === 'fwi' ? 'w-[min(20rem,calc(100vw-2rem))]' : 'w-64'}`}>
         {canViewMapLayers && activePanel === 'layers' && (
           <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-72 animate-in slide-in-from-top-2 duration-200 max-h-[80vh] overflow-y-auto">
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between sticky top-0 bg-slate-950/95 z-10 py-1">
@@ -372,7 +376,7 @@ export const MapControls: React.FC<MapControlsProps> = ({
         )}
 
         {canViewFwi && activePanel === 'fwi' && (
-          <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-64 animate-in slide-in-from-top-2 duration-200">
+          <div className="bg-slate-950/95 backdrop-blur-lg border border-slate-800 rounded-xl shadow-2xl p-4 w-full max-h-[calc(100dvh-7rem-env(safe-area-inset-top))] overflow-y-auto overscroll-contain animate-in slide-in-from-top-2 duration-200">
             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center justify-between">
               FWI
               <button onClick={() => setActivePanel(null)} className="hover:text-white">
@@ -382,8 +386,8 @@ export const MapControls: React.FC<MapControlsProps> = ({
             <div className="space-y-1">
               {[
                 { id: null, label: 'Off', icon: X, color: 'text-slate-400' },
-                { id: MapLayer.FWI_BOSNIAN, label: 'NFFIS FWI (EFFIS scale)', icon: Flame, color: 'text-purple-500' },
-                { id: MapLayer.FIRE_INTELLIGENCE_FWI, label: 'BiH FWI COG (EFFIS scale)', icon: Flame, color: 'text-orange-500' },
+                { id: MapLayer.FWI_BOSNIAN, label: 'Bosnian NFFIS FWI (original)', icon: Flame, color: 'text-purple-500' },
+                { id: MapLayer.FIRE_INTELLIGENCE_FWI, label: 'Canadian FWI COG (EFFIS scale)', icon: Flame, color: 'text-orange-500' },
               ].map((layer) => (
                 <button
                   key={layer.id ?? 'fwi-off'}
@@ -394,38 +398,39 @@ export const MapControls: React.FC<MapControlsProps> = ({
                       onToggleLayer(activeFwiLayer);
                     }
                   }}
-                  className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
+                  className={`w-full flex items-center justify-between gap-2 p-2 rounded-lg border transition-all ${
                     (layer.id ? activeLayers.has(layer.id) : !activeFwiLayer)
                       ? 'bg-blue-600/10 border-blue-600/50'
                       : 'bg-slate-900/50 border-transparent hover:border-slate-700'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
                     <layer.icon
                       size={16}
-                      className={layer.id ? (activeLayers.has(layer.id) ? layer.color : 'text-slate-600') : (!activeFwiLayer ? layer.color : 'text-slate-600')}
+                      className={`shrink-0 ${layer.id ? (activeLayers.has(layer.id) ? layer.color : 'text-slate-600') : (!activeFwiLayer ? layer.color : 'text-slate-600')}`}
                     />
-                    <span className={`text-[11px] font-bold ${layer.id ? (activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500') : (!activeFwiLayer ? 'text-white' : 'text-slate-500')}`}>
+                    <span className={`truncate text-[11px] font-bold ${layer.id ? (activeLayers.has(layer.id) ? 'text-white' : 'text-slate-500') : (!activeFwiLayer ? 'text-white' : 'text-slate-500')}`}>
                       {layer.label}
                     </span>
                   </div>
-                  {(layer.id ? activeLayers.has(layer.id) : !activeFwiLayer) && <ShieldCheck size={12} className="text-blue-500" />}
+                  {(layer.id ? activeLayers.has(layer.id) : !activeFwiLayer) && <ShieldCheck size={12} className="shrink-0 text-blue-500" />}
                 </button>
               ))}
+
               {canViewFireMonitoring && (
                 <button
                   type="button"
                   onClick={() => onToggleLayer(MapLayer.FWI_FIRE_SPREAD)}
-                  className={`w-full flex items-center justify-between p-2 rounded-lg border transition-all ${
+                  className={`w-full flex items-center justify-between gap-2 p-2 rounded-lg border transition-all ${
                     activeLayers.has(MapLayer.FWI_FIRE_SPREAD)
                       ? 'bg-orange-500/10 border-orange-500/50'
                       : 'bg-slate-900/50 border-transparent hover:border-slate-700'
                   }`}
                   aria-pressed={activeLayers.has(MapLayer.FWI_FIRE_SPREAD)}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
                     <Wind size={16} className={activeLayers.has(MapLayer.FWI_FIRE_SPREAD) ? 'text-orange-400' : 'text-slate-600'} />
-                    <span className={`text-[11px] font-bold ${activeLayers.has(MapLayer.FWI_FIRE_SPREAD) ? 'text-white' : 'text-slate-500'}`}>
+                    <span className={`truncate text-[11px] font-bold ${activeLayers.has(MapLayer.FWI_FIRE_SPREAD) ? 'text-white' : 'text-slate-500'}`}>
                       {language === Language.BS ? 'Pyretechnics širenje (test)' : 'Pyretechnics spread (test)'}
                     </span>
                   </div>
