@@ -7,6 +7,7 @@ import type { AuthUser } from '../lib/auth/session';
 import { ApiUsageDashboard } from './Admin/ApiUsageDashboard';
 import { AwsUploadPanel } from './AwsUploadPanel';
 import { canUploadAws } from '../lib/auth/session';
+import { tr } from '../lib/i18n/uiText';
 
 interface NavProps {
   state: AppState;
@@ -92,11 +93,11 @@ export const Navigation: React.FC<NavProps> = ({
         {/* Navigation Groups */}
         <div className="flex-1 py-4 flex flex-col gap-1">
           <NavItem icon={Map} label={t.map} id="map" />
-          {canViewFireMonitoring && <NavItem icon={Flame} label="Fire monitoring" id="fires" color="text-orange-500" />}
+          {canViewFireMonitoring && <NavItem icon={Flame} label={tr('Fire monitoring')} id="fires" color="text-orange-500" />}
           {canViewPdr && <NavItem icon={FileSpreadsheet} label={pdrText(state.language).module} id="pdr" color="text-amber-500" />}
           {canViewReports && <NavItem icon={BarChart3} label={t.stats} id="stats" />}
           {canViewLayers && <NavItem icon={ListFilter} label={t.layers} id="layers" onClick={onOpenLayers} />}
-          {canUploadAws(user) && <NavItem icon={UploadCloud} label="Upload AWS data" onClick={() => setShowAwsUpload(true)} />}
+          {canUploadAws(user) && <NavItem icon={UploadCloud} label={tr('Upload AWS data')} onClick={() => setShowAwsUpload(true)} />}
           
           <div className="my-2 border-t border-slate-800/30 mx-2" />
           
@@ -121,7 +122,7 @@ export const Navigation: React.FC<NavProps> = ({
              <NavItem icon={Settings} label={t.system} id="admin" onClick={canViewUsers ? undefined : () => {}} />
              <NavItem icon={HelpCircle} label={t.support} onClick={() => {}} />
              <NavItem icon={UserRound} label={`${user.username} · ${user.role?.name || 'No role'}${isSuperAdmin ? ' · API usage' : ''}`} onClick={() => isSuperAdmin && setShowApiUsage(true)} />
-             <NavItem icon={LogOut} label="Sign out" onClick={onLogout} color="text-red-400" />
+             <NavItem icon={LogOut} label={tr('Sign out')} onClick={onLogout} color="text-red-400" />
            </div>
         </div>
       </nav>
@@ -139,10 +140,10 @@ export const Navigation: React.FC<NavProps> = ({
           <button
             type="button"
             onClick={() => onSetView('fires')}
-            aria-label="Fire monitoring"
+            aria-label={tr('Fire monitoring')}
             className={`flex w-full flex-col items-center justify-center gap-1 transition-colors ${state.view === 'fires' ? 'text-orange-500' : 'text-slate-500'}`}
           >
-            <Flame size={20} /><span className="w-full truncate px-1 text-center text-[10px] font-bold uppercase tracking-widest">Fires</span>
+            <Flame size={20} /><span className="w-full truncate px-1 text-center text-[10px] font-bold uppercase tracking-widest">{tr('Fires')}</span>
           </button>
         ) : <span />}
         

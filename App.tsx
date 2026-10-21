@@ -28,6 +28,7 @@ import {
 import { installExternalApiUsageTracker } from './services/apiUsageService';
 import { parsePdrHash } from './components/Pdr/pdrRoute';
 import { pdrText } from './lib/pdr/i18n';
+import { setUiLanguage, tr } from './lib/i18n/uiText';
 
 const mapEnvironment = (import.meta as ImportMeta & { env: Record<string, string | boolean | undefined> }).env;
 const mapboxAccessToken = String(mapEnvironment.VITE_MAPBOX_ACCESS_TOKEN || '');
@@ -140,6 +141,8 @@ const App: React.FC = () => {
   const appliedDefaultDatasetLayersRef = useRef(false);
 
   const t = TRANSLATIONS[state.language];
+  // Screens with English literals translate through tr(); keep its language in step with the app.
+  setUiLanguage(state.language);
   const canViewReports = hasPermission(authUser, 'reports', 'view');
   const canCreateReports = hasPermission(authUser, 'reports', 'create');
   const canViewDatasetLayers = hasPermission(authUser, 'dataset-layers', 'view');
@@ -784,7 +787,7 @@ const App: React.FC = () => {
                     <Database size={14} /> {t.systemCoreData}
                   </div>
                   <h1 className={`text-3xl font-bold tracking-tight ${state.isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                    {state.view === 'reports' ? t.recentReports : state.view === 'layers' ? t.layers : state.view === 'fires' ? 'Fire monitoring' : state.view === 'pdr' ? pdrText(state.language).module : state.view === 'admin' ? (state.language === Language.BS ? 'Administracija korisnika' : 'User administration') : t.stats}
+                    {state.view === 'reports' ? t.recentReports : state.view === 'layers' ? t.layers : state.view === 'fires' ? tr('Fire monitoring') : state.view === 'pdr' ? pdrText(state.language).module : state.view === 'admin' ? tr('User administration') : t.stats}
                   </h1>
                 </div>
                 {state.view === 'fires' && <div id="fire-monitoring-header-actions" className="relative flex items-center" />}
