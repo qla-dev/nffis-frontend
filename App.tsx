@@ -798,7 +798,7 @@ const App: React.FC = () => {
                 <Suspense fallback={<ScreenLoader label="Loading statistics" />}><StatisticsDashboard language={state.language} isDarkMode={state.isDarkMode} /></Suspense>
               )}
               {state.view === 'pdr' && canViewPdr && (
-                <Suspense fallback={<ScreenLoader label="Loading damage reports" />}><PdrModule language={state.language} isDarkMode={state.isDarkMode} canCreate={canCreatePdr} canReview={canReviewPdr} /></Suspense>
+                <Suspense fallback={<ScreenLoader label="Loading damage reports" />}><PdrModule language={state.language} isDarkMode={state.isDarkMode} canCreate={canCreatePdr} canReview={canReviewPdr} canViewIncidents={canViewReports} canUpdateIncidents={hasPermission(authUser, 'reports', 'update')} /></Suspense>
               )}
               {state.view === 'admin' && canViewUsers && authUser && (
                 <Suspense fallback={<ScreenLoader label="Loading users" />}><UserManagement language={state.language} isDarkMode={state.isDarkMode} currentUserId={authUser.id} canCreate={hasPermission(authUser, 'users', 'create')} canUpdate={hasPermission(authUser, 'users', 'update')} /></Suspense>

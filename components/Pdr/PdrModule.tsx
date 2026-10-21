@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Calculator, FileText, History, Map as MapIcon, RefreshCw } from 'lucide-react';
+import { Calculator, FileText, Flame, History, Map as MapIcon, RefreshCw } from 'lucide-react';
 import { Language } from '../../types';
 import { pdrText } from '../../lib/pdr/i18n';
 import { AoiTool } from './AoiTool';
 import { CoefficientMatrix } from './CoefficientMatrix';
 import { DataSyncStatus } from './DataSyncStatus';
 import { HistoryViewer } from './HistoryViewer';
+import { IncidentManager } from './IncidentManager';
 import { PdrReportList } from './PdrReportList';
 import { PdrReportPage } from './PdrReportPage';
 import { navigatePdr, parsePdrHash, type PdrRoute } from './pdrRoute';
@@ -15,10 +16,12 @@ interface Props {
   isDarkMode: boolean;
   canCreate: boolean;
   canReview: boolean;
+  canViewIncidents?: boolean;
+  canUpdateIncidents?: boolean;
 }
 
 /** Preliminary Damage Report module shell with hash deep links (#/pdr/...). */
-export default function PdrModule({ language, isDarkMode, canCreate, canReview }: Props) {
+export default function PdrModule({ language, isDarkMode, canCreate, canReview, canViewIncidents = false, canUpdateIncidents = false }: Props) {
   const t = pdrText(language);
   const [route, setRoute] = useState<PdrRoute>(() => parsePdrHash(window.location.hash) || { page: 'list' });
 
@@ -46,6 +49,7 @@ export default function PdrModule({ language, isDarkMode, canCreate, canReview }
       <p className="-mt-6 mb-5 text-sm text-slate-500">{t.subtitle}</p>
       <nav className="mb-6 flex flex-wrap gap-2" aria-label={t.module}>
         {tab('list', t.reports, FileText, '/pdr')}
+        {canViewIncidents && tab('incidents', t.incidents, Flame, '/pdr/incidents')}
         {tab('coefficients', t.coefficients, Calculator, '/pdr/coefficients')}
         {tab('aoi', t.aoi, MapIcon, '/pdr/aoi')}
         {tab('history', t.history, History, '/pdr/history')}
@@ -55,6 +59,7 @@ export default function PdrModule({ language, isDarkMode, canCreate, canReview }
       {route.page === 'report' && <PdrReportPage key={`${route.id}`} reportId={route.id} step={route.step} language={language} isDarkMode={isDarkMode} />}
       {route.page === 'coefficients' && <CoefficientMatrix language={language} isDarkMode={isDarkMode} canEdit={canReview} />}
       {route.page === 'aoi' && <AoiTool language={language} isDarkMode={isDarkMode} />}
+      {route.page === 'incidents' && canViewIncidents && <IncidentManager language={language} isDarkMode={isDarkMode} canUpdate={canUpdateIncidents} />}
       {route.page === 'history' && <HistoryViewer language={language} isDarkMode={isDarkMode} />}
       {route.page === 'sync' && <DataSyncStatus language={language} isDarkMode={isDarkMode} />}
     </div>

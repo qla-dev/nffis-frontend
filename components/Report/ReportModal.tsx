@@ -59,6 +59,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
   // Historical FLOOD incidents are still rendered everywhere they already were.
   const type = IncidentType.FIRE;
   const [description, setDescription] = useState('');
+  const [details, setDetails] = useState({ affected_area_ha: '', injured: '', evacuated: '', dangerous_substances: '', assistance_required: '' });
+  const detailText = language === Language.BS
+    ? { title: 'Dodatni podaci o incidentu (opcionalno)', area: 'Procijenjena površina (ha)', injured: 'Povrijeđeni', evacuated: 'Evakuisani', substances: 'Opasne materije', assistance: 'Potrebna pomoć' }
+    : { title: 'Additional incident details (optional)', area: 'Estimated affected area (ha)', injured: 'Injured', evacuated: 'Evacuated', substances: 'Dangerous substances', assistance: 'Assistance required' };
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   
@@ -120,6 +124,11 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
         wind_direction_degrees: current.wind_direction_10m,
         wind_gust_kmh: current.wind_gusts_10m,
         humidity_percent: current.relative_humidity_2m,
+        affected_area_ha: details.affected_area_ha ? Number(details.affected_area_ha) : null,
+        injured: details.injured ? Number(details.injured) : null,
+        evacuated: details.evacuated ? Number(details.evacuated) : null,
+        dangerous_substances: details.dangerous_substances.trim() || null,
+        assistance_required: details.assistance_required.trim() || null,
         urgency: aiResult.urgency as any,
       });
     } catch (submitRequestError) {
@@ -379,6 +388,22 @@ export const ReportModal: React.FC<ReportModalProps> = ({ language, location, on
                         className="w-full h-full min-h-[200px] bg-slate-950 border-2 border-slate-800 rounded-xl p-4 text-white placeholder:text-slate-600 focus:outline-none focus:border-blue-500 focus:ring-0 transition-colors resize-none"
                     />
                 </div>
+
+                <details className="rounded-xl border border-slate-800 bg-slate-950 p-4" data-testid="incident-details">
+                  <summary className="cursor-pointer text-xs font-bold uppercase tracking-widest text-slate-500">{detailText.title}</summary>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    {([['affected_area_ha', detailText.area], ['injured', detailText.injured], ['evacuated', detailText.evacuated]] as const).map(([field, label]) => (
+                      <label key={field} className="text-[11px] font-bold text-slate-500">{label}
+                        <input name={field} type="number" min={0} step={field === 'affected_area_ha' ? 'any' : 1} value={details[field]} onChange={event => setDetails(current => ({ ...current, [field]: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-white" />
+                      </label>
+                    ))}
+                    {([['dangerous_substances', detailText.substances], ['assistance_required', detailText.assistance]] as const).map(([field, label]) => (
+                      <label key={field} className="col-span-2 text-[11px] font-bold text-slate-500">{label}
+                        <input name={field} value={details[field]} onChange={event => setDetails(current => ({ ...current, [field]: event.target.value }))} className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-white" />
+                      </label>
+                    ))}
+                  </div>
+                </details>
 
                 {/* Auto-filled Data Preview */}
                 <div className="bg-slate-950 rounded-xl p-4 border border-slate-800 space-y-2">
