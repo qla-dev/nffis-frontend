@@ -11,7 +11,8 @@ import { ErrorBox, errorText } from './PdrReportPage';
 const BIH_BOUNDS: [[number, number], [number, number]] = [[42.55, 15.72], [45.28, 19.62]];
 
 function rasterStyle(layer: TimeSeriesLayer): CogRasterStyle {
-  if (layer.key === 'fwi') return FWI_COG_STYLE;
+  // Model FWI and the station-interpolated FWI_AWS share the EFFIS scale.
+  if (layer.key === 'fwi' || layer.key === 'fwi_aws') return FWI_COG_STYLE;
   if (layer.group === 'fire_danger') return supplementaryIndexCogStyle(layer.key.toUpperCase() as SupplementaryIndexType);
   return { scale: (layer.scale || 'dryness') as CogRasterStyle['scale'], min: layer.min ?? 0, max: layer.max ?? 1 };
 }
