@@ -219,6 +219,65 @@ NFFIS_BASE_URL=https://api.nffis.com:81 NFFIS_ORIGIN=https://nffis.com NFFIS_LOG
 
 - **Produkcija:** novi indeksi nastaju automatski uz svaku šestosatnu prognozu. Datumi koji su već arhivirani imaju samo FWI. Popunjavanje historije za ostale indekse (`fire-intelligence:backfill-fwi`) ponovo povlači historijske podatke s Open-Meteo, pa to treba isplanirati prema kvoti. Nisam ga pokretao.
 
+### B15 — Registar slojeva kao vremenska serija · F8 — Historijski pregled (FC_PDR11, PDR5, PDR10)
+- Tabela `layer_time_series`: svaki VDM/NDVI/NDII build se sada arhivira po datumu snimka. Ranije je novi build pregazio stari.
+- `GET /api/time-series` je jedan katalog svih slojeva s historijom i njihovim datumima:
+  - FWI, Angström, GFDI, KBDI i FWI iz stanica;
+  - arhivirani vegetacijski rasteri;
+  - broj hotspot detekcija po danu.
+- Dodatni API:
+  - `GET /api/time-series/hotspots?date=` vraća detekcije jednog dana, ograničeno na entitet korisnika;
+  - `GET /api/time-series/{sloj}/{datum}/raster` vraća arhivirani raster.
+- Novi tab **History** (`#/pdr/history`): izbor sloja, kalendar, klizač, play/pauza; raster ili hotspot tačke na mapi.
+- **Test:**
+  1. http://localhost:3000/#/pdr/history
+  2. Izaberi sloj, pa **‹ / ›** ili datum.
+  3. Za hotspote izaberi „Satellite hotspot detections“.
+- Lokalni hotspoti su sintetički demo podaci (`scripts/dev/seed-hotspot-demo.php`, izvor `demo`).
+- VDM lokalno nema datuma, jer build traži GDAL na serveru. Arhiva se puni od prvog sljedećeg `vegetation:build-bih`.
+
+| FWI (posljednji dan) | Hotspoti za dan | KBDI, dva dana unazad |
+|---|---|---|
+| ![](screenshots/30-history-fwi-latest.png) | ![](screenshots/31-history-hotspots.png) | ![](screenshots/32-history-kbdi-two-days-back.png) |
+
+### B14 — FWI iz AWS stanica (PDR09)
+- `fire-intelligence:aws-fwi` za svaku stanicu s koordinatama izvuče dnevne podnevne ulaze: temperatura, vlažnost i vjetar u 12:00 te kiša za proteklih 24 h.
+- Worker (`weather_aws`) ih IDW-om (snaga 2, radijus 60 km) interpolira na mrežu BiH i propušta kroz isti FFMC/DMC/DC lanac sa zagrijavanjem.
+- Rezultat su `FWI_AWS` proizvodi, uz podatak o pokrivenosti mreže i broju stanica.
+- Komanda se pokreće svaki dan u 14:15 i vidi se u tabu Historija, pored FWI-ja iz modela.
+- **Pretpostavka:** `precipMm` je količina od prethodnog očitanja, pa se sabira (`FIRE_INTELLIGENCE_AWS_FWI_PRECIPITATION=max` ako je dnevni zbir). **Treba potvrditi s FHMZ/RHMZ.**
+- **Lokalni demo:** 12 lokacija stvarnih stanica sa sintetičkim mjerenjima (`scripts/dev/seed-aws-fwi-demo.php`), pokrenuto kroz pravi worker.
+- **Test:**
+  1. `php artisan test --filter=AwsFireWeatherIndexTest`
+  2. http://localhost:3000/#/pdr/history → „FWI from weather stations (AWS)“
+
+![aws fwi](screenshots/35-history-fwi-from-aws-stations.png)
+
+### F10 — Dvojezičnost starijih ekrana (FC_PDR14)
+- Fire monitoring dashboard, detalji požara, spremnost za odgovor, analitika požara i navigacija sada prate prebacivanje EN/BS (`lib/i18n/uiText.ts`, funkcija `tr()`).
+- **Test:** klikni globus (EN → BS), pa ikonu plamena (**Praćenje požara**).
+
+![bs fire monitoring](screenshots/33-fire-monitoring-bosnian.png)
+
+### B21 / F13 — Atributi incidenta (FC_PDR13, PDR9)
+- Prijave incidenata dobile su nova polja:
+  - status (prijavljen → potvrđen → aktivan → lokaliziran → ugašen / lažna uzbuna);
+  - zahvaćena površina;
+  - intervencija;
+  - osoblje i vozila;
+  - smrtno stradali, povrijeđeni i evakuisani;
+  - opasne materije;
+  - potrebna pomoć.
+- Ista polja su i u PDF-u prijave.
+- Forma za novu prijavu ima opcionalnu sekciju „Additional incident details“.
+- Tab **Incidents** (`#/pdr/incidents`) služi za pregled i uređivanje, uz PDF prijave. Vidljiv je ulogama s pristupom modulu `reports`.
+- **Test:**
+  1. Uloguj se kao `pdr.admin` → http://localhost:3000/#/pdr/incidents.
+  2. Izaberi prijavu, promijeni status i brojeve → **Save** → treba pisati „Saved“.
+  3. Klikni **PDF**.
+
+![incidents](screenshots/34-incident-attributes-saved.png)
+
 ### Sigurnosna ispravka
 - SHP/KMZ upload provjerava veličinu svake datoteke u arhivi prije raspakivanja (maks. 50 MB), kao zaštitu od zip-bomb napada. Ima i test.
 
@@ -228,10 +287,10 @@ NFFIS_BASE_URL=https://api.nffis.com:81 NFFIS_ORIGIN=https://nffis.com NFFIS_LOG
 
 | Repo | Rezultat |
 |---|---|
-| Backend: PDR + MODIS + korisnici (`php artisan test --filter='Pdr\|Modis\|UserManagement'`) | **29/29 prolazi**, uključujući 4 PostGIS testa sa poligonom poznate površine |
-| Backend: cijeli suite | 13 padova koji su postojali **i prije mojih izmjena** (nema `../gis/forest/bih-boundary.geojson`, `host.docker.internal:5432` nedostupan) |
+| Backend: PDR + MODIS + korisnici + historija + AWS FWI + incidenti (`php artisan test --filter='Pdr\|Modis\|UserManagement\|TimeSeries\|AwsFireWeather\|IncidentAttributes'`) | **37/37 prolazi**, uključujući 4 PostGIS testa sa poligonom poznate površine |
+| Backend: cijeli suite | 98 prolazi; 13 padova koji su postojali **i prije mojih izmjena** (nema `../gis/forest/bih-boundary.geojson`, `host.docker.internal:5432` nedostupan) |
 | Backend: indeksi B13 (`php artisan test --filter='FireSupplementaryIndices\|FireIndexAvailability'`) | **9/9 prolazi**: formule prema objavljenim jednačinama, KBDI kiša/granice, worker bez dodatnih zahtjeva, API |
-| Frontend (`npx vitest run`) | **155/155 prolazi** (uključujući `tests/supplementary-indices.test.tsx`) |
+| Frontend (`npx vitest run`) | **161/161 prolazi** |
 | `vite build` | prolazi; PDR je zaseban lazy chunk od 47 kB |
 
 ## Commitovi (lokalno, nisu pushani)
@@ -248,6 +307,10 @@ Grana `feature/pdr-module`:
   - dashboard sažetak
   - load test i dokumentacija
   - zip zaštita
+  - B13 indeksi (sesija za rastere)
+  - B15 vremenske serije
+  - B21 atributi incidenta
+  - B14 FWI iz AWS stanica
 - **Frontend:**
   - PDR UI (wizard, rezultati, verifikacija, matrica, AOI)
   - export dugmad
@@ -255,15 +318,19 @@ Grana `feature/pdr-module`:
   - tab za sinhronizaciju
   - administracija korisnika
   - PDR sažetak na dashboardu
+  - F7 slojevi indeksa
+  - F8 historija
+  - F10 prevod
+  - F13 incidenti
 
 ## Ostaje / ograničenja
-- **Board api.bosancica.ai:82:** port je otvoren, ali svaki HTTP zahtjev iz terminala ili iz novog Chrome taba dobija *connection reset*. Taskove treba unijeti ručno iz `PDR_GAP_TASKS.md`, ili provjeriti firewall ili whitelist na serveru.
+- **Board:** svih 37 taskova je na boardu (`https://api.bosancica.ai:82`, samo HTTPS). Prebacivanje u „Na testiranju“ traži agentski API pristup (Basic auth), a ne browser sesiju. Za to postoji skripta `board-handoff.mjs` (vidi razgovor), a ručno prebacivanje je takođe moguće.
 - Koeficijenti su placeholder. Formule i stope mora definisati i odobriti metodološki tim (PDR04).
 - Demo podaci pokrivaju samo područje Sarajeva. Za cijelu BiH pokreni `pdr:import-layers` bez `--bbox` (CLC brzo, OSM objekti ~1–2 h).
 - Stanovništvo je procjena iz broja objekata. Bolje bi bilo koristiti GHS-POP raster ili popisne krugove.
-- Nije urađeno:
-  - **B14**: FWI iz IDW interpolacije AWS osmatranja. B13 je urađen (vidi gore).
-    Napomena: popup šume u `GISMap.tsx` (`computeFireIndexMetrics`) i dalje prikazuje stare heurističke KBDI/GFI vrijednosti. Slojevi na karti ih više ne koriste.
-  - **B15**: registar slojeva kao vremenska serija.
-  - **F8**: timeline za hotspote i VDM. F7 je urađen u sklopu B13.
-  - **B21/F13** je u praksi pokriven PDR metapodacima (stradali, opasne materije, intervencija, tražena pomoć). Postojeći obrazac incidenta nije proširivan.
+- Svi taskovi s liste su urađeni. Otvoreno ostaje:
+  - prave stope koeficijenata (metodološki tim);
+  - odluka o `ENTITY_STRICT_SCOPING`;
+  - potvrda da li je AWS `precipMm` količina po očitanju ili dnevni zbir;
+  - VDM arhiva se puni tek na serveru (GDAL);
+  - popup šume u `GISMap.tsx` (`computeFireIndexMetrics`) i dalje prikazuje stare heurističke KBDI/GFI vrijednosti.
