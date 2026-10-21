@@ -1,4 +1,5 @@
 import { fetchCurrentAwsDataset } from './services/awsCurrentService';
+import { API_BASE_URL } from './services/api';
 
 export const fhmzRealDummyData = {
   scrapedAt: "2026-05-15T18:00:00.000Z",
@@ -191,7 +192,7 @@ export interface ScrapedData {
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
-const FHMZ_FEED_URL = "/api/weather-stations/fbih";
+const FHMZ_FEED_URL = `${API_BASE_URL}/weather-stations/fbih`;
 
 /** Parse a cell string to float, returning null for empty / error codes. */
 function parseNum(raw: string): number | null {
@@ -263,6 +264,7 @@ async function scrapeFeed(): Promise<ScrapedData> {
   const html = await res.text();
   const doc = new DOMParser().parseFromString(html, "text/html");
   const tables = Array.from(doc.querySelectorAll("table"));
+  if (!tables.length) throw new Error('FHMZ response contains no weather station tables.');
 
   // Report date printed on page
   const bodyText = doc.body?.innerText ?? "";

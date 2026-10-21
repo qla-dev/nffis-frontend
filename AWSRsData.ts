@@ -2,6 +2,7 @@
 
 import { toLatinScript } from './lib/text/latinScript';
 import { fetchCurrentAwsDataset } from './services/awsCurrentService';
+import { API_BASE_URL } from './services/api';
 
 export interface RsStation {
   type: 'meteo';
@@ -60,7 +61,7 @@ export const rsAwsDummyData: RsScrapedData = {
 
 // ─── Scraper ─────────────────────────────────────────────────────────────────
 
-const RS_FEED_URL = '/api/weather-stations/rs';
+const RS_FEED_URL = `${API_BASE_URL}/weather-stations/rs`;
 
 function parseNum(v: string | number | null | undefined): number | null {
   if (v === null || v === undefined || v === '' || v === 'null') return null;
