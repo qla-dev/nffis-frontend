@@ -2,6 +2,7 @@ import { fromArrayBuffer } from 'geotiff';
 import * as plotty from 'plotty';
 import { EFFIS_FWI_COLOR_STOPS, EFFIS_FWI_DISPLAY_MAX } from '../fwi/effisFwiScale';
 import { API_BASE_URL } from '../../services/api';
+import { SUPPLEMENTARY_INDICES, indexColorStops, type DailyIndexType } from '../fwi/supplementaryIndices';
 
 const SCALE = 'nffis-mapbox-fwi';
 plotty.addColorScale(SCALE, EFFIS_FWI_COLOR_STOPS.map(stop => stop.color), EFFIS_FWI_COLOR_STOPS.map(stop => stop.position));
@@ -19,7 +20,13 @@ function blob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Unable to encode raster image.')), 'image/png'));
 }
 
-export async function renderFwiCogForMapbox(url: string, signal?: AbortSignal): Promise<MapboxRasterImage> {
+export async function renderFwiCogForMapbox(url: string, signal?: AbortSignal, type: DailyIndexType = 'FWI'): Promise<MapboxRasterImage> {
+  const definition = type === 'FWI' ? null : SUPPLEMENTARY_INDICES[type];
+  const scale = definition ? `nffis-mapbox-${type}` : SCALE;
+  if (type !== 'FWI') {
+    const stops = indexColorStops(type);
+    plotty.addColorScale(scale, stops.map(stop => stop.color), stops.map(stop => stop.position));
+  }
   const resolved = url.startsWith('/api/') ? `${API_BASE_URL}${url.slice(4)}` : url;
   const response = await fetch(resolved, { credentials: 'include', headers: { Accept: 'image/tiff' }, signal });
   if (!response.ok) throw new Error(`FWI COG request failed (${response.status}).`);
@@ -40,7 +47,7 @@ export async function renderFwiCogForMapbox(url: string, signal?: AbortSignal): 
   canvas.height = image.getHeight();
   new plotty.plot({
     canvas, data: values, width: canvas.width, height: canvas.height,
-    domain: [0, EFFIS_FWI_DISPLAY_MAX], colorScale: SCALE,
+    domain: [definition?.displayMin ?? 0, definition?.displayMax ?? EFFIS_FWI_DISPLAY_MAX], colorScale: scale,
     clampLow: true, clampHigh: true, noDataValue: image.getGDALNoData(), useWebGL: false,
   }).render();
   const objectUrl = URL.createObjectURL(await blob(canvas));

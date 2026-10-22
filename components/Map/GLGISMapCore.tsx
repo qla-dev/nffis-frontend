@@ -26,7 +26,8 @@ import { MapControls } from './MapControls';
 import { MapboxOperationalLayers } from './MapboxOperationalLayers';
 import { GLMapScaleControl } from './GLMapScaleControl';
 import { archiveFwiDateRange, defaultFwiDateRange, filterFwiProducts, FwiDateRangePicker, FwiDateTimeline, type FwiDateRange } from './FwiDateTimeline';
-import { fetchFwiAvailability, type FireWeatherProduct } from '../../services/fireMonitoringService';
+import { fetchDailyIndexAvailability, type FireWeatherProduct } from '../../services/fireMonitoringService';
+import { timelineIndexType, SUPPLEMENTARY_INDICES, indexCssGradient, indexTicks } from '../../lib/fwi/supplementaryIndices';
 import { BH_FWI_CSS_GRADIENT } from '../../lib/fwi/bhFwiColorScale';
 import { FwiScaleLabels, FWI_SCALE_LABELS } from './FwiScaleLabels';
 import { EFFIS_FWI_DISPLAY_MAX } from '../../lib/fwi/effisFwiScale';
@@ -295,6 +296,9 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
   const [allFwiArchive, setAllFwiArchive] = useState<FireWeatherProduct[]>([]);
   const [fwiRange, setFwiRange] = useState<FwiDateRange>(defaultFwiDateRange);
   const fwiArchive = useMemo(() => filterFwiProducts(allFwiArchive, fwiRange), [allFwiArchive, fwiRange]);
+  const [fwiError, setFwiError] = useState<string | null>(null);
+  const [fwiLoading, setFwiLoading] = useState(false);
+  const [fwiRasterError, setFwiRasterError] = useState<string | null>(null);
   const [fwiIndex, setFwiIndex] = useState(0);
   const [fwiPlaying, setFwiPlaying] = useState(false);
   const [isPickingWeather, setIsPickingWeather] = useState(false);
@@ -368,7 +372,11 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
   ].map(Number).join('|'), [activeLayerSignature]);
   const incidentLayerSignature = `${Number(activeLayers.has(MapLayer.FIRE_RISK))}|${Number(activeLayers.has(MapLayer.FLOOD_RISK))}`;
   const terrainEnabled = activeLayers.has(MapLayer.TERRAIN);
-  const fwiVisible = canViewFwi && (activeLayers.has(MapLayer.FWI_BOSNIAN) || activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI));
+  const dailyIndexType = timelineIndexType(activeLayers);
+  const fwiVisible = canViewFwi && Boolean(dailyIndexType);
+  const indexDefinition = dailyIndexType && dailyIndexType !== 'FWI' ? SUPPLEMENTARY_INDICES[dailyIndexType] : null;
+  const indexName = indexDefinition?.label[language === Language.BS ? 'bs' : 'en'] ?? 'FWI';
+  const indexMax = indexDefinition?.displayMax ?? EFFIS_FWI_DISPLAY_MAX;
   const t = TRANSLATIONS[language];
 
   useEffect(() => {
@@ -376,16 +384,20 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
   }, [onDatasetFeaturesLoaded, onDatasetLayerLoadingChange]);
 
   useEffect(() => {
-    if (!fwiVisible) { setFwiPlaying(false); return; }
+    setFwiPlaying(false);
+    setAllFwiArchive([]);
+    setFwiError(null);
+    if (!fwiVisible || !dailyIndexType) return;
+    setFwiLoading(true);
     const controller = new AbortController();
-    fetchFwiAvailability(controller.signal).then(({ data }) => {
+    fetchDailyIndexAvailability(dailyIndexType, controller.signal).then(({ data }) => {
       const range = archiveFwiDateRange(data);
       setAllFwiArchive(data);
       setFwiRange(range);
       setFwiIndex(Math.max(0, filterFwiProducts(data, range).length - 1));
-    }).catch(error => { if ((error as Error).name !== 'AbortError') console.warn('FWI archive unavailable', error); });
+    }).catch(error => { if (!controller.signal.aborted) setFwiError('Unable to load raster availability: ' + (error as Error).message); }).finally(() => { if (!controller.signal.aborted) setFwiLoading(false); });
     return () => controller.abort();
-  }, [fwiVisible]);
+  }, [fwiVisible, dailyIndexType]);
 
   const changeFwiRange = (range: FwiDateRange) => {
     setFwiPlaying(false);
@@ -823,7 +835,8 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
             createMarker={engine.createMarker as never}
             createPopup={engine.createPopup as never}
             onLocationSelect={setWeatherLocation}
-            selectedFwiProductId={fwiArchive[fwiIndex]?.id}
+            selectedFwiProductId={fwiArchive[fwiIndex]?.index_type === dailyIndexType ? fwiArchive[fwiIndex]?.id : null}
+            onFwiRasterError={setFwiRasterError}
             geoEditorMode={gisMapProps.geoEditorMode}
             geoEditorFeatures={gisMapProps.geoEditorFeatures}
             geoEditorSelectedFeatureId={gisMapProps.geoEditorSelectedFeatureId}
@@ -889,7 +902,7 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-black">NFFIS FWI · EFFIS scale</div>
             {Number.isFinite(fwiArchive[fwiIndex]?.statistics?.mean) && <div className="shrink-0 text-sm font-black text-orange-300" aria-live="polite">
-              FWI {fwiArchive[fwiIndex].statistics!.mean.toFixed(1)}
+              {indexName} {fwiArchive[fwiIndex].statistics!.mean.toFixed(1)}
             </div>}
           </div>
           <div className="mt-3 flex items-center justify-between gap-3">
@@ -897,15 +910,15 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
               {Number.isFinite(fwiArchive[fwiIndex]?.statistics?.mean) && (
                 <div role="img" aria-label={`FWI ${fwiArchive[fwiIndex].statistics!.mean.toFixed(1)}`} title={`FWI ${fwiArchive[fwiIndex].statistics!.mean.toFixed(1)}`}
                   className="absolute top-0 z-10 -translate-x-1/2 transition-[left] duration-300"
-                  style={{ left: `${Math.max(0, Math.min(100, fwiArchive[fwiIndex].statistics!.mean / EFFIS_FWI_DISPLAY_MAX * 100))}%` }}>
+                  style={{ left: `${Math.max(0, Math.min(100, fwiArchive[fwiIndex].statistics!.mean / indexMax * 100))}%` }}>
                   <div className="h-0 w-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-white drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]" />
                 </div>
               )}
-              <div className="relative h-3 rounded-full" style={{ background: BH_FWI_CSS_GRADIENT }}>
-                {FWI_SCALE_LABELS.map(value => <span key={value} className="absolute top-0 h-full w-px bg-slate-950/40"
-                  style={{ left: `${value / EFFIS_FWI_DISPLAY_MAX * 100}%` }} />)}
+              <div className="relative h-3 rounded-full" style={{ background: dailyIndexType && dailyIndexType !== 'FWI' ? indexCssGradient(dailyIndexType) : BH_FWI_CSS_GRADIENT }}>
+                {(dailyIndexType && dailyIndexType !== 'FWI' ? indexTicks(dailyIndexType).map(tick => tick.value) : FWI_SCALE_LABELS).map(value => <span key={value} className="absolute top-0 h-full w-px bg-slate-950/40"
+                  style={{ left: `${value / indexMax * 100}%` }} />)}
               </div>
-              <FwiScaleLabels />
+              <div className="flex justify-between text-[10px]">{indexDefinition ? indexTicks(indexDefinition.type).map(tick => <span key={tick.value}>{tick.value}</span>) : <FwiScaleLabels />}</div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {fwiArchive.length > 0 && <button type="button" onClick={() => {
@@ -921,6 +934,9 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
           </div>
           <div className="mt-3"><FwiDateRangePicker range={fwiRange} onChange={changeFwiRange} language={language}
             maxDate={defaultFwiDateRange().to} firstAvailableDate={allFwiArchive[0]?.valid_at.slice(0, 10)} /></div>
+          {(fwiError || fwiRasterError || !fwiArchive.length) && <div role="status" className="mt-2 text-xs text-amber-300">
+            {fwiError || fwiRasterError || (fwiLoading ? 'Loading raster products?' : 'No approved ' + indexName + ' raster products available for this date range.')}
+          </div>}
           {allFwiArchive.length > 0 && <FwiDateTimeline products={fwiArchive} range={fwiRange} index={fwiIndex}
             onSelect={(index) => { setFwiPlaying(false); setFwiIndex(index); }} language={language} />}
         </div>

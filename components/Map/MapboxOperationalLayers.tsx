@@ -6,10 +6,11 @@ import { MapLayer, RegionType } from '../../types';
 import { allFhmzStations, scrape, type AnyStation } from '../../AWSFBiHData';
 import { rsAwsDummyData, scrapeRs, type RsStation } from '../../AWSRsData';
 import {
-  fetchActiveFires, fetchFireIntelligenceProducts, fetchFireScenarioPerimeters,
+  fetchActiveFires, fetchFireScenarioPerimeters,
   fetchFireScenarios, FIRE_REFRESH_MS, type FireEventProperties,
 } from '../../services/fireMonitoringService';
 import { fetchWindGrid, WIND_REFRESH_MS } from '../../services/windService';
+import { timelineIndexType } from '../../lib/fwi/supplementaryIndices';
 import { renderFwiCogForMapbox } from '../../lib/gis/mapboxRasterImage';
 import { insertVertex, outerRings, positionKey, removeVertex, updateVertex, vertices, type Position, type VertexRef } from '../../lib/gis/geoEditor';
 import { AWSHoverCard } from './layers/AWS/AWSHoverCard';
@@ -36,6 +37,7 @@ interface Props {
   createPopup: () => PopupLike;
   onLocationSelect?: (location: { name: string; lat: number; lng: number }) => void;
   selectedFwiProductId?: number | null;
+  onFwiRasterError?: (message: string | null) => void;
   geoEditorMode: 'view' | 'draw' | 'edit-single' | 'edit-shared';
   geoEditorFeatures: GeoJSON.Feature[];
   geoEditorSelectedFeatureId: string | null;
@@ -267,9 +269,23 @@ export function MapboxOperationalLayers(props: Props) {
     if(!activeLayers.has(MapLayer.METEOBLUE)||!props.canViewMapLayers){remove(map,[METEOBLUE_LAYER],[METEOBLUE_SOURCE]);return;}let alive=true;const controller=new AbortController();fetch('https://maps-api.meteoblue.com/v1/time/hourly/ICONAUTO?lang=en&apikey=be72f76237db',{signal:controller.signal}).then(r=>{if(!r.ok)throw new Error(String(r.status));return r.json();}).then(data=>{if(!alive)return;const url=`https://maps-api.meteoblue.com/v1/map/raster/ICONAUTO/${data.current}/11~2%20m%20above%20gnd~hourly~none~contourSteps~-10.0~rgba(52,140,237,1.0)~0.0~rgba(0,239,124,1.0)~10.0~rgba(0,114,41,1.0)~20.0~rgba(255,246,0,1.0)~30.0~rgba(255,102,0,1.0)/{z}/{x}/{y}?temperatureUnit=C&apikey=be72f76237db&lastUpdate=${data.lastUpdate}`;remove(map,[METEOBLUE_LAYER],[METEOBLUE_SOURCE]);map.addSource(METEOBLUE_SOURCE,{type:'raster',tiles:[url],tileSize:256});map.addLayer({id:METEOBLUE_LAYER,type:'raster',source:METEOBLUE_SOURCE,paint:{'raster-opacity':.78}});}).catch(e=>{if((e as Error).name!=='AbortError')console.warn('Meteoblue unavailable',e);});return()=>{alive=false;controller.abort();remove(map,[METEOBLUE_LAYER],[METEOBLUE_SOURCE]);};
   },[map,meteoblueVisible,props.canViewMapLayers]);
 
-  useEffect(()=>{
-    const fwiActive=props.canViewFwi&&[MapLayer.FWI_ANGSTROM,MapLayer.FWI_GFI,MapLayer.FWI_KBDI,MapLayer.FWI_BOSNIAN,MapLayer.FIRE_INTELLIGENCE_FWI].some(layer=>activeLayers.has(layer));if(!fwiActive){remove(map,[FWI_LAYER,FWI_HEAT_LAYER],[FWI_SOURCE,FWI_POINTS_SOURCE]);return;}let release:(()=>void)|null=null;const controller=new AbortController();const load=async()=>{try{const wantsCog=activeLayers.has(MapLayer.FWI_BOSNIAN)||activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI);if(!wantsCog)throw new Error('Use calculated index surface.');let id=props.selectedFwiProductId;if(!id){const products=await fetchFireIntelligenceProducts(controller.signal);id=products.data.filter(p=>p.index_type==='FWI'&&p.forecast_day===0&&p.status==='approved'&&p.artifact_urls?.cog).sort((a,b)=>Date.parse(b.valid_at)-Date.parse(a.valid_at))[0]?.id;}if(!id)throw new Error('No approved FWI product.');const image=await renderFwiCogForMapbox(`/api/fire-intelligence/products/${id}/artifact/cog`,controller.signal);release=image.release;if(controller.signal.aborted)return;remove(map,[FWI_LAYER],[FWI_SOURCE]);map.addSource(FWI_SOURCE,{type:'image',url:image.url,coordinates:image.coordinates});map.addLayer({id:FWI_LAYER,type:'raster',source:FWI_SOURCE,paint:{'raster-opacity':.78,'raster-resampling':'linear'}});}catch(e){if(controller.signal.aborted||(e as Error).name==='AbortError')return;const key=activeLayers.has(MapLayer.FWI_ANGSTROM)?'angstrom':activeLayers.has(MapLayer.FWI_GFI)?'gfi':activeLayers.has(MapLayer.FWI_KBDI)?'kbdi':'fwi';const max=key==='angstrom'?6:key==='gfi'?15:key==='kbdi'?800:80;const features=MOCK_FORESTS.filter(f=>f.type!==RegionType.LANDFILL).map(f=>({type:'Feature' as const,geometry:{type:'Point' as const,coordinates:[f.coordinates[1],f.coordinates[0]]},properties:{value:key==='angstrom'?6-f.riskScore*4:key==='gfi'?f.riskScore*15:key==='kbdi'?f.riskScore*700:f.riskScore*80}}));map.addSource(FWI_POINTS_SOURCE,{type:'geojson',data:{type:'FeatureCollection',features}});map.addLayer({id:FWI_HEAT_LAYER,type:'heatmap',source:FWI_POINTS_SOURCE,paint:{'heatmap-weight':['interpolate',['linear'],['get','value'],0,0,max,1],'heatmap-radius':70,'heatmap-opacity':.72,'heatmap-color':['interpolate',['linear'],['heatmap-density'],0,'rgba(34,197,94,0)',.3,'#facc15',.55,'#f97316',.8,'#dc2626',1,'#581c87']}});}};void load();return()=>{controller.abort();release?.();remove(map,[FWI_LAYER,FWI_HEAT_LAYER],[FWI_SOURCE,FWI_POINTS_SOURCE]);};
-  },[fwiSignature,map,props.canViewFwi,props.selectedFwiProductId]);
+  useEffect(() => {
+    const type = timelineIndexType(activeLayers);
+    remove(map, [FWI_LAYER, FWI_HEAT_LAYER], [FWI_SOURCE, FWI_POINTS_SOURCE]);
+    props.onFwiRasterError?.(null);
+    if (!props.canViewFwi || !type || !props.selectedFwiProductId) return;
+    const controller = new AbortController();
+    let release: (() => void) | undefined;
+    void renderFwiCogForMapbox('/api/fire-intelligence/products/' + props.selectedFwiProductId + '/artifact/cog', controller.signal, type).then(image => {
+      if (controller.signal.aborted) { image.release(); return; }
+      release = image.release;
+      map.addSource(FWI_SOURCE, { type: 'image', url: image.url, coordinates: image.coordinates });
+      map.addLayer({ id: FWI_LAYER, type: 'raster', source: FWI_SOURCE, paint: { 'raster-opacity': .78, 'raster-resampling': 'linear' } });
+    }).catch(error => {
+      if (!controller.signal.aborted) props.onFwiRasterError?.('Unable to load ' + type + ' raster: ' + (error as Error).message);
+    });
+    return () => { controller.abort(); remove(map, [FWI_LAYER, FWI_HEAT_LAYER], [FWI_SOURCE, FWI_POINTS_SOURCE]); release?.(); };
+  }, [fwiSignature, map, props.canViewFwi, props.selectedFwiProductId, props.onFwiRasterError]);
 
   useEffect(()=>{
     remove(map,[EDIT_FILL,EDIT_LINE,EDIT_VERTEX_LAYER],[EDIT_SOURCE,EDIT_VERTEX_SOURCE]);
