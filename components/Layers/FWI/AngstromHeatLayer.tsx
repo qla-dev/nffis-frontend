@@ -1,47 +1,5 @@
-import React, { useCallback } from 'react';
-import { FWIGeoTiffLayer } from './FWIGeoTiffLayer';
+import React from 'react';
+import { ServerIndexCogLayer, type ServerIndexLayerProps } from './ServerIndexCogLayer';
 
-interface AngstromHeatLayerProps {
-  points: Array<{
-    id: string;
-    lat: number;
-    lng: number;
-    angstrom: number;
-  }>;
-  rasterBounds?: {
-    west: number;
-    east: number;
-    south: number;
-    north: number;
-  };
-  pane?: string;
-  visible: boolean;
-}
-
-export const AngstromHeatLayer: React.FC<AngstromHeatLayerProps> = ({
-  points,
-  rasterBounds,
-  pane,
-  visible,
-}) => {
-  const getAngstromSeverity = useCallback(
-    (point: AngstromHeatLayerProps['points'][number]) => Math.max(0, 6 - point.angstrom),
-    []
-  );
-
-  return (
-    <FWIGeoTiffLayer
-      points={points}
-      visible={visible}
-      valueAccessor={getAngstromSeverity}
-      displayMin={0}
-      displayMax={5}
-      rasterBounds={rasterBounds}
-      colorScaleName="inferno"
-      debugLabel="Angstrom"
-      opacity={0.74}
-      influenceRadius={0.9}
-      pane={pane}
-    />
-  );
-};
+/** Angström index (Chandler et al. 1983), computed daily by the Fire Intelligence worker. */
+export const AngstromHeatLayer: React.FC<ServerIndexLayerProps> = (props) => <ServerIndexCogLayer type="ANGSTROM" {...props} />;

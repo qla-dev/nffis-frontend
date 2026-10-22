@@ -4,6 +4,7 @@ import { Sun, Moon, Wind, Thermometer, Trees, Settings2, Info, Satellite, X, Map
 import { MapLayer, Language, RegionType } from '../../types';
 import { TRANSLATIONS } from '../../constants';
 import { FOREST_RASTER_LAYERS, FOREST_WMS_URL } from '../../lib/gis/forestRasterLayers';
+import { SUPPLEMENTARY_INDICES } from '../../lib/fwi/supplementaryIndices';
 
 const FirefighterIcon = ({ size = 24, className = '', color = 'currentColor' }: { size?: number | string; className?: string; color?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 512 512" fill={color} className={className}>

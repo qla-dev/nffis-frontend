@@ -10,6 +10,7 @@ import {
   fetchFireScenarios, FIRE_REFRESH_MS, type FireEventProperties,
 } from '../../services/fireMonitoringService';
 import { fetchWindGrid, WIND_REFRESH_MS } from '../../services/windService';
+import { timelineIndexType } from '../../lib/fwi/supplementaryIndices';
 import { renderBosnianFwiForMapbox, renderFwiCogForMapbox } from '../../lib/gis/mapboxRasterImage';
 import { insertVertex, outerRings, positionKey, removeVertex, updateVertex, vertices, type Position, type VertexRef } from '../../lib/gis/geoEditor';
 import { AWSHoverCard } from './layers/AWS/AWSHoverCard';
@@ -305,7 +306,8 @@ export function MapboxOperationalLayers(props: Props) {
   useEffect(() => {
     const bosnian = props.canViewFwi && activeLayers.has(MapLayer.FWI_BOSNIAN);
     const canadian = props.canViewFwi && activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI);
-    if (!bosnian && !canadian) return;
+    const type = timelineIndexType(activeLayers);
+    if (!bosnian && !type) return;
     let alive = true;
     let release: (() => void) | undefined;
     const controller = new AbortController();
@@ -323,11 +325,13 @@ export function MapboxOperationalLayers(props: Props) {
           let id = props.selectedFwiProductId;
           if (!id && !props.fwiDate) {
             const products = await fetchFireIntelligenceProducts(controller.signal);
-            id = products.data.filter(p => p.index_type === 'FWI' && p.forecast_day === 0 && p.status === 'approved' && p.artifact_urls?.cog)
+            id = products.data.filter(p => p.index_type === type && p.forecast_day === 0 && p.status === 'approved' && p.artifact_urls?.cog)
               .sort((a, b) => Date.parse(b.valid_at) - Date.parse(a.valid_at))[0]?.id;
           }
-          if (!id) throw new Error('No Canadian FWI COG is saved for the selected date.');
-          image = await renderFwiCogForMapbox(`/api/fire-intelligence/products/${id}/artifact/cog`, controller.signal);
+          if (!id) throw new Error(type === 'FWI' ? 'No Canadian FWI COG is saved for the selected date.' : 'No approved ' + type + ' raster is saved for the selected date.');
+          image = type === 'FWI'
+            ? await renderFwiCogForMapbox(`/api/fire-intelligence/products/${id}/artifact/cog`, controller.signal)
+            : await renderFwiCogForMapbox(`/api/fire-intelligence/products/${id}/artifact/cog`, controller.signal, type ?? 'FWI');
         }
         if (!alive) { image.release(); return; }
         release = image.release;

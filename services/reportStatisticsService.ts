@@ -40,7 +40,21 @@ export interface CreateReportPayload {
   wind_direction_degrees?: number;
   wind_gust_kmh?: number;
   humidity_percent?: number;
+  // Structured incident attributes (FC_PDR13).
+  status?: IncidentStatus;
+  affected_area_ha?: number | null;
+  intervention_details?: string | null;
+  personnel_deployed?: number | null;
+  vehicles_deployed?: number | null;
+  fatalities?: number | null;
+  injured?: number | null;
+  evacuated?: number | null;
+  dangerous_substances?: string | null;
+  assistance_required?: string | null;
 }
+
+export const INCIDENT_STATUSES = ['reported', 'confirmed', 'active', 'contained', 'extinguished', 'false_alarm'] as const;
+export type IncidentStatus = typeof INCIDENT_STATUSES[number];
 
 export interface CreatedReport extends CreateReportPayload {
   id: number;

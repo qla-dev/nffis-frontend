@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound, Flame, UploadCloud, Calculator } from 'lucide-react';
+import { Map, ListFilter, AlertTriangle, BarChart3, ShieldCheck, Globe, Settings, HelpCircle, LogOut, UserRound, Flame, UploadCloud, Calculator, FileSpreadsheet } from 'lucide-react';
+import { pdrText } from '../lib/pdr/i18n';
 import { Language, AppState } from '../types';
 import { TRANSLATIONS } from '../constants';
 import type { AuthUser } from '../lib/auth/session';
 import { ApiUsageDashboard } from './Admin/ApiUsageDashboard';
 import { AwsUploadPanel } from './AwsUploadPanel';
 import { canUploadAws } from '../lib/auth/session';
+import { tr } from '../lib/i18n/uiText';
 
 interface NavProps {
   state: AppState;
@@ -21,6 +23,8 @@ interface NavProps {
   canCreateReports: boolean;
   canViewLayers: boolean;
   canViewFireMonitoring?: boolean;
+  canViewPdr?: boolean;
+  canViewUsers?: boolean;
   onLogout: () => void;
 }
 
@@ -38,6 +42,8 @@ export const Navigation: React.FC<NavProps> = ({
   canCreateReports,
   canViewLayers,
   canViewFireMonitoring = false,
+  canViewPdr = false,
+  canViewUsers = false,
   onLogout,
 }) => {
   const t = TRANSLATIONS[state.language];
@@ -53,6 +59,7 @@ export const Navigation: React.FC<NavProps> = ({
     return (
       <button
         onClick={() => onClick ? onClick() : onSetView(id)}
+        aria-label={typeof label === 'string' ? label : undefined}
         className={`group relative flex items-center w-full h-10 transition-all duration-150 ${
           isActive 
             ? 'bg-blue-600/10 text-blue-400' 
@@ -90,11 +97,12 @@ export const Navigation: React.FC<NavProps> = ({
         {/* Navigation Groups */}
         <div className="flex-1 py-4 flex flex-col gap-1">
           <NavItem icon={Map} label={t.map} id="map" />
-          {canViewFireMonitoring && <NavItem icon={Flame} label="Fire monitoring" id="fires" color="text-orange-500" />}
+          {canViewFireMonitoring && <NavItem icon={Flame} label={tr('Fire monitoring')} id="fires" color="text-orange-500" />}
+          {canViewPdr && <NavItem icon={FileSpreadsheet} label={pdrText(state.language).module} id="pdr" color="text-amber-500" />}
           {canViewReports && <NavItem icon={BarChart3} label={t.stats} id="stats" />}
           {canViewLayers && <NavItem icon={ListFilter} label={t.layers} id="layers" onClick={onOpenLayers} />}
           {isSuperAdmin && onOpenFwiCalculations && <NavItem icon={Calculator} label="FWI calculations" id="fwi-calculations" onClick={onOpenFwiCalculations} />}
-          {canUploadAws(user) && <NavItem icon={UploadCloud} label="Upload AWS data" onClick={() => setShowAwsUpload(true)} />}
+          {canUploadAws(user) && <NavItem icon={UploadCloud} label={tr('Upload AWS data')} onClick={() => setShowAwsUpload(true)} />}
           
           <div className="my-2 border-t border-slate-800/30 mx-2" />
           
@@ -116,10 +124,10 @@ export const Navigation: React.FC<NavProps> = ({
                label={`${t.activeLanguage}: ${state.language.toUpperCase()}`}
                onClick={() => onSetLang(nextLanguage)}
              />
-             <NavItem icon={Settings} label={t.system} onClick={() => {}} />
+             <NavItem icon={Settings} label={t.system} id="admin" onClick={canViewUsers ? undefined : () => {}} />
              <NavItem icon={HelpCircle} label={t.support} onClick={() => {}} />
              <NavItem icon={UserRound} label={`${user.username} · ${user.role?.name || 'No role'}${isSuperAdmin ? ' · API usage' : ''}`} onClick={() => isSuperAdmin && setShowApiUsage(true)} />
-             <NavItem icon={LogOut} label="Sign out" onClick={onLogout} color="text-red-400" />
+             <NavItem icon={LogOut} label={tr('Sign out')} onClick={onLogout} color="text-red-400" />
            </div>
         </div>
       </nav>
@@ -137,10 +145,10 @@ export const Navigation: React.FC<NavProps> = ({
           <button
             type="button"
             onClick={() => onSetView('fires')}
-            aria-label="Fire monitoring"
+            aria-label={tr('Fire monitoring')}
             className={`flex w-full flex-col items-center justify-center gap-1 transition-colors ${state.view === 'fires' ? 'text-orange-500' : 'text-slate-500'}`}
           >
-            <Flame size={20} /><span className="w-full truncate px-1 text-center text-[10px] font-bold uppercase tracking-widest">Fires</span>
+            <Flame size={20} /><span className="w-full truncate px-1 text-center text-[10px] font-bold uppercase tracking-widest">{tr('Fires')}</span>
           </button>
         ) : <span />}
         

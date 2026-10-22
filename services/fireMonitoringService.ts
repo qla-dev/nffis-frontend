@@ -171,6 +171,8 @@ export function markFireNotificationRead(id: string): Promise<{ data: FireNotifi
 export function fetchFireIntelligenceHealth(signal?: AbortSignal): Promise<FireIntelligenceHealth> { return apiRequest('/fire-intelligence/health', { signal }); }
 export function fetchFireIntelligenceProducts(signal?: AbortSignal): Promise<{ data: FireWeatherProduct[] }> { return apiRequest('/fire-intelligence/products', { signal }); }
 export function fetchFwiAvailability(signal?: AbortSignal): Promise<{ data: FireWeatherProduct[]; meta: { days: number | null; date_from: string | null; date_to: string } }> { return apiRequest('/fire-intelligence/fwi-availability', { signal, cache: 'no-store' }); }
+/** Approved daily products of one index (FWI, ANGSTROM, GFDI or KBDI), one per date. */
+export function fetchDailyIndexAvailability(type: 'FWI' | 'ANGSTROM' | 'GFDI' | 'KBDI', signal?: AbortSignal): Promise<{ data: FireWeatherProduct[]; meta: { index_type: string; days: number | null; date_from: string | null; date_to: string } }> { return apiRequest(`/fire-intelligence/availability/${type}`, { signal, cache: 'no-store' }); }
 export function fetchFireIntelligenceGrid(productId: number, signal?: AbortSignal): Promise<GeoJSON.FeatureCollection<GeoJSON.Point, { value: number; danger_class?: string }>> { return apiRequest(`/fire-intelligence/products/${productId}/artifact/geojson`, { signal }); }
 export async function fetchFireIntelligenceCog(productId: number, signal?: AbortSignal): Promise<ArrayBuffer> {
   const response = await fetch(`${API_BASE_URL}/fire-intelligence/products/${productId}/artifact/cog`, { credentials: 'include', headers: { Accept: 'image/tiff' }, signal });

@@ -27,7 +27,8 @@ import { MapControls } from './MapControls';
 import { MapboxOperationalLayers } from './MapboxOperationalLayers';
 import { GLMapScaleControl } from './GLMapScaleControl';
 import { BosnianFwiDateControls, archiveFwiDateRange, defaultFwiDateRange, filterFwiProducts, FwiDateRangePicker, FwiDateTimeline, type FwiDateRange } from './FwiDateTimeline';
-import { fetchFwiAvailability, type FireWeatherProduct } from '../../services/fireMonitoringService';
+import { fetchFwiAvailability, fetchDailyIndexAvailability, type FireWeatherProduct } from '../../services/fireMonitoringService';
+import { timelineIndexType, SUPPLEMENTARY_INDICES, indexCssGradient, indexTicks } from '../../lib/fwi/supplementaryIndices';
 import { BH_FWI_CSS_GRADIENT } from '../../lib/fwi/bhFwiColorScale';
 import { FwiScaleLabels, FWI_SCALE_LABELS } from './FwiScaleLabels';
 import { EFFIS_FWI_DISPLAY_MAX } from '../../lib/fwi/effisFwiScale';
@@ -299,6 +300,8 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
   const [allFwiArchive, setAllFwiArchive] = useState<FireWeatherProduct[]>([]);
   const [fwiRange, setFwiRange] = useState<FwiDateRange>(defaultFwiDateRange);
   const fwiArchive = useMemo(() => filterFwiProducts(allFwiArchive, fwiRange), [allFwiArchive, fwiRange]);
+  const [fwiError, setFwiError] = useState<string | null>(null);
+  const [fwiLoading, setFwiLoading] = useState(false);
   const [fwiIndex, setFwiIndex] = useState(0);
   const [bosnianFwiMean, setBosnianFwiMean] = useState<number | null>(null);
   const [fwiLayerError, setFwiLayerError] = useState<string | null>(null);
@@ -374,7 +377,11 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
   ].map(Number).join('|'), [activeLayerSignature]);
   const incidentLayerSignature = `${Number(activeLayers.has(MapLayer.FIRE_RISK))}|${Number(activeLayers.has(MapLayer.FLOOD_RISK))}`;
   const terrainEnabled = activeLayers.has(MapLayer.TERRAIN);
-  const fwiVisible = canViewFwi && (activeLayers.has(MapLayer.FWI_BOSNIAN) || activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI));
+  const dailyIndexType = activeLayers.has(MapLayer.FWI_BOSNIAN) ? null : timelineIndexType(activeLayers);
+  const fwiVisible = canViewFwi && (Boolean(dailyIndexType) || activeLayers.has(MapLayer.FWI_BOSNIAN));
+  const indexDefinition = dailyIndexType && dailyIndexType !== 'FWI' ? SUPPLEMENTARY_INDICES[dailyIndexType] : null;
+  const indexName = indexDefinition?.label[language === Language.BS ? 'bs' : 'en'] ?? 'FWI';
+  const indexMax = indexDefinition?.displayMax ?? EFFIS_FWI_DISPLAY_MAX;
   const canadianFwiVisible = canViewFwi && activeLayers.has(MapLayer.FIRE_INTELLIGENCE_FWI);
   const displayedFwiProduct = fwiDate ? allFwiArchive.find(product => product.valid_at.slice(0, 10) === fwiDate) : fwiArchive[fwiIndex];
   const displayedFwiMean = activeLayers.has(MapLayer.FWI_BOSNIAN) ? bosnianFwiMean : displayedFwiProduct?.statistics?.mean;
@@ -392,16 +399,20 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
   }, [onDatasetFeaturesLoaded, onDatasetLayerLoadingChange]);
 
   useEffect(() => {
-    if (!canadianFwiVisible) { setFwiPlaying(false); return; }
+    setFwiPlaying(false);
+    setAllFwiArchive([]);
+    setFwiError(null);
+    if (!fwiVisible || !dailyIndexType || activeLayers.has(MapLayer.FWI_BOSNIAN)) return;
+    setFwiLoading(true);
     const controller = new AbortController();
-    fetchFwiAvailability(controller.signal).then(({ data }) => {
+    (dailyIndexType === 'FWI' ? fetchFwiAvailability(controller.signal) : fetchDailyIndexAvailability(dailyIndexType, controller.signal)).then(({ data }) => {
       const range = archiveFwiDateRange(data);
       setAllFwiArchive(data);
       setFwiRange(range);
       setFwiIndex(Math.max(0, filterFwiProducts(data, range).length - 1));
-    }).catch(error => { if ((error as Error).name !== 'AbortError') console.warn('FWI archive unavailable', error); });
+    }).catch(error => { if (!controller.signal.aborted) setFwiError('Unable to load raster availability: ' + (error as Error).message); }).finally(() => { if (!controller.signal.aborted) setFwiLoading(false); });
     return () => controller.abort();
-  }, [canadianFwiVisible]);
+  }, [fwiVisible, dailyIndexType]);
 
   const changeFwiRange = (range: FwiDateRange) => {
     setFwiPlaying(false);
@@ -877,7 +888,7 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
             createMarker={engine.createMarker as never}
             createPopup={engine.createPopup as never}
             onLocationSelect={setWeatherLocation}
-            selectedFwiProductId={canadianFwiVisible ? displayedFwiProduct?.id : undefined}
+            selectedFwiProductId={(displayedFwiProduct?.index_type ?? 'FWI') === dailyIndexType ? displayedFwiProduct?.id : undefined}
             fwiDate={fwiDate}
             bosnianBoundaryLayerId={datasetLayers.find(layer => layer.table_name === 'bih_administrative_boundaries')?.id}
             onBosnianFwiMean={setBosnianFwiMean}
@@ -948,7 +959,7 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-black">{activeLayers.has(MapLayer.FWI_BOSNIAN) ? 'Bosnian NFFIS FWI · original formula' : 'Canadian FWI COG · EFFIS scale'}</div>
             {displayedFwiMean != null && Number.isFinite(displayedFwiMean) && <div className="shrink-0 text-sm font-black text-orange-300" aria-live="polite">
-              FWI {displayedFwiMean!.toFixed(1)}
+              {indexDefinition ? indexName : 'FWI'} {displayedFwiMean!.toFixed(1)}
             </div>}
           </div>
           {fwiLayerError && <p role="alert" className="mt-2 text-xs text-amber-300">{fwiLayerError}</p>}
@@ -957,22 +968,22 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
               {displayedFwiMean != null && Number.isFinite(displayedFwiMean) && (
                 <div role="img" aria-label={`FWI ${displayedFwiMean!.toFixed(1)}`} title={`FWI ${displayedFwiMean!.toFixed(1)}`}
                   className="absolute top-0 z-10 -translate-x-1/2 transition-[left] duration-300"
-                  style={{ left: `${Math.max(0, Math.min(100, displayedFwiMean! / EFFIS_FWI_DISPLAY_MAX * 100))}%` }}>
+                  style={{ left: `${Math.max(0, Math.min(100, displayedFwiMean! / indexMax * 100))}%` }}>
                   <div className="h-0 w-0 border-l-[6px] border-r-[6px] border-t-[8px] border-l-transparent border-r-transparent border-t-white drop-shadow-[0_0_4px_rgba(0,0,0,0.8)]" />
                 </div>
               )}
-              <div className="relative h-3 rounded-full" style={{ background: BH_FWI_CSS_GRADIENT }}>
-                {FWI_SCALE_LABELS.map(value => <span key={value} className="absolute top-0 h-full w-px bg-slate-950/40"
-                  style={{ left: `${value / EFFIS_FWI_DISPLAY_MAX * 100}%` }} />)}
+              <div className="relative h-3 rounded-full" style={{ background: dailyIndexType && dailyIndexType !== 'FWI' ? indexCssGradient(dailyIndexType) : BH_FWI_CSS_GRADIENT }}>
+                {(dailyIndexType && dailyIndexType !== 'FWI' ? indexTicks(dailyIndexType).map(tick => tick.value) : FWI_SCALE_LABELS).map(value => <span key={value} className="absolute top-0 h-full w-px bg-slate-950/40"
+                  style={{ left: `${value / indexMax * 100}%` }} />)}
               </div>
-              <FwiScaleLabels />
+              <div className="flex justify-between text-[10px]">{indexDefinition ? indexTicks(indexDefinition.type).map(tick => <span key={tick.value}>{tick.value}</span>) : <FwiScaleLabels />}</div>
             </div>
 
           </div>
           {activeLayers.has(MapLayer.FWI_BOSNIAN) && <BosnianFwiDateControls date={fwiDate} onChange={onFwiDateChange} language={language} />}
-          {canadianFwiVisible && <div className="mt-3"><FwiDateRangePicker range={fwiRange} onChange={changeFwiRange} language={language}
+          {!activeLayers.has(MapLayer.FWI_BOSNIAN) && <div className="mt-3"><FwiDateRangePicker range={fwiRange} onChange={changeFwiRange} language={language}
             maxDate={defaultFwiDateRange().to} firstAvailableDate={allFwiArchive[0]?.valid_at.slice(0, 10)} /></div>}
-          {canadianFwiVisible && allFwiArchive.length > 0 && <FwiDateTimeline products={fwiDate && !displayedFwiProduct ? [] : fwiArchive} range={fwiRange} index={fwiIndex}
+          {!activeLayers.has(MapLayer.FWI_BOSNIAN) && allFwiArchive.length > 0 && <FwiDateTimeline products={fwiDate && !displayedFwiProduct ? [] : fwiArchive} range={fwiRange} index={fwiIndex}
             playing={fwiPlaying} onTogglePlaying={() => {
               if (!fwiPlaying && fwiArchive.length) {
                     const next = fwiIndex >= fwiArchive.length - 1 ? 0 : fwiIndex;
@@ -982,6 +993,7 @@ export const GLGISMapCore: React.FC<GLGISMapProps> = (allProps) => {
               setFwiPlaying(value => !value);
             }}
             onSelect={(index) => { setFwiPlaying(false); setFwiIndex(index); onFwiDateChange?.(fwiArchive[index]?.valid_at.slice(0, 10)); }} language={language} />}
+          {!activeLayers.has(MapLayer.FWI_BOSNIAN) && (fwiError || !fwiArchive.length) && <p role="status" className="mt-2 text-xs text-amber-300">{fwiError || (fwiLoading ? 'Loading raster products?' : 'No approved raster products for this date range.')}</p>}
         </div>
       )}
 
