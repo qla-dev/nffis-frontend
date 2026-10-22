@@ -1,3 +1,4 @@
+import { inspectSupplementaryWeather, type SupplementarySettings } from '../lib/fwi/supplementaryCalculations';
 import { apiRequest } from './api';
 import { MOCK_FORESTS } from '../constants';
 import { RegionType } from '../types';
@@ -10,7 +11,7 @@ export interface FwiWeather extends CanadianFwiWeatherData {
   daily: { time: string[]; precipitation_sum: Array<number | null> };
 }
 export interface FwiWeatherResponse {
-  data: FwiWeather[]; date: string; source: string; timezone: string; historical: boolean;
+  data: FwiWeather[]; date: string; source: string; timezone: string; historical: boolean; supplementary_settings?: SupplementarySettings;
 }
 export const FWI_SAMPLE_LOCATIONS: FwiLocation[] = MOCK_FORESTS
   .filter(forest => forest.type !== RegionType.LANDFILL)
@@ -32,7 +33,7 @@ export function fetchFwiWeather(locations: FwiLocation[], date: string, inspect 
   return request;
 }
 
-export function inspectFwiWeather(weather: FwiWeather, response: Pick<FwiWeatherResponse, 'date' | 'historical'>) {
+export function inspectFwiWeather(weather: FwiWeather, response: Pick<FwiWeatherResponse, 'date' | 'historical' | 'supplementary_settings'>) {
   const targetTime = response.historical ? `${response.date}T12:00` : weather.current?.time;
   const index = weather.hourly?.time?.findIndex(time => time.slice(0, 13) === targetTime?.slice(0, 13)) ?? -1;
   if (index < 0) throw new Error('No weather observation is available for this date and hour.');
@@ -57,7 +58,7 @@ export function inspectFwiWeather(weather: FwiWeather, response: Pick<FwiWeather
     dryDays: bosnian.dryDays, rainMm, month: Number(targetTime!.slice(5, 7)),
     previousFfmc: previousDay?.ffmc ?? 85, previousDmc: previousDay?.dmc ?? 6, previousDc: previousDay?.dc ?? 15,
   };
-  return { bosnian, canadian, currentCanadian: calculateCanadianComparison(comparisonInputs, targetTime!), comparisonInputs, observationTime: targetTime!, precipitationDays };
+  return { supplementaryInputs: inspectSupplementaryWeather(weather, response.date, response.supplementary_settings), bosnian, canadian, currentCanadian: calculateCanadianComparison(comparisonInputs, targetTime!), comparisonInputs, observationTime: targetTime!, precipitationDays };
 }
 
 export async function fetchBosnianFwiSurface(date = sarajevoDate()) {

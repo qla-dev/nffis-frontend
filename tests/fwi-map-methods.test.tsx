@@ -17,6 +17,16 @@ function props(layer: MapLayer) {
 }
 const image = () => ({ url: 'blob:test', coordinates: [[15,45],[20,45],[20,42],[15,42]], release: vi.fn() });
 describe('FWI method separation on native maps', () => {
+  it.each([[MapLayer.FWI_ANGSTROM, 'ANGSTROM'], [MapLayer.FWI_GFI, 'GFDI'], [MapLayer.FWI_KBDI, 'KBDI']] as const)('renders the selected %s raster using its own scale', async (layer, type) => {
+    cogRaster.mockResolvedValue(image());
+    const p = props(layer);
+    render(<MapboxOperationalLayers {...p} selectedFwiProductId={52} fwiDate="2026-09-20" />);
+    await waitFor(() => expect(p.map.addSource).toHaveBeenCalled());
+    expect(cogRaster).toHaveBeenCalledWith('/api/fire-intelligence/products/52/artifact/cog', expect.any(AbortSignal), type);
+    expect(surface).not.toHaveBeenCalled();
+    expect(products).not.toHaveBeenCalled();
+  });
+
   it('renders original calculated values and does not load the Canadian COG', async () => {
     const points = [{ id: '1', lat: 44, lng: 18, fwi: 9 }];
     surface.mockResolvedValue(points); originalRaster.mockResolvedValue(image());

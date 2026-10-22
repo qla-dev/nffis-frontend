@@ -1,3 +1,5 @@
+import { SupplementaryIndexCalculations } from './SupplementaryIndexCalculations';
+import type { SupplementaryInputs } from '../../lib/fwi/supplementaryCalculations';
 import { useId, useState } from 'react';
 import { FwiCodeHelp } from './FwiCodeHelp';
 import { calculateBosnianFwi } from '../../lib/fwi/bosnianFwi';
@@ -16,8 +18,8 @@ const fields = [
   ['previousDc', 'Previous DC', 0, undefined],
 ] as const;
 
-export function FwiParameterComparison({ inputs, observationTime, locationName }: {
-  inputs: FwiComparisonInputs; observationTime: string; locationName: string;
+export function FwiParameterComparison({ inputs, observationTime, locationName, supplementaryInputs }: {
+  inputs: FwiComparisonInputs; observationTime: string; locationName: string; supplementaryInputs?: SupplementaryInputs;
 }) {
   const inputId = useId();
   const initial = Object.fromEntries(fields.map(([key]) => [key, inputs[key] == null ? '' : String(inputs[key])])) as Record<keyof FwiComparisonInputs, string>;
@@ -77,5 +79,6 @@ export function FwiParameterComparison({ inputs, observationTime, locationName }
       </tr>)}</tbody>
     </table>
     <p className="mt-3 text-sm font-bold">Canadian − Bosnian: <output aria-label="FWI difference">{bosnian && canadian ? format(canadian.fwi - bosnian.fwi) : '-'}</output></p>
+    {supplementaryInputs && <SupplementaryIndexCalculations key={observationTime + JSON.stringify(supplementaryInputs)} inputs={supplementaryInputs} date={observationTime.slice(0, 10)} />}
   </section>;
 }
