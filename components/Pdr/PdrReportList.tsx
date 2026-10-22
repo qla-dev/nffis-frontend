@@ -25,17 +25,20 @@ export function PdrReportList({ language, isDarkMode, canCreate }: { language: L
   const [status, setStatus] = useState('');
   const [jurisdiction, setJurisdiction] = useState('');
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const panel = isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white';
 
   useEffect(() => {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      listPdrReports({ status, jurisdiction, q: query.trim() }, controller.signal)
-        .then(response => { setReports(response.data); setError(''); })
+      listPdrReports({ status, jurisdiction, q: query.trim(), page }, controller.signal)
+        .then(response => { setReports(response.data); setLastPage(response.last_page); setTotal(response.total); setError(''); })
         .catch(reason => { if (reason.name !== 'AbortError') setError(reason.message); });
     }, query ? 250 : 0);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [status, jurisdiction, query]);
+  }, [status, jurisdiction, query, page]);
 
   return (
     <div className="space-y-4" data-testid="pdr-report-list">
@@ -43,13 +46,13 @@ export function PdrReportList({ language, isDarkMode, canCreate }: { language: L
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-56 flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={query} onChange={event => setQuery(event.target.value)} placeholder={t.search} className="pdr-input pl-9" aria-label={t.search} />
+          <input value={query} onChange={event => { setPage(1); setReports(null); setQuery(event.target.value); }} placeholder={t.search} className="pdr-input pl-9" aria-label={t.search} />
         </div>
-        <select value={status} onChange={event => setStatus(event.target.value)} className="pdr-input w-auto" aria-label={t.allStatuses}>
+        <select value={status} onChange={event => { setPage(1); setReports(null); setStatus(event.target.value); }} className="pdr-input w-auto" aria-label={t.allStatuses}>
           <option value="">{t.allStatuses}</option>
           {(['draft', 'submitted', 'approved', 'rejected'] as PdrStatus[]).map(item => <option key={item} value={item}>{t.status[item]}</option>)}
         </select>
-        <select value={jurisdiction} onChange={event => setJurisdiction(event.target.value)} className="pdr-input w-auto" aria-label={t.allEntities}>
+        <select value={jurisdiction} onChange={event => { setPage(1); setReports(null); setJurisdiction(event.target.value); }} className="pdr-input w-auto" aria-label={t.allEntities}>
           <option value="">{t.allEntities}</option>
           <option value="fbih">{t.jurisdiction.fbih}</option>
           <option value="rs">{t.jurisdiction.rs}</option>
@@ -83,6 +86,11 @@ export function PdrReportList({ language, isDarkMode, canCreate }: { language: L
           </table>
         </div>
       )}
+      {reports && lastPage > 1 && <div className="flex items-center justify-end gap-3 text-sm">
+        <button type="button" onClick={() => { setReports(null); setPage(current => Math.max(1, current - 1)); }} disabled={page <= 1} className="rounded border border-slate-500/30 px-3 py-1 disabled:opacity-40">{t.previous}</button>
+        <span>{page} / {lastPage} · {total}</span>
+        <button type="button" onClick={() => { setReports(null); setPage(current => Math.min(lastPage, current + 1)); }} disabled={page >= lastPage} className="rounded border border-slate-500/30 px-3 py-1 disabled:opacity-40">{t.next}</button>
+      </div>}
     </div>
   );
 }

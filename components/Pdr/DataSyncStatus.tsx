@@ -11,19 +11,28 @@ export function DataSyncStatus({ language, isDarkMode }: { language: Language; i
   const [overview, setOverview] = useState<DataSyncOverview | null>(null);
   const [error, setError] = useState('');
   const [source, setSource] = useState('');
+  const [page, setPage] = useState(1);
   const panel = isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white';
 
-  const load = () => listDataSyncRuns(source).then(setOverview).catch(reason => setError(errorText(reason)));
-  useEffect(() => { void load(); }, [source]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setOverview(null);
+    setError('');
+    listDataSyncRuns(source, page, controller.signal)
+      .then(setOverview)
+      .catch(reason => { if (reason.name !== 'AbortError') setError(errorText(reason)); });
+    return () => controller.abort();
+  }, [source, page]);
 
   if (!overview) return error ? <ErrorBox message={error} /> : <Loader2 className="animate-spin text-slate-400" />;
 
   return (
     <div className="space-y-4" data-testid="pdr-sync">
       <p className="text-sm text-slate-500">{t.syncHelp}</p>
+      {error && <ErrorBox message={error} />}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {overview.sources.map(item => (
-          <button key={item.source} type="button" onClick={() => setSource(current => current === item.source ? '' : item.source)} className={`rounded-xl border p-4 text-left ${panel} ${source === item.source ? 'ring-2 ring-blue-500' : ''}`}>
+          <button key={item.source} type="button" onClick={() => { setPage(1); setSource(current => current === item.source ? '' : item.source); }} className={`rounded-xl border p-4 text-left ${panel} ${source === item.source ? 'ring-2 ring-blue-500' : ''}`}>
             <div className="flex items-center justify-between gap-2">
               <span className="font-mono text-xs font-bold">{item.source}</span>
               {item.latest_status === 'success' ? <CheckCircle2 size={16} className="text-emerald-500" /> : item.latest_status === 'failed' ? <XCircle size={16} className="text-red-500" /> : <RefreshCw size={16} className="text-amber-500" />}
@@ -52,6 +61,11 @@ export function DataSyncStatus({ language, isDarkMode }: { language: Language; i
           </tbody>
         </table>
       </div>
+      {overview.last_page > 1 && <div className="flex items-center justify-end gap-3 text-sm">
+        <button type="button" disabled={page <= 1} onClick={() => setPage(current => current - 1)} className="rounded border border-slate-500/30 px-3 py-1 disabled:opacity-40">{t.previous}</button>
+        <span>{page} / {overview.last_page} · {overview.total}</span>
+        <button type="button" disabled={page >= overview.last_page} onClick={() => setPage(current => current + 1)} className="rounded border border-slate-500/30 px-3 py-1 disabled:opacity-40">{t.next}</button>
+      </div>}
     </div>
   );
 }

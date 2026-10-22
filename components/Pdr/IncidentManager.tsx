@@ -29,13 +29,20 @@ export function IncidentManager({ language, isDarkMode, canUpdate }: { language:
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const panel = isDarkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-white';
 
-  const load = (keep?: number) => listIncidentReports().then(response => {
+  const load = (keep?: number, requestedPage = page) => listIncidentReports({ page: requestedPage }).then(response => {
     setReports(response.data);
+    setLastPage(response.last_page);
+    setTotal(response.total);
+    setPage(requestedPage);
     const next = response.data.find(report => report.id === keep) || response.data[0] || null;
     setSelected(next);
     setDraft(next ? toDraft(next) : null);
+    setError('');
   }).catch(reason => setError(errorText(reason)));
   useEffect(() => { void load(); }, []);
 
@@ -74,6 +81,11 @@ export function IncidentManager({ language, isDarkMode, canUpdate }: { language:
             <div className="text-[11px] text-slate-400">{new Date(report.reported_at || report.created_at).toLocaleString()}{report.affected_area_ha ? ` · ${formatNumber(report.affected_area_ha, 1, language)} ha` : ''}</div>
           </button>
         ))}
+        {lastPage > 1 && <div className="flex items-center justify-between gap-2 p-3 text-xs">
+          <button type="button" disabled={page <= 1} onClick={() => { setReports(null); void load(undefined, page - 1); }} className="rounded border border-slate-500/30 px-2 py-1 disabled:opacity-40">{t.previous}</button>
+          <span>{page} / {lastPage} · {total}</span>
+          <button type="button" disabled={page >= lastPage} onClick={() => { setReports(null); void load(undefined, page + 1); }} className="rounded border border-slate-500/30 px-2 py-1 disabled:opacity-40">{t.next}</button>
+        </div>}
       </div>
 
       {selected && draft && (

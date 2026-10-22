@@ -120,16 +120,18 @@ export interface CoefficientCatalogue {
 }
 
 export interface DataSyncRun { id: number; source: string; status: 'running' | 'success' | 'failed'; started_at: string; finished_at: string | null; duration_ms: number | null; records_fetched: number | null; records_stored: number | null; summary: Record<string, unknown> | null; error: string | null }
-export interface DataSyncOverview { sources: { source: string; latest_status: string | null; latest_started_at: string | null; last_success_at: string | null; runs_24h: number; failures_24h: number }[]; data: DataSyncRun[] }
+export interface DataSyncOverview { sources: { source: string; latest_status: string | null; latest_started_at: string | null; last_success_at: string | null; runs_24h: number; failures_24h: number }[]; data: DataSyncRun[]; current_page: number; last_page: number; total: number }
 
-export function listDataSyncRuns(source = '', signal?: AbortSignal) {
-  return apiRequest<DataSyncOverview>(`/data-sync-runs${source ? `?source=${encodeURIComponent(source)}` : ''}`, { signal });
+export function listDataSyncRuns(source = '', page = 1, signal?: AbortSignal) {
+  const query = new URLSearchParams({ page: String(page) });
+  if (source) query.set('source', source);
+  return apiRequest<DataSyncOverview>(`/data-sync-runs?${query}`, { signal });
 }
 
 interface Paginated<T> { data: T[]; total: number; current_page: number; last_page: number }
 
-export function listPdrReports(filters: { status?: string; jurisdiction?: string; q?: string } = {}, signal?: AbortSignal) {
-  const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value) as [string, string][]).toString();
+export function listPdrReports(filters: { status?: string; jurisdiction?: string; q?: string; page?: number } = {}, signal?: AbortSignal) {
+  const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== undefined && value !== '').map(([key, value]) => [key, String(value)])).toString();
   return apiRequest<Paginated<PdrReport>>(`/pdr-reports${query ? `?${query}` : ''}`, { signal });
 }
 

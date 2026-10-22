@@ -12,6 +12,18 @@ const report = {
 };
 
 describe('IncidentManager', () => {
+  it('requests the next page instead of hiding older incidents', async () => {
+    const list = vi.spyOn(service, 'listIncidentReports').mockImplementation(async ({ page } = {}) => ({
+      data: [{ ...report, id: page === 2 ? 8 : 7 }], total: 26, current_page: page ?? 1, last_page: 2,
+    }));
+    render(<IncidentManager language={Language.EN} isDarkMode={false} canUpdate={false} />);
+
+    await screen.findByText('#7 · fire');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByText('#8 · fire');
+    expect(list).toHaveBeenLastCalledWith({ page: 2 });
+  });
+
   it('edits structured incident attributes and sends numbers and nulls', async () => {
     vi.spyOn(service, 'listIncidentReports').mockResolvedValue({ data: [report], total: 1, current_page: 1, last_page: 1 });
     const update = vi.spyOn(service, 'updateIncidentReport').mockResolvedValue({ data: { ...report, status: 'contained' } });
